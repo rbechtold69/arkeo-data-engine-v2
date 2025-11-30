@@ -1,4 +1,4 @@
-# Arkeo Provider Core (Docker)
+# Arkeo Provider Core (Docker File)
 
 Containerized hot-wallet admin UI + API + sentinel reverse-proxy for Arkeo providers. Run locally or on a server to bond/modify services and manage sentinel config through a web UI.
 
