@@ -3,7 +3,10 @@ import json
 import os
 import re
 import shlex
+import socket
+import socketserver
 import subprocess
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -26,6 +29,8 @@ LISTENER_PORT_START = int(os.getenv("LISTENER_PORT_START", "62001"))
 LISTENER_PORT_END = int(os.getenv("LISTENER_PORT_END", "62100"))
 ACTIVE_SERVICE_TYPES_FILE = os.path.join(CACHE_DIR, "active_service_types.json")
 SUBSCRIBER_INFO_FILE = os.path.join(CACHE_DIR, "subscriber_info.json")
+_LISTENER_SERVERS: dict[int, dict] = {}
+_LISTENER_LOCK = threading.Lock()
 
 def _build_sentinel_uri() -> str:
     port = os.getenv("SENTINEL_PORT") or "3636"
@@ -1159,6 +1164,97 @@ def _write_listeners(data: dict) -> None:
             pass
 
 
+def _is_listener_active(entry: dict) -> bool:
+    """Return True if listener status is active-like."""
+    status = str(entry.get("status") or "").strip().lower()
+    return status in ("active", "1", "true", "on", "yes")
+
+
+class _HelloHandler(socketserver.BaseRequestHandler):
+    def handle(self):
+        try:
+            self.request.sendall(b"hello world\n")
+        except Exception:
+            pass
+        try:
+            self.request.close()
+        except Exception:
+            pass
+
+
+class _HelloServer(socketserver.ThreadingTCPServer):
+    allow_reuse_address = True
+    daemon_threads = True
+
+
+def _start_listener_server(listener: dict) -> tuple[bool, str | None]:
+    """Start a background hello-world TCP listener for the given entry."""
+    port_val = listener.get("port")
+    try:
+        port = int(port_val)
+    except (TypeError, ValueError):
+        return False, "invalid port"
+    with _LISTENER_LOCK:
+        if port in _LISTENER_SERVERS:
+            return True, None
+        try:
+            srv = _HelloServer(("0.0.0.0", port), _HelloHandler)
+        except OSError as e:
+            return False, f"failed to bind port {port}: {e}"
+        thread = threading.Thread(target=srv.serve_forever, kwargs={"poll_interval": 0.5}, daemon=True)
+        _LISTENER_SERVERS[port] = {"server": srv, "thread": thread, "listener_id": listener.get("id")}
+        thread.start()
+    return True, None
+
+
+def _stop_listener_server(port: int) -> None:
+    """Stop a running listener server if present."""
+    srv_entry = None
+    with _LISTENER_LOCK:
+        srv_entry = _LISTENER_SERVERS.pop(port, None)
+    if not srv_entry:
+        return
+    srv = srv_entry.get("server")
+    try:
+        if srv:
+            srv.shutdown()
+            srv.server_close()
+    except Exception:
+        pass
+
+
+def _ensure_listener_runtime(listener: dict, previous_port: int | None = None, previous_status=None) -> tuple[bool, str | None]:
+    """Ensure background process matches desired status/port."""
+    try:
+        port = int(listener.get("port"))
+    except (TypeError, ValueError):
+        return False, "invalid port"
+    active = _is_listener_active(listener)
+    prev_active = _is_listener_active({"status": previous_status}) if previous_status is not None else None
+
+    if not active:
+        # Stop current or previous port
+        if previous_port is not None:
+            _stop_listener_server(previous_port)
+        else:
+            _stop_listener_server(port)
+        return True, None
+
+    # If port changed, stop the old one before starting
+    if previous_port is not None and previous_port != port:
+        _stop_listener_server(previous_port)
+
+    ok, err = _start_listener_server(listener)
+    if not ok:
+        # best-effort restart old port if we disabled it and it was active
+        if previous_port is not None and prev_active:
+            try:
+                _start_listener_server({"port": previous_port, "id": listener.get("id")})
+            except Exception:
+                pass
+    return ok, err
+
+
 def _next_available_port(used: set[int]) -> int | None:
     for p in range(LISTENER_PORT_START, LISTENER_PORT_END + 1):
         if p not in used:
@@ -1206,6 +1302,43 @@ def _collect_used_ports(listeners: list, skip_id: str | None = None) -> set[int]
         except (TypeError, ValueError):
             continue
     return used
+
+
+def _bootstrap_listeners_from_cache():
+    """Start background listeners for any active entries in listeners.json."""
+    try:
+        data = _ensure_listeners_file()
+        listeners = data.get("listeners") if isinstance(data, dict) else []
+        if not isinstance(listeners, list):
+            return
+        for l in listeners:
+            if not isinstance(l, dict) or not _is_listener_active(l):
+                continue
+            ok, err = _start_listener_server(l)
+            if not ok:
+                print(f"[listeners] failed to start listener on port {l.get('port')}: {err}")
+    except Exception as e:
+            print(f"[listeners] bootstrap error: {e}")
+
+
+def _test_listener_port(port: int, timeout: float = 3.0) -> tuple[bool, str | None, str | None]:
+    """Attempt to connect to localhost:port and read a small response."""
+    try:
+        with socket.create_connection(("127.0.0.1", port), timeout=timeout) as sock:
+            sock.settimeout(timeout)
+            # Send a minimal payload; our listener will reply immediately anyway
+            try:
+                sock.sendall(b"ping\n")
+            except Exception:
+                pass
+            try:
+                data = sock.recv(1024)
+            except socket.timeout:
+                data = b""
+            text = data.decode("utf-8", errors="replace")
+            return True, text, None
+    except Exception as e:
+        return False, None, str(e)
 
 
 def _min_payg_rate(raw: dict) -> tuple[int | None, str | None]:
@@ -1598,7 +1731,7 @@ def cache_counts():
 def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_id: str | None = None):
     """Validate listener payload and return (listener_dict, error_str_or_None)."""
     target = ""  # notes removed
-    status = (payload.get("status") or "").strip() or "pending"
+    status = (payload.get("status") or "").strip() or "inactive"
     service_id_val = payload.get("service_id") or payload.get("service")
     service_id = str(service_id_val).strip() if service_id_val not in (None, "") else ""
     port_val = payload.get("port")
@@ -1671,6 +1804,9 @@ def create_listener():
         "created_at": now,
         "updated_at": now,
     }
+    ok, err = _ensure_listener_runtime(new_entry, previous_port=None, previous_status=None)
+    if not ok:
+        return jsonify({"error": err or "failed to start listener"}), 500
     listeners.append(new_entry)
     listeners.sort(key=lambda x: x.get("port") if isinstance(x, dict) else 0)
     data["listeners"] = listeners
@@ -1702,11 +1838,13 @@ def update_listener(listener_id: str):
     svc_meta = svc_lookup.get(clean.get("service_id") or "", {})
     best = _top_active_services_by_payg(clean.get("service_id") or "", limit=3)
     updated = None
+    old_snapshot = None
     for l in listeners:
         if not isinstance(l, dict):
             continue
         if str(l.get("id")) != str(listener_id):
             continue
+        old_snapshot = dict(l)
         if clean["port"] is not None:
             l["port"] = clean["port"]
         l["target"] = ""
@@ -1720,6 +1858,21 @@ def update_listener(listener_id: str):
         break
     if updated is None:
         return jsonify({"error": "listener not found"}), 404
+    old_port = None
+    old_status = None
+    if old_snapshot:
+        try:
+            old_port = int(old_snapshot.get("port"))
+        except Exception:
+            old_port = old_snapshot.get("port")
+        old_status = old_snapshot.get("status")
+    ok, err = _ensure_listener_runtime(updated, previous_port=old_port, previous_status=old_status)
+    if not ok:
+        if old_snapshot is not None:
+            # revert the in-memory entry to its previous state to avoid persisting a broken change
+            updated.clear()
+            updated.update(old_snapshot)
+        return jsonify({"error": err or "failed to start listener"}), 500
     listeners.sort(key=lambda x: x.get("port") if isinstance(x, dict) else 0)
     data["listeners"] = listeners
     _write_listeners(data)
@@ -1733,9 +1886,19 @@ def delete_listener(listener_id: str):
     listeners = data.get("listeners") if isinstance(data, dict) else []
     if not isinstance(listeners, list):
         listeners = []
+    removed_entry = None
+    for l in listeners:
+        if str(l.get("id")) == str(listener_id):
+            removed_entry = l
+            break
     new_list = [l for l in listeners if str(l.get("id")) != str(listener_id)]
     if len(new_list) == len(listeners):
         return jsonify({"error": "listener not found"}), 404
+    if removed_entry:
+        try:
+            _stop_listener_server(int(removed_entry.get("port")))
+        except Exception:
+            _stop_listener_server(removed_entry.get("port"))
     new_list.sort(key=lambda x: x.get("port") if isinstance(x, dict) else 0)
     data["listeners"] = new_list
     data["fetched_at"] = _timestamp()
@@ -1781,6 +1944,37 @@ def refresh_listener_top_services(listener_id: str):
     data["listeners"] = listeners
     _write_listeners(data)
     return jsonify({"listener": found})
+
+
+@app.get("/api/listeners/<listener_id>/test")
+def test_listener(listener_id: str):
+    """Test connectivity to a listener port."""
+    data = _ensure_listeners_file()
+    listeners = data.get("listeners") if isinstance(data, dict) else []
+    if not isinstance(listeners, list):
+        listeners = []
+    target = None
+    for l in listeners:
+        if not isinstance(l, dict):
+            continue
+        if str(l.get("id")) == str(listener_id):
+            target = l
+            break
+    if not target:
+        return jsonify({"error": "listener not found"}), 404
+    try:
+        port = int(target.get("port"))
+    except Exception:
+        return jsonify({"error": "invalid port"}), 400
+    ok, resp, err = _test_listener_port(port)
+    cmd = f"curl -v http://127.0.0.1:{port}/"
+    payload = {"ok": ok, "port": port, "command": cmd}
+    if resp:
+        payload["response"] = resp
+    if err:
+        payload["error"] = err
+    status = 200 if ok else 500
+    return jsonify(payload), status
 
 
 @app.post("/api/sentinel-rebuild")
@@ -2330,6 +2524,9 @@ def provider_totals():
         }
     )
 
+
+_bootstrap_thread = threading.Thread(target=_bootstrap_listeners_from_cache, daemon=True)
+_bootstrap_thread.start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=API_PORT)

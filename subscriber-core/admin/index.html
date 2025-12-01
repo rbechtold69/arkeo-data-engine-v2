@@ -645,6 +645,7 @@
                 <td>${escapeHtml(svcLabel || "—")}</td>
                 <td class="mono">${portSafe || "–"}</td>
                 <td class="listener-actions-cell col-actions">
+                    <button class="primary" onclick="testListener('${l.id}')">Test</button>
                     <button class="primary" onclick="refreshTopServices('${l.id}')">Refresh</button>
                     <button class="primary" onclick="editListener('${l.id}')">Edit</button>
                     <button class="primary danger-btn" onclick="deleteListener('${l.id}')">Delete</button>
@@ -758,6 +759,31 @@
             await loadListeners();
         } catch (err) {
             showResultModal("Delete Listener", `Failed to delete listener: ${err}`);
+        }
+    }
+
+    async function testListener(id) {
+        try {
+            const res = await fetch(`http://localhost:9999/api/listeners/${encodeURIComponent(id)}/test`, {
+                method: "GET",
+                cache: "no-store",
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || (data && data.error && data.ok === false)) {
+                const err = (data && (data.detail || data.error)) || res.statusText || res.status;
+                showResultModal("Test Listener", `Failed to test listener: ${escapeHtml(String(err))}`);
+                return;
+            }
+            const cmd = data && data.command ? data.command : "";
+            const resp = data && data.response ? data.response : "";
+            const body = `
+<div>Command:</div>
+<pre class="mono">${escapeHtml(cmd)}</pre>
+<div>Response:</div>
+<pre class="mono">${escapeHtml(resp || "(no data)")}</pre>`;
+            showResultModal("Test Listener", body);
+        } catch (err) {
+            showResultModal("Test Listener", `Failed to test listener: ${escapeHtml(String(err))}`);
         }
     }
 
