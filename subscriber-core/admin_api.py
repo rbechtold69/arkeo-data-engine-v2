@@ -11,7 +11,15 @@ import urllib.parse
 import yaml
 from flask import Flask, jsonify, request
 
+from cache_fetcher import (
+    build_commands as cache_build_commands,
+    ensure_cache_dir as cache_ensure_cache_dir,
+    fetch_once as cache_fetch_once,
+    STATUS_FILE as CACHE_STATUS_FILE,
+)
+
 app = Flask(__name__)
+CACHE_DIR = os.getenv("CACHE_DIR", "/app/cache")
 
 def _build_sentinel_uri() -> str:
     port = os.getenv("SENTINEL_PORT") or "3636"
@@ -1056,6 +1064,273 @@ def _all_services_lookup() -> dict[str, str]:
             continue
         lookup[str(sid)] = name
     return lookup
+
+
+def _load_cached(name: str) -> dict:
+    path = os.path.join(CACHE_DIR, f"{name}.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+@app.get("/api/providers-with-contracts")
+def providers_with_contracts():
+    """Return providers joined with contracts (by pubkey) and service names from cache."""
+    providers_raw = _load_cached("active_providers")
+    contracts_raw = _load_cached("provider-contracts")
+    services_raw = _load_cached("service-types")
+    provider_services_raw = _load_cached("provider-services")
+
+    providers_list = providers_raw.get("providers") or []
+    if not isinstance(providers_list, list):
+        providers_list = []
+    # filter to active providers (status == 1 or "1")
+    providers_list = [p for p in providers_list if isinstance(p, dict) and (p.get("status") == 1 or p.get("status") == "1")]
+    contracts_list = contracts_raw.get("data", {}).get("contracts") or contracts_raw.get("data", {}).get("contract") or []
+    if not isinstance(contracts_list, list):
+        contracts_list = []
+    services_list = []
+    if isinstance(services_raw.get("data"), list):
+        services_list = services_raw.get("data")
+    elif isinstance(services_raw.get("data"), dict):
+        services_list = services_raw["data"].get("services") or services_raw["data"].get("service") or services_raw["data"].get("result") or []
+    if not isinstance(services_list, list):
+        services_list = []
+
+    svc_lookup: dict[str, dict[str, str]] = {}
+    for s in services_list:
+        if not isinstance(s, dict):
+            continue
+        sid = s.get("id") or s.get("service_id") or s.get("serviceID") or s.get("service")
+        if sid is None:
+            continue
+        key = str(sid)
+        slug = (s.get("name") or s.get("service") or s.get("label") or s.get("type") or key) or key
+        desc = s.get("description") or s.get("desc") or s.get("label")
+        display = desc or slug.replace("-", " ").strip().title()
+        svc_lookup[key] = {
+            "id": key,
+            "name": slug,
+            "slug": slug,
+            "type": s.get("type") or slug,
+            "description": desc,
+            "display": display,
+        }
+
+    def service_info_for(val) -> dict[str, str]:
+        if val is None:
+            return {"id": "", "name": "", "type": ""}
+        key = str(val)
+        info = svc_lookup.get(key)
+        if info:
+            return info
+        # fallback formatting: use id with dash->space, title-cased
+        fallback_name = key.replace("-", " ").strip().title() if key else ""
+        return {
+            "id": key,
+            "name": fallback_name or key,
+            "slug": fallback_name or key,
+            "type": "",
+            "description": "",
+            "display": fallback_name or key,
+        }
+
+    def service_is_active(svc: dict) -> bool:
+        if not isinstance(svc, dict):
+            return False
+        status_val = svc.get("status")
+        if status_val is None:
+            return True  # default to active if missing
+        if isinstance(status_val, bool):
+            return bool(status_val)
+        status_str = str(status_val).strip().lower()
+        return status_str in ("1", "active", "online", "true", "on", "up", "running")
+
+    # Build provider -> services lookup from provider-services cache
+    prov_services_lookup: dict[str, list] = {}
+    prov_services_list = []
+    data_ps = provider_services_raw.get("data")
+    if isinstance(data_ps, dict):
+        prov_services_list = data_ps.get("providers") or data_ps.get("provider") or []
+    if not isinstance(prov_services_list, list):
+        prov_services_list = []
+    for ps in prov_services_list:
+        if not isinstance(ps, dict):
+            continue
+        pk = ps.get("pub_key") or ps.get("pubkey") or ps.get("pubKey")
+        if not pk:
+            continue
+        entries = []
+        if isinstance(ps.get("services"), list):
+            entries = ps["services"]
+        elif isinstance(ps.get("service"), list):
+            entries = ps["service"]
+        elif entries := [ps]:
+            pass
+        if pk in prov_services_lookup:
+            prov_services_lookup[pk].extend(entries)
+        else:
+            prov_services_lookup[pk] = entries
+
+    def contract_matches_provider(contract: dict, pubkey: str) -> bool:
+        if not isinstance(contract, dict):
+            return False
+        cpk = (
+            contract.get("provider")
+            or contract.get("provider_pubkey")
+            or contract.get("provider_pub_key")
+            or contract.get("providerPubKey")
+        )
+        return cpk == pubkey
+
+    combined = []
+    for p in providers_list:
+        if not isinstance(p, dict):
+            continue
+        pubkey = p.get("pubkey") or p.get("pub_key") or p.get("pubKey")
+        if not pubkey:
+            continue
+        services_for_provider = prov_services_lookup.get(pubkey) or []
+        services_normalized = []
+        for s in services_for_provider:
+            if not isinstance(s, dict) or not service_is_active(s):
+                continue
+            sid = s.get("service_id") or s.get("id") or s.get("service")
+            status_raw = s.get("status") or p.get("provider", {}).get("status") or p.get("status")
+            info = service_info_for(sid)
+            services_normalized.append(
+                {
+                    "id": sid,
+                    "name": info.get("name") or info.get("slug"),
+                    "slug": info.get("slug") or info.get("name"),
+                    "type": info.get("type"),
+                    "description": info.get("description"),
+                    "display": info.get("display") or info.get("description") or info.get("name"),
+                    "metadata_uri": s.get("metadata_uri") or s.get("metadataUri"),
+                    "status": status_raw,
+                    "raw": s,
+                }
+            )
+        matched_contracts = []
+        for c in contracts_list:
+            if not contract_matches_provider(c, pubkey):
+                continue
+            svc_id = c.get("service") or c.get("service_id") or c.get("serviceID")
+            svc_info = service_info_for(svc_id)
+            matched_contracts.append(
+                {
+                    "contract_id": c.get("contract_id") or c.get("id") or c.get("cid"),
+                    "service_id": svc_id,
+                    "service_info": svc_info,
+                    "subscriber": c.get("subscriber"),
+                    "provider": c.get("provider"),
+                    "status": c.get("status"),
+                }
+            )
+        combined.append(
+            {
+                "pubkey": pubkey,
+                "provider": p.get("provider") or p,
+                "metadata_uri": p.get("metadata_uri"),
+                "metadata": p.get("metadata"),
+                "metadata_error": p.get("metadata_error"),
+                "status": p.get("status"),
+                "services": services_normalized,
+                "contracts": matched_contracts,
+            }
+        )
+
+    return jsonify({"providers": combined, "counts": {"providers": len(combined), "contracts": len(contracts_list), "services": len(services_list)}})
+
+
+@app.post("/api/cache-refresh")
+def cache_refresh():
+    """Trigger a one-time cache fetch for providers, contracts, and services."""
+    try:
+        cache_ensure_cache_dir()
+        commands = cache_build_commands()
+        results = cache_fetch_once(commands, record_status=True)
+        # Include derived active caches in the response for UI counts
+        providers_cache = _load_cached("active_providers")
+        if providers_cache:
+            results["active_providers"] = {"data": providers_cache, "exit_code": 0}
+        active_services_cache = _load_cached("active_services")
+        if active_services_cache:
+            results["active_services"] = {"data": active_services_cache, "exit_code": 0}
+        subscribers_cache = _load_cached("subscribers")
+        if subscribers_cache:
+            results["subscribers"] = {"data": subscribers_cache, "exit_code": 0}
+        return jsonify({"status": "ok", "results": results})
+    except Exception as e:
+        return jsonify({"error": "cache_refresh_failed", "detail": str(e)}), 500
+
+
+@app.get("/api/cache-status")
+def cache_status():
+    """Return the current cache sync status."""
+    payload = {"in_progress": False}
+    try:
+        if os.path.isfile(CACHE_STATUS_FILE):
+            with open(CACHE_STATUS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict):
+                payload.update(data)
+    except Exception:
+        pass
+    return jsonify(payload)
+
+
+@app.get("/api/cache-counts")
+def cache_counts():
+    """Return counts derived from cached files (active providers/services/contracts/chains)."""
+    def _safe_load(name: str):
+        try:
+            return _load_cached(name) or {}
+        except Exception:
+            return {}
+
+    active_providers = _safe_load("active_providers")
+    active_services = _safe_load("active_services")
+    contracts = _safe_load("provider-contracts")
+    service_types = _safe_load("service-types")
+    subscribers_cache = _safe_load("subscribers")
+
+    counts = {
+        "active_providers": 0,
+        "active_services": 0,
+        "contracts": 0,
+        "supported_chains": 0,
+        "subscribers": 0,
+    }
+
+    providers_list = active_providers.get("providers") or []
+    if isinstance(providers_list, list):
+        counts["active_providers"] = len(providers_list)
+
+    active_services_list = active_services.get("active_services") or []
+    if isinstance(active_services_list, list):
+        counts["active_services"] = len(active_services_list)
+
+    contracts_list = contracts.get("data", {}).get("contracts") or contracts.get("data", {}).get("contract") or []
+    if isinstance(contracts_list, list):
+        counts["contracts"] = len(contracts_list)
+
+    services_list = []
+    data_st = service_types.get("data")
+    if isinstance(data_st, list):
+        services_list = data_st
+    elif isinstance(data_st, dict):
+        services_list = data_st.get("services") or data_st.get("service") or data_st.get("result") or []
+    if isinstance(services_list, list):
+        counts["supported_chains"] = len(services_list)
+
+    subscribers_list = subscribers_cache.get("subscribers") or []
+    if isinstance(subscribers_list, list):
+        counts["subscribers"] = len(subscribers_list)
+
+    return jsonify(counts)
 
 
 @app.post("/api/sentinel-rebuild")

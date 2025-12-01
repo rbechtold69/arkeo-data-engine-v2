@@ -37,12 +37,44 @@
             </div>
             <div class="header-line" id="headerBalance"><strong>Subscriber Balance:</strong></div>
             <div class="header-line muted" id="headerBlock"><strong>Current Block:</strong></div>
-            <div class="header-line fixed-pill"><span id="headerRefreshPill" class="status-badge status-warn hidden">Loading...</span></div>
+            <div class="header-line fixed-pill"><span id="syncPill" class="status-badge status-warn hidden">Syncing...</span></div>
         </div>
     </div>
 </div>
 
 <div class="card">
+    <h2>Arkeo Data Marketplace</h2>
+    <div class="metrics-grid header-metrics">
+        <div class="metric-card">
+            <div class="metric-label">Active Providers</div>
+            <div class="metric-value" id="metricProviders">–</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Active Services</div>
+            <div class="metric-value" id="metricServices">–</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Contracts</div>
+            <div class="metric-value" id="metricContracts">–</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Subscribers</div>
+            <div class="metric-value" id="metricSubscribers">–</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Supported Chains</div>
+            <div class="metric-value" id="metricNodeTypes">–</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value"><button class="primary block-btn" id="cacheRefreshBtn" onclick="refreshCache()">Refresh</button></div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <h2>Arkeo Data Marketplace</h2>
+    <p id="providersStatus" class="muted">Loading providers...</p>
+    <div id="providersList" class="stack"></div>
 </div>
 
 <div class="card footer-card">
@@ -109,9 +141,17 @@
         return resp.height.toString();
     }
 
+    function escapeHtml(str) {
+        if (str === undefined || str === null) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
     async function refreshHeader() {
-        const loadingPill = document.getElementById("headerRefreshPill");
-        if (loadingPill) loadingPill.style.display = "inline-block";
         const fetchNoStore = (url) => fetch(url, { cache: "no-store" });
         const parseSafe = async (settled) => {
             if (!settled || settled.status !== "fulfilled") return { error: "request failed" };
@@ -156,7 +196,6 @@
         if (headerBalEl) headerBalEl.innerHTML = `<strong>Subscriber Balance:</strong> ${formatBalance(bal)}`;
         if (headerBlockEl) headerBlockEl.innerHTML = `<strong>Current Block:</strong> ${formatBlockHeight(height)}`;
 
-        if (loadingPill) loadingPill.style.display = "none";
     }
 
     async function copyPubkeyFromHeader() {
@@ -187,10 +226,137 @@
         }
     }
 
+    async function refreshCache() {
+        const statusEl = document.getElementById("cacheStatus");
+        const btn = document.getElementById("cacheRefreshBtn");
+        const startMsg = `Starting cache refresh at ${new Date().toISOString()}...\n` +
+            [
+                "Providers: syncing...",
+                "Contracts: syncing...",
+                "Services: syncing...",
+                "Active Providers: deriving...",
+                "Active Services: deriving...",
+                "Subscribers: deriving..."
+            ].join("\n");
+        if (statusEl) statusEl.textContent = "Refreshing cache...";
+        if (btn) btn.disabled = true;
+        // keep syncing state across full refresh flow to avoid flicker
+        setSyncingLocal(true);
+        showResultModal("Cache Refresh", startMsg);
+        try {
+            const res = await fetch("http://localhost:9999/api/cache-refresh", { method: "POST" });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || (data && data.error)) {
+                const detail = (data && (data.detail || data.error)) || `${res.status}`;
+                throw new Error(detail);
+            }
+            const results = (data && data.results) || {};
+            const summarize = (key, payload) => {
+                const tryParse = (val) => {
+                    if (typeof val === "string") {
+                        try { return JSON.parse(val); } catch (e) { return null; }
+                    }
+                    return val;
+                };
+                const pickList = (obj, candidates) => {
+                    for (const c of candidates) {
+                        const v = c && typeof c === "string" ? obj[c] : obj?.[c];
+                        const parsed = tryParse(v);
+                        if (Array.isArray(parsed)) return parsed;
+                    }
+                    return [];
+                };
+                if (!payload || typeof payload !== "object") return `${key}: (no data)`;
+                let d = payload.data ?? payload;
+                d = tryParse(d) ?? {};
+                let items = [];
+                if (Array.isArray(d)) {
+                    items = d;
+                } else if (typeof d === "object") {
+                    if (key === "provider-services" || key === "providers" || key === "active_providers") {
+                        items = pickList(d, ["providers", "provider", "result"]);
+                    } else if (key === "provider-contracts" || key === "contracts") {
+                        items = pickList(d, ["contracts", "contract", "result"]);
+                    } else if (key === "active_services") {
+                        items = pickList(d, ["active_services"]);
+                    } else if (key === "service-types" || key === "services") {
+                        // handle nested under data as well
+                        items = pickList(d, ["services", "service", "result"]);
+                        if (!items.length && d.data) {
+                            items = pickList(d.data, ["services", "service", "result"]);
+                        }
+                    } else if (key === "subscribers") {
+                        items = pickList(d, ["subscribers"]);
+                    } else {
+                        items = [];
+                    }
+                }
+                const count = Array.isArray(items) ? items.length : 0;
+                return `${key}: ${count || "(no data)"}`;
+            };
+            const orderedKeys = ["provider-services","provider-contracts","service-types","active_providers","active_services","subscribers"];
+            const summary = orderedKeys.filter(k => k in results).map(k => summarize(k, results[k])).join("\n");
+            const finishedMsg = `Finished cache refresh at ${new Date().toISOString()}\n${summary || "(no results)"}`;
+            if (statusEl) statusEl.textContent = `Last refresh: ${new Date().toLocaleString()}`;
+            updateModalBody(finishedMsg);
+            // refresh providers table and header after cache refresh
+            await loadProvidersContracts(false);
+            await refreshHeader();
+            // update metrics
+            updateMetrics(results);
+        } catch (err) {
+            if (statusEl) statusEl.textContent = `Cache refresh failed: ${err}`;
+            updateModalBody(`Failed to refresh cache:\n${err}`);
+        } finally {
+            if (btn) btn.disabled = false;
+            setSyncingLocal(false);
+        }
+    }
+
+    async function loadProvidersContracts(manageSync) {
+        const statusEl = document.getElementById("providersStatus");
+        if (statusEl) statusEl.textContent = "Loading providers...";
+        const list = document.getElementById("providersList");
+        if (list) list.innerHTML = `<div class="muted">Loading...</div>`;
+        if (manageSync) setSyncingLocal(true);
+        try {
+            const res = await fetch("http://localhost:9999/api/providers-with-contracts", { cache: "no-store" });
+            const data = await res.json();
+            if (!res.ok || (data && data.error)) {
+                throw new Error((data && (data.detail || data.error)) || res.status);
+            }
+            const providersData = (data && data.providers) || [];
+            const counts = data && data.counts;
+            let activeSvcCount = 0;
+            providersData.forEach(p => {
+                if (p && Array.isArray(p.services)) activeSvcCount += p.services.length;
+            });
+            renderProvidersBlocks(providersData, counts);
+            updateMetrics(null, {
+                providers: providersData.length,
+                services: activeSvcCount,
+                contracts: counts && counts.contracts,
+                nodeTypes: counts && counts.services,
+            });
+        } catch (err) {
+            if (statusEl) statusEl.textContent = `Failed to load providers/contracts: ${err}`;
+            if (list) list.innerHTML = `<div class="muted">Failed to load providers/contracts</div>`;
+        } finally {
+            if (manageSync) setSyncingLocal(false);
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         refreshHeader();
         // Refresh every 10 seconds to mirror provider UI behavior
         setInterval(refreshHeader, 10000);
+        // load cached providers/contracts on load
+        loadProvidersContracts(true);
+        // try to populate metrics from initial cache-refresh data if present
+        updateMetrics();
+        // poll cache status to reflect background sync
+        pollSyncStatus();
+        setInterval(pollSyncStatus, 5000);
     });
 
     function showResultModal(title, body) {
@@ -200,6 +366,196 @@
         if (modalTitle) modalTitle.textContent = title || "Result";
         if (modalBody) modalBody.textContent = body || "";
         if (modal) modal.classList.remove("hidden");
+    }
+
+    function updateModalBody(body) {
+        const modalBody = document.getElementById("modalBody");
+        if (modalBody) modalBody.textContent = body || "";
+    }
+
+    let syncingLocal = false;
+    let syncingRemote = false;
+    function updateSyncUI() {
+        const pill = document.getElementById("syncPill");
+        const btn = document.getElementById("cacheRefreshBtn");
+        const isSyncing = syncingLocal || syncingRemote;
+        if (pill) pill.classList[isSyncing ? "remove" : "add"]("hidden");
+        if (btn) btn.disabled = isSyncing;
+    }
+    function setSyncingLocal(active) {
+        syncingLocal = !!active;
+        updateSyncUI();
+    }
+    function setSyncingRemote(active) {
+        syncingRemote = !!active;
+        updateSyncUI();
+    }
+    async function pollSyncStatus() {
+        try {
+            const statusRes = await fetch("http://localhost:9999/api/cache-status", { cache: "no-store" });
+            if (statusRes.ok) {
+                const data = await statusRes.json();
+                const inProg = data && (data.in_progress === true || data.in_progress === "true");
+                setSyncingRemote(!!inProg);
+            }
+            const countsRes = await fetch("http://localhost:9999/api/cache-counts", { cache: "no-store" });
+            if (countsRes.ok) {
+                const counts = await countsRes.json();
+                // Update only the active providers, active services, and contracts counts to avoid jumping the UI
+                updateMetrics(null, {
+                    providers: counts.active_providers,
+                    services: counts.active_services,
+                    contracts: counts.contracts,
+                    subscribers: counts.subscribers,
+                    nodeTypes: counts.supported_chains,
+                });
+            }
+        } catch (e) {
+            // keep previous remote state on error
+        }
+    }
+
+    function serviceIsActiveStatus(statusVal) {
+        if (statusVal === undefined || statusVal === null) return true;
+        if (typeof statusVal === "boolean") return !!statusVal;
+        const s = String(statusVal).trim().toLowerCase();
+        if (!s) return true;
+        return ["1", "active", "online", "true", "on", "up", "running"].includes(s);
+    }
+
+    function countActiveServicesFromProviderServices(payload) {
+        if (!payload || typeof payload !== "object") return null;
+        const d = payload.data || payload;
+        let providers = [];
+        if (Array.isArray(d.providers)) providers = d.providers;
+        else if (Array.isArray(d.provider)) providers = d.provider;
+        let count = 0;
+        for (const p of providers) {
+            if (!p || typeof p !== "object") continue;
+            const svcs = Array.isArray(p.services) ? p.services : Array.isArray(p.service) ? p.service : [];
+            for (const s of svcs) {
+                if (!s || typeof s !== "object") continue;
+                const status = s.status !== undefined ? s.status : p.status;
+                if (serviceIsActiveStatus(status)) count += 1;
+            }
+        }
+        return count;
+    }
+
+    function updateMetrics(results, overrides) {
+        const mProv = document.getElementById("metricProviders");
+        const mSvc = document.getElementById("metricServices");
+        const mCon = document.getElementById("metricContracts");
+        const mSub = document.getElementById("metricSubscribers");
+        const mNode = document.getElementById("metricNodeTypes");
+        const getCount = (payload, keys) => {
+            if (!payload || typeof payload !== "object") return null;
+            const d = payload.data || payload;
+            for (const k of keys) {
+                const v = d[k];
+                if (Array.isArray(v)) return v.length;
+            }
+            return null;
+        };
+        let activeSvcCount = null;
+        if (results) {
+            if ("active_services" in results) {
+                const d = results["active_services"].data || results["active_services"];
+                if (d && Array.isArray(d.active_services)) activeSvcCount = d.active_services.length;
+            }
+            if (activeSvcCount === null && "provider-services" in results) {
+                const c = countActiveServicesFromProviderServices(results["provider-services"]);
+                if (c !== null) activeSvcCount = c;
+            }
+            if (mProv && "provider-services" in results) {
+                const c = getCount(results["provider-services"], ["providers", "provider"]);
+                if (c !== null) mProv.textContent = c;
+            }
+            if (mProv && "active_providers" in results) {
+                const d = results["active_providers"].data || results["active_providers"];
+                if (d && Array.isArray(d.providers)) {
+                    mProv.textContent = d.providers.length;
+                }
+            }
+            if (mCon && "provider-contracts" in results) {
+                const c = getCount(results["provider-contracts"], ["contracts", "contract"]);
+                if (c !== null) mCon.textContent = c;
+            }
+            if (mSub && "subscribers" in results) {
+                const d = results["subscribers"].data || results["subscribers"];
+                if (d && Array.isArray(d.subscribers)) mSub.textContent = d.subscribers.length;
+            }
+            if (mSvc && "service-types" in results) {
+                const c = getCount(results["service-types"], ["services", "service", "result", "data"]);
+                if (mNode && c !== null) mNode.textContent = c;
+            }
+            if (mProv && "providers" in results) {
+                const d = results["providers"];
+                if (d && d.data && Array.isArray(d.data.providers)) {
+                    mProv.textContent = d.data.providers.length;
+                }
+            }
+        }
+        if (mSvc && activeSvcCount !== null) {
+            mSvc.textContent = activeSvcCount;
+        }
+        if (overrides) {
+            if (mProv && overrides.providers !== undefined) mProv.textContent = overrides.providers;
+            if (mSvc && overrides.services !== undefined) mSvc.textContent = overrides.services;
+            if (mCon && overrides.contracts !== undefined) mCon.textContent = overrides.contracts;
+            if (mSub && overrides.subscribers !== undefined) mSub.textContent = overrides.subscribers;
+            if (mNode && overrides.nodeTypes !== undefined) mNode.textContent = overrides.nodeTypes;
+        }
+        if (mNode) mNode.textContent = mNode.textContent || "–";
+    }
+    function renderProvidersBlocks(providers, counts) {
+        const list = document.getElementById("providersList");
+        const statusEl = document.getElementById("providersStatus");
+        if (!list) return;
+        if (!Array.isArray(providers) || !providers.length) {
+            list.innerHTML = `<div class="muted">No providers found in cache.</div>`;
+            if (statusEl) statusEl.textContent = "";
+            updateMetrics();
+            return;
+        }
+        const blocks = providers.map((p, idx) => {
+            const pk = p.pubkey || "(no pubkey)";
+            const metaUri = p.metadata_uri || (p.provider && p.provider.metadata_uri) || "";
+            const statusVal = p.status;
+            const statusStr = statusVal === 1 || statusVal === "1" ? "Active" : "Inactive";
+            const statusClass = statusVal === 1 || statusVal === "1" ? "status-ok" : "status-err";
+            const m = p.metadata || {};
+            const moniker = (m.config && m.config.moniker) || m.moniker || "";
+            const desc = (m.config && m.config.description) || m.description || "";
+            const svcs = Array.isArray(p.services) ? p.services : [];
+            const svcBlock = svcs.length
+                ? `<div class="mt-2 muted">Services:<br>${svcs.map(s => {
+                    const sid = s && s.id;
+                    const display = (s && s.display) || (s && s.description) || (s && s.name) || (s && s.slug) || "";
+                    const slug = (s && s.slug) || (s && s.name) || "";
+                    return `${escapeHtml(display || "(unknown)")}${slug ? ` | ${escapeHtml(slug)}` : ""}${sid ? ` | ${escapeHtml(String(sid))}` : ""}`;
+                }).join("<br>")}</div>`
+                : "";
+            return `<div class="panel mb-8">
+                <div><span class="status-pill ${statusClass}">${statusStr}</span></div>
+                <div><strong>${escapeHtml(moniker || "(unknown)")}</strong></div>
+                <div class="muted">${escapeHtml(desc || "")}</div>
+                <div class="mono mt-2">${pk}</div>
+                ${metaUri ? `<div class="muted mt-2">metadata_uri: <a href="${metaUri}" target="_blank" rel="noopener">${escapeHtml(metaUri)}</a></div>` : `<div class="muted mt-2">metadata_uri: (none)</div>`}
+                ${svcBlock}
+            </div>`;
+        });
+        list.innerHTML = blocks.join("");
+        if (statusEl) statusEl.textContent = "";
+        const overrides = counts
+            ? {
+                providers: counts.providers ?? providers.length,
+                contracts: counts.contracts,
+                services: counts.services,
+                nodeTypes: counts.services,
+            }
+            : { providers: providers.length };
+        updateMetrics(null, overrides);
     }
 
     function closeModal() {

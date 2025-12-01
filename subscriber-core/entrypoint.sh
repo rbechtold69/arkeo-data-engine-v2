@@ -26,6 +26,10 @@ RPC_URL_DEFAULT=${RPC_URL_DEFAULT/tcp:\/\//http:\/\/}
 ADMIN_PORT=${ADMIN_PORT:-8080}
 # If provided, prefer ARKEO_REST_API_PORT as the provider hub URI default
 PROVIDER_HUB_URI=${PROVIDER_HUB_URI:-${ARKEO_REST_API_PORT:-}}
+CACHE_DIR=${CACHE_DIR:-/app/cache}
+CACHE_FETCH_INTERVAL=${CACHE_FETCH_INTERVAL:-300}
+# Default off to avoid any startup hangs; rely on background fetcher or manual refresh.
+CACHE_WARM_ON_START=${CACHE_WARM_ON_START:-0}
 
 # Default sentinel-related envs (used by sentinel binary)
 # EVENT_STREAM_HOST needs host:port (no scheme); derive from ARKEOD_NODE if unset.
@@ -42,12 +46,22 @@ echo "  KEY_MNEMONIC          = (hidden for security)"
 echo "  ARKEOD_HOME           = $ARKEOD_HOME"
 echo "  ARKEOD_NODE           = $ARKEOD_NODE"
 echo "  ADMIN_PORT            = $ADMIN_PORT"
+echo "  CACHE_DIR             = $CACHE_DIR"
+echo "  CACHE_FETCH_INTERVAL  = ${CACHE_FETCH_INTERVAL}s"
+echo "  CACHE_WARM_ON_START   = $CACHE_WARM_ON_START"
 
 # Ensure home directory exists
 mkdir -p "$ARKEOD_HOME"
 mkdir -p /app/config
+mkdir -p "$CACHE_DIR"
 # Ensure supervisor runtime dirs exist (for supervisorctl socket/logs)
 mkdir -p /var/run /var/log/supervisor
+
+# Optional one-time cache warm on start (disabled by default)
+if [ "${CACHE_WARM_ON_START}" != "0" ]; then
+  echo "Priming cache on start..."
+  python3 /app/cache_fetcher.py --once || true
+fi
 
 # Check if key already exists in the keyring
 if arkeod --home "$ARKEOD_HOME" \

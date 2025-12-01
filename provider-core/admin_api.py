@@ -742,15 +742,40 @@ def provider_info():
 
 @app.get("/api/services")
 def list_services():
-    """Return available services from arkeod."""
+    """Return available services (REST first, CLI fallback)."""
+    # Try REST first
+    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT") or os.getenv("PROVIDER_HUB_URI"))
+    if rest_base:
+        try:
+            url = f"{rest_base}/arkeo/services"
+            with urllib.request.urlopen(url, timeout=6) as resp:
+                body = resp.read().decode("utf-8")
+            parsed = json.loads(body)
+            entries = parsed.get("services") or parsed.get("service") or []
+            services = []
+            for item in entries:
+                if not isinstance(item, dict):
+                    continue
+                sid = item.get("id") or item.get("service_id") or item.get("serviceID")
+                name = item.get("service") or item.get("name") or item.get("label")
+                desc = item.get("description") or item.get("desc") or ""
+                if sid is None and name is None:
+                    continue
+                services.append({"id": sid, "name": name, "description": desc})
+            if services:
+                return jsonify({"services": services, "raw": parsed, "source": url})
+        except Exception:
+            pass
+
+    # Fallback to CLI
     cmd = ["arkeod", "--home", ARKEOD_HOME]
     if ARKEOD_NODE:
         cmd.extend(["--node", ARKEOD_NODE])
-    cmd.extend(["query", "arkeo", "all-services", "-o", "json"])
+    cmd.extend(["query", "arkeo", "all-services", "-o", "json", "--limit", "5000", "--count-total"])
 
     code, out = run_list(cmd)
     if code != 0:
-        return jsonify({"error": "failed to list services", "detail": out}), 500
+        return jsonify({"error": "failed to list services", "detail": out, "cmd": cmd}), 500
 
     raw_out = out
 
@@ -790,14 +815,15 @@ def list_services():
             continue
         sid = item.get("id") or item.get("service_id") or item.get("serviceID")
         name = item.get("service") or item.get("name") or item.get("label")
+        desc = item.get("description") or item.get("desc") or ""
         if sid is None and name is None:
             continue
-        services.append({"id": sid, "name": name})
+        services.append({"id": sid, "name": name, "description": desc})
 
     # If parsing failed, try to extract minimal info from text lines
     if not services and isinstance(parsed, str):
         text_pattern = re.compile(
-            r"^\s*-\s*(?P<service>[^:]+?)\s*:\s*(?P<id>[0-9]+)\s*\((?P<desc>.*)\)\s*$"
+            r"^\s*-\s*(?P<service>[^:]+?)\s*:\s*(?P<id>[0-9]+)\s*\\((?P<desc>.*)\\)\\s*$"
         )
         for line in parsed.splitlines():
             m = text_pattern.match(line)
@@ -1112,11 +1138,42 @@ def _write_export_bundle(
 
 
 def _fetch_provider_services_internal(bech32_pubkey: str) -> list[dict]:
-    """Return provider services for a given pubkey (lightweight helper)."""
+    """Return provider services for a given pubkey (tries REST first, CLI fallback)."""
+    # Try REST (if hub URI provided)
+    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT") or os.getenv("PROVIDER_HUB_URI"))
+    if rest_base:
+        try:
+            url = f"{rest_base}/arkeo/services"
+            with urllib.request.urlopen(url, timeout=6) as resp:
+                body = resp.read().decode("utf-8")
+            data = json.loads(body)
+            entries = data.get("services") or data.get("service") or []
+            services: list[dict] = []
+            for s in entries:
+                if not isinstance(s, dict):
+                    continue
+                provider_pk = s.get("provider") or s.get("provider_pubkey") or s.get("provider_pub_key")
+                if provider_pk != bech32_pubkey:
+                    continue
+                sid = s.get("service_id") or s.get("id") or s.get("service")
+                sname = s.get("service") or s.get("name")
+                services.append(
+                    {
+                        "id": sid,
+                        "name": sname,
+                        "status": s.get("status"),
+                    }
+                )
+            if services:
+                return services
+        except Exception:
+            pass
+
+    # Fallback to CLI query
     cmd = ["arkeod", "--home", ARKEOD_HOME]
     if ARKEOD_NODE:
         cmd.extend(["--node", ARKEOD_NODE])
-    cmd.extend(["query", "arkeo", "list-providers", "--output", "json"])
+    cmd.extend(["query", "arkeo", "list-providers", "--output", "json", "--limit", "5000", "--count-total"])
     code, out = run_list(cmd)
     if code != 0:
         return []
