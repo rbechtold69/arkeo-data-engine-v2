@@ -29,7 +29,7 @@ ARKEO_REST_API = (
     or "http://provider1.innovationtheory.com:1317"
 )
 CACHE_DIR = os.getenv("CACHE_DIR", "/app/cache")
-CACHE_FETCH_INTERVAL = int(os.getenv("CACHE_FETCH_INTERVAL", "300"))  # seconds
+CACHE_FETCH_INTERVAL = 0  # hard-disabled background loop
 STATUS_FILE = os.path.join(CACHE_DIR, "_sync_status.json")
 
 
@@ -518,7 +518,17 @@ def main() -> None:
 
     ensure_cache_dir()
     commands = build_commands()
-    interval = max(60, CACHE_FETCH_INTERVAL)  # enforce a sane floor
+    interval_raw = CACHE_FETCH_INTERVAL
+    if interval_raw <= 0:
+        print(
+            f"[cache] background fetch loop disabled (CACHE_FETCH_INTERVAL={CACHE_FETCH_INTERVAL}); cache dir={CACHE_DIR}; node={ARKEOD_NODE}; rest_api={ARKEO_REST_API}",
+            flush=True,
+        )
+        # sleep forever so supervisor keeps the process alive without looping
+        while True:
+            time.sleep(86400)
+
+    interval = max(60, interval_raw) if interval_raw>0 else 60
     print(
         f"[cache] starting fetch loop every {interval}s; cache dir={CACHE_DIR}; node={ARKEOD_NODE}; rest_api={ARKEO_REST_API}",
         flush=True,

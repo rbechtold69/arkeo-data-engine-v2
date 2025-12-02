@@ -1,70 +1,65 @@
-# Arkeo Subscriber Core (Docker)
+# Arkeo Subscriber Admin (Docker)
 
-Containerized hot-wallet admin UI + API for Arkeo subscribers. Run locally or on a server to manage a subscriber hot wallet and related settings through a web UI.
+Containerized hot-wallet admin UI + API for Arkeo subscribers. Run it to manage a subscriber hot wallet, cache marketplace data, and expose listener proxies that handle Arkeo PAYG contracts on demand.
 
-## Prerequisites
-- Docker 20+ (buildkit preferred)
-- An environment file with your keys and defaults (see `subscriber.env`)
+Before you start, install Docker on your host and be comfortable with basic Docker commands (start/stop, logs, pull). Use your OS vendor’s Docker docs.
 
-## Quick Start (build locally)
-```bash
-cd subscriber-core
-docker build -t arkeonetwork/subscriber-core:dev .
-docker run --rm --env-file subscriber.env \
-  -p 8079:8079 -p 9998:9998 -p 3636:3636 \
-  arkeonetwork/subscriber-core:dev
+## 1) Create a `subscriber.env` for the docker
+Save this file next to where you run Docker (e.g., `~/subscriber-core/subscriber.env` so the volume mount works):
 ```
-- Admin UI: http://localhost:8079/index.html
-- Admin API: http://localhost:9998
-- Sentinel metadata: http://localhost:3636/metadata.json (if enabled)
+SUBSCRIBER_NAME=Arkeo Core Subscriber
 
-## Environment
-Copy `subscriber.env` and set at least:
-```
-`PROVIDER_NAME=(Use your subscriber name)`
-`MONIKER=(Use a moniker for your subscriber)`
-`WEBSITE=(Use your website)`
-`DESCRIPTION=(Add a description)`
-`LOCATION=(Add a location)`
-`FREE_RATE_LIMIT=10`
-`FREE_RATE_LIMIT_DURATION=1`
+KEY_NAME=subscriber
+KEY_KEYRING_BACKEND=test
+KEY_MNEMONIC=coach teach unfold exchange holiday orient sibling tenant soap motor magnet play rather early please primary age sweet destroy evolve exile wire canyon exit
+CHAIN_ID="arkeo-main-v1"
 
-`KEY_NAME=subscriber`
-`KEY_KEYRING_BACKEND=test`
-`KEY_MNEMONIC=(Use your own Arkeo hot wallet mnemonic)`
-`CHAIN_ID=arkeo-main-v1`
-
-`ARKEOD_HOME=~/.arkeo`
-`EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657`
-`ARKEO_REST_API_PORT=http://provider1.innovationtheory.com:1317`
-
-`SENTINEL_NODE=`
-`SENTINEL_PORT=`
+ARKEOD_HOME=~/.arkeo
+EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657
+EXTERNAL_ARKEO_REST_API=http://provider1.innovationtheory.com:1317
+EXTERNAL_SENTINEL_NODE=http://docker.innovationtheory.com:3636
 
 ADMIN_PORT=8079
 ADMIN_API_PORT=9998
 ```
+If you don’t have a mnemonic, leave `KEY_MNEMONIC` empty. On first start the container will print a generated mnemonic—copy it from the logs and paste it back into `subscriber.env` for next runs.
 
-The UI also persists sentinel values in `config/sentinel.env` and `config/sentinel.yaml`.
-
-## Pull from GHCR (once published)
+## 2) Run the Subscriber Core docker image
 ```bash
+# create host dirs
+mkdir -p ~/subscriber-core/config ~/subscriber-core/cache ~/subscriber-core/arkeo
+
+# stop/remove any existing container with this name
+docker stop subscriber-core || true
+docker rm subscriber-core || true
+
+# pull latest image (optional but recommended)
 docker pull ghcr.io/arkeonetwork/subscriber-core:latest
-docker run --rm --env-file subscriber.env \
-  -p 8079:8079 -p 9998:9998 -p 3636:3636 \
+
+# run
+docker run -d --name subscriber-core --restart=unless-stopped \
+  --env-file ~/subscriber-core/subscriber.env \
+  -e ENV_ADMIN_PORT=8079 \
+  -p 8079:8079 -p 9998:9998 -p 62001-62100:62001-62100 \
+  -v ~/subscriber-core/config:/app/config \
+  -v ~/subscriber-core/cache:/app/cache \
+  -v ~/subscriber-core/arkeo:/root/.arkeo \
   ghcr.io/arkeonetwork/subscriber-core:latest
 ```
+Make sure these ports are open in your firewall.
 
-## Workflow
-1) Start container (above).
-2) Open the Admin UI.
-3) Configure subscriber settings as needed in the UI forms (defaults come from `subscriber.env`).
+## 3) Open the admin UI
+Browse to `http://localhost:8079` (or your host IP:8079).
+- The header shows your subscriber pubkey and address. Fund the hot wallet with a small amount of ARKEO (it’s a hot wallet).
+- The admin sync runs for a while on first load (pulls providers/contracts/services, filters inactive, builds marketplace cache). By default it repeats about every 5 minutes. To disable the background loop, set `CACHE_FETCH_INTERVAL=0` (manual “Refresh” still works).
 
-## Notes
-- Exposed ports: 8079 (web), 9998 (admin API), 3636 (sentinel). Adjust `-p` as needed.
-- Sentinel YAML lives at `/app/config/sentinel.yaml`; services are added/removed by the Provider Services form (inactive services are removed; a placeholder is only kept when no services remain).
-- Claims helper jobs (if present) can be triggered via the API; see scripts in this folder for examples.
-- A cache fetcher runs every 5 minutes (default) to download providers, contracts, and services from `arkeod` and stores them in `/app/cache/{provider-services,provider-contracts,service-types}.json`. Configure via `CACHE_DIR` or `CACHE_FETCH_INTERVAL` env vars. It also derives `/app/cache/active_providers.json` by fetching each provider’s external `metadata_uri` (short timeout; skipped for localhost/127.*), attaching metadata, and setting `status` (1 = fetched, 0 = missing/failed/timeout). After that it builds `/app/cache/active_services.json` for ONLINE services whose provider is active.
-- Services are fetched via the REST API (`${EXTERNAL_ARKEO_REST_API}/arkeo/services`) without pagination; set `EXTERNAL_ARKEO_REST_API` to change the source. Providers/contracts use `arkeod` CLI.
-- Manual refresh: call `POST /api/cache-refresh` (or use the "Refresh Cache Now" button in the UI) to immediately rebuild the cache files.
-- Startup warm: set `CACHE_WARM_ON_START=1` if you want a one-time cache refresh on container start (defaults to off to avoid startup stalls).
+## 4) Add listeners (proxies)
+- Each listener exposes a port that wraps Arkeo subscriber contract handling (auto PAYG contract creation when needed).
+- When you add a listener, it auto-selects top providers from the Arkeo Data Marketplace for that service.
+- Set a per-listener whitelist to restrict who can hit the exposed port.
+- Your external app points at this subscriber’s IP and listener port. Use the “Test” action on the listener row to see the exact curl and payload format.
+
+That’s it—you’re consuming the Arkeo Data Marketplace through your subscriber listeners. Cache and listener state live under `/app/cache` (host-mounted to `~/subscriber-core/cache`). Config is under `/app/config` (host-mounted to `~/subscriber-core/config`). Listener data is in `/root/.arkeo` (host-mounted to `~/subscriber-core/arkeo`).
+
+## Getting ARKEO Tokens (using the Keplr wallet)
+In Keplr, add the Osmosis chain, swap for `ARKEO` on Osmosis, then IBC-transfer it to your Arkeo address via the `ARKEO (Arkeo/channel-103074)` route. After it lands, it appears as native `ARKEO` on Arkeo. Start with a small test send and keep a little OSMO for fees.

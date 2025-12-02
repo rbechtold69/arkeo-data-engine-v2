@@ -241,11 +241,31 @@
             showResultModal("Copy Subscriber Pubkey", "Pubkey unavailable");
             return;
         }
+        const msgTitle = "Copy Subscriber Pubkey";
         try {
             await navigator.clipboard.writeText(val);
-            showResultModal("Copy Subscriber Pubkey", `Pubkey copied to clipboard:\n${val}`);
+            showResultModal(msgTitle, `Pubkey copied to clipboard:\n${val}`);
         } catch (e) {
-            showResultModal("Copy Subscriber Pubkey", "Failed to copy pubkey");
+            // fallback for non-HTTPS contexts
+            const ta = document.createElement("textarea");
+            ta.value = val;
+            document.body.appendChild(ta);
+            ta.select();
+            let fallbackOk = false;
+            try {
+                fallbackOk = document.execCommand("copy");
+            } catch (err) {
+                fallbackOk = false;
+            }
+            document.body.removeChild(ta);
+            if (fallbackOk) {
+                showResultModal(msgTitle, `Pubkey copied (fallback):\n${val}`);
+            } else {
+                showResultModal(
+                    msgTitle,
+                    `Failed to copy. Clipboard access may require HTTPS. Here is the value:\n${val}`
+                );
+            }
         }
     }
 
@@ -255,11 +275,30 @@
             showResultModal("Copy Subscriber Address", "Subscriber address unavailable");
             return;
         }
+        const msgTitle = "Copy Subscriber Address";
         try {
             await navigator.clipboard.writeText(val);
-            showResultModal("Copy Subscriber Address", `Address copied to clipboard:\n${val}`);
+            showResultModal(msgTitle, `Address copied to clipboard:\n${val}`);
         } catch (e) {
-            showResultModal("Copy Subscriber Address", "Failed to copy address");
+            const ta = document.createElement("textarea");
+            ta.value = val;
+            document.body.appendChild(ta);
+            ta.select();
+            let fallbackOk = false;
+            try {
+                fallbackOk = document.execCommand("copy");
+            } catch (err) {
+                fallbackOk = false;
+            }
+            document.body.removeChild(ta);
+            if (fallbackOk) {
+                showResultModal(msgTitle, `Address copied (fallback):\n${val}`);
+            } else {
+                showResultModal(
+                    msgTitle,
+                    `Failed to copy. Clipboard access may require HTTPS. Here is the value:\n${val}`
+                );
+            }
         }
     }
 
@@ -361,6 +400,8 @@
         // poll cache status to reflect background sync
         pollSyncStatus();
         setInterval(pollSyncStatus, 5000);
+        // kick off a cache refresh on load
+        refreshCache();
     });
 
     function showResultModal(title, body, asHtml = false) {

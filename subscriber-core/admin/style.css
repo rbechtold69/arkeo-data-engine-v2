@@ -398,6 +398,7 @@ pre {
     padding: 12px;
     background: #0b1220;
     border-radius: 8px;
+    border: 1px solid var(--muted-2);
 }
 .listener-grid {
     display: grid;

@@ -1,67 +1,60 @@
-# Arkeo Provider Core (Docker)
+# Arkeo Provider Admin (Docker)
 
-Containerized hot-wallet admin UI + API + sentinel reverse-proxy for Arkeo providers. Run locally or on a server to bond/modify services and manage sentinel config through a web UI.
+Containerized admin UI, API, and sentinel reverse-proxy for Arkeo providers.
 
-## Prerequisites
-- Docker 20+ (buildkit preferred)
-- An environment file with your keys and defaults (see `provider.env`)
+Before you start, install Docker on your host and be comfortable with basic Docker commands (start/stop, logs, pull). Use your OS vendor’s Docker docs.
 
-## Quick Start (build locally)
-```bash
-cd provider-core
-docker build -t arkeonetwork/provider-core:dev .
-docker run --rm --env-file provider.env \
-  -p 8080:8080 -p 9999:9999 -p 3636:3636 \
-  arkeonetwork/provider-core:dev
+## Create the `provider.env` for the docker
+Create `~/provider.env` (or similar) with:
 ```
-- Admin UI: http://localhost:8080/index.html  
-- Admin API: http://localhost:9999  
-- Sentinel metadata: http://localhost:3636/metadata.json
+KEY_NAME=provider
+KEY_KEYRING_BACKEND=test
+KEY_MNEMONIC=
+CHAIN_ID="arkeo-main-v1"
 
-## Environment
-Copy `provider.env` and set at least:
-```
-`PROVIDER_NAME=(Use your provider name)`
-`MONIKER=(Use a moniker for your provider name)`
-`WEBSITE=(Use your website)`
-`DESCRIPTION=(Add a description)`
-`LOCATION=(Add a location)`
-`FREE_RATE_LIMIT=10`
-`FREE_RATE_LIMIT_DURATION=1`
+ARKEOD_HOME=~/.arkeo
+EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657
+ARKEO_REST_API_PORT=http://provider1.innovationtheory.com:1317
 
-`KEY_NAME=provider`
-`KEY_KEYRING_BACKEND=test`
-`KEY_MNEMONIC=(Use your own Arkeo hot wallet mnemonic)`
-`CHAIN_ID=arkeo-main-v1`
-
-`ARKEOD_HOME=~/.arkeo`
-`EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657`
-`ARKEO_REST_API_PORT=http://provider1.innovationtheory.com:1317`
-
-`SENTINEL_NODE=`
-`SENTINEL_PORT=`
+SENTINEL_NODE=http://provider-core-1.innovationtheory.com
+SENTINEL_PORT=3636
 
 ADMIN_PORT=8080
 ADMIN_API_PORT=9999
 ```
+- If you don’t have a mnemonic, leave `KEY_MNEMONIC` empty. On first launch the container will create a hotwallet and print the mnemonic; copy it and paste it back into `provider.env`.
 
-The UI also persists sentinel values in `config/sentinel.env` and `config/sentinel.yaml`.
-
-## Pull from GHCR (once published)
+## Run the latest Provider Core docker image
 ```bash
+# create host dirs
+mkdir -p ~/provider-core/config ~/provider-core/arkeo
+
+# stop/remove any existing container with this name
+docker stop provider-core || true
+docker rm provider-core || true
+
+# pull latest image (optional but recommended)
 docker pull ghcr.io/arkeonetwork/provider-core:latest
-docker run --rm --env-file provider.env \
-  -p 8080:8080 -p 9999:9999 -p 3636:3636 \
+
+# run
+docker run -d --name provider-core --restart=unless-stopped \
+  --env-file ~/provider.env \
+  -e ENV_ADMIN_PORT=8080 \
+  -p 8080:8080 -p 3636:3636 -p 9999:9999 \
+  -v ~/provider-core/config:/app/config \
+  -v ~/provider-core/arkeo:/root/.arkeo \
   ghcr.io/arkeonetwork/provider-core:latest
 ```
 
-## Workflow
-1) Start container (above).  
-2) Open the Admin UI.  
-3) Sentinel form: set Provider Name/Moniker and save (restarts sentinel).  
-4) Provider Services form: bond + mod a service, supply RPC URL (and optional user/pass). On success the sentinel YAML is updated and sentinel is restarted.
+- Open firewall for ports 8080 (admin UI), 9999 (admin API), 3636 (sentinel).
+- Admin UI: `http://<host>:8080`
+- Copy the Arkeo address shown at the top; fund the address with a small amount of ARKEO (hotwallet).
+- In Admin: configure sentinel (so your provider is discoverable).
+- Add provider services: pick the service type, set RPC URI and optional user/pass. If your node is firewalled, allow the Docker host IP. The host must reach your node.
+- Each provider service requires a minimum bond of 1 ARKEO to prevent spam.
+- Do a Provider Export when done. Keep `provider.env` and exports safe—they contain your mnemonic.
 
-## Notes
-- Exposed ports: 8080 (web), 9999 (admin API), 3636 (sentinel). Adjust `-p` as needed.
-- Sentinel YAML lives at `/app/config/sentinel.yaml`; services are added/removed by the Provider Services form (inactive services are removed; a placeholder is only kept when no services remain).
-- Provider claims are auto-triggered every 30 minutes inside the container via `/api/provider-claims` (see `claim_cron.sh`). Override interval with `CLAIM_CRON_INTERVAL` env var if needed.
+You’re now on the Arkeo Data Marketplace.
+
+## Getting ARKEO Tokens (using the Keplr wallet)
+In Keplr, add the Osmosis chain, swap for `ARKEO` on Osmosis, then IBC-transfer it to your Arkeo address via the `ARKEO (Arkeo/channel-103074)` route. After it lands, it appears as native `ARKEO` on Arkeo. Start with a small test send and keep a little OSMO for fees.
