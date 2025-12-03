@@ -174,7 +174,7 @@ def run_list(cmd: list[str]) -> tuple[int, str]:
 @app.after_request
 def add_cors(resp):
     resp.headers["Access-Control-Allow-Origin"] = "*"
-    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+    resp.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Cache-Control"
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return resp
 
@@ -1994,6 +1994,38 @@ def provider_totals():
     totals_list = sorted(totals.values(), key=lambda x: (int(x["contract_id"]) if str(x["contract_id"]).isdigit() else x["contract_id"]))
     grand_total = sum(t["total"] for t in totals_list)
 
+    # Per-service summary
+    service_totals = {}
+    for r in all_rows:
+        svc = r.get("service") or ""
+        if not svc:
+            continue
+        st = service_totals.setdefault(
+            svc,
+            {
+                "service": svc,
+                "tx_count": 0,
+                "total": 0,
+                "first_height": r["height"],
+                "last_height": r["height"],
+                "contracts": set(),
+            },
+        )
+        st["tx_count"] += 1
+        st["total"] += r["paid"]
+        st["first_height"] = min(st["first_height"], r["height"])
+        st["last_height"] = max(st["last_height"], r["height"])
+        st["contracts"].add(r["contract_id"])
+    # Convert contract sets to lists and sort
+    service_totals_list = []
+    for svc, st in service_totals.items():
+        st = dict(st)
+        st["contracts"] = sorted(st["contracts"], key=lambda x: int(x) if str(x).isdigit() else str(x))
+        st["total_paid_uarkeo"] = st["total"]
+        st["total_paid_arkeo"] = st["total"] / 1_000_000
+        service_totals_list.append(st)
+    service_totals_list.sort(key=lambda x: x["service"])
+
     return jsonify(
         {
             "provider_pubkey": provider_pubkey,
@@ -2005,6 +2037,7 @@ def provider_totals():
             "contracts": totals_list,
             "total_paid_uarkeo": grand_total,
             "total_paid_arkeo": grand_total / 1_000_000,
+            "service_totals": service_totals_list,
         }
     )
 

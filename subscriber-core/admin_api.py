@@ -2188,6 +2188,7 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
             length = 0
         body = self.rfile.read(length) if length > 0 else b"{}"
         response_time_sec = 0
+        t_total_start = time.time()
         self._log("info", f"req start service={service} svc_id={svc_id} provider_filter={cfg.get('provider_pubkey')} sentinel={sentinel} bytes={len(body)}")
 
         # IP whitelist
@@ -2376,6 +2377,10 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                     as_header=bool(cfg.get("arkauth_as_header", PROXY_ARKAUTH_AS_HEADER)),
                 )
             response_time_sec = time.time() - t0
+            total_time_sec = time.time() - t_total_start
+            # Prefer total time for metrics if available
+            if total_time_sec > response_time_sec:
+                response_time_sec = total_time_sec
 
             meta_full = _build_arkeo_meta_clean(active, nonce, svc_id, service, provider_filter, contract_client, sentinel, response_time_sec)
             self.server.last_code = code

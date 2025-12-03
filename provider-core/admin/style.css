@@ -260,6 +260,35 @@ pre {
     box-sizing: border-box;
 }
 
+.claims-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 12px;
+    width: 100%;
+    padding: 8px 0;
+}
+.claim-card {
+    background: #0b1220;
+    border-radius: 8px;
+    padding: 12px;
+    box-sizing: border-box;
+    border: 1px solid #1f2937;
+}
+.claim-title {
+    font-weight: 700;
+    margin-bottom: 6px;
+}
+.claim-metric {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 4px;
+    color: #3be0ff;
+}
+.claim-meta {
+    color: var(--muted-2);
+    font-size: 12px;
+}
+
 .footer-card {
     text-align: left;
     background: #1f2a3d;

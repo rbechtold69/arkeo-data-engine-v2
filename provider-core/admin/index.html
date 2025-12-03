@@ -42,6 +42,11 @@
 </div>
 
 <div class="card">
+    <h2>Claim Totals</h2>
+    <div id="claimTotals" class="claims-grid muted card-body">(loading claim totals...)</div>
+</div>
+
+<div class="card">
     <h2>Sentinel Info</h2>
     <div class="row">
         <div class="col">
@@ -227,6 +232,8 @@
     }
 
     let providerServicesData = [];
+    let providerServiceTotals = [];
+    let providerServiceLookup = {};
     let currentPubkey = "";
 
     async function refreshInfo() {
@@ -238,7 +245,7 @@
         if (headerPill) headerPill.style.display = "inline-block";
         try {
             const fetchNoStore = (url) => fetch(url, { cache: "no-store" });
-            const [provRes, balRes, keyRes, svcRes, allSvcRes, sentRes, heightRes, sCfgRes, metaRes] = await Promise.allSettled([
+            const [provRes, balRes, keyRes, svcRes, allSvcRes, sentRes, heightRes, sCfgRes, metaRes, totalsRes] = await Promise.allSettled([
                 fetchNoStore(resolveApi("/api/provider-info")),
                 fetchNoStore(resolveApi("/api/balance")),
                 fetchNoStore(resolveApi("/api/key")),
@@ -248,6 +255,11 @@
                 fetchNoStore(resolveApi("/api/block-height")),
                 fetchNoStore(resolveApi("/api/sentinel-config")),
                 fetchNoStore(resolveApi("/api/sentinel-metadata?quiet=1")),
+                fetch(resolveApi("/api/provider-totals"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+                    body: "{}",
+                }),
             ]);
             const parseSafe = async (settled) => {
                 if (settled.status !== "fulfilled" || !settled.value) return { error: String(settled.reason || "request failed") };
@@ -270,6 +282,7 @@
             const height = await parseSafe(heightRes);
             const sentinelConfig = await parseSafe(sCfgRes);
             const meta = await parseSafe(metaRes);
+            const totals = await parseSafe(totalsRes);
             // Provider summary at top
             const metaCfg = (meta && meta.metadata && meta.metadata.config) || {};
             const envMeta = (prov && prov.provider_metadata) || {};
@@ -335,7 +348,9 @@
                     }
                 });
             }
+            providerServiceLookup = svcLookup;
             providerServicesData = services && Array.isArray(services.services) ? services.services : [];
+            providerServiceTotals = (totals && Array.isArray(totals.service_totals)) ? totals.service_totals : [];
             const sentinelServices = [];
             renderEndpointPanel(sentinelConfig, prov, envMeta);
             if (sentinelConfig && sentinelConfig.config && Array.isArray(sentinelConfig.config.services)) {
@@ -420,6 +435,7 @@
             } else {
                 svcEl.textContent = "No provider services found";
             }
+            renderClaimTotals();
             debugEl.textContent = JSON.stringify(
                 {
                     provider_info: prov,
@@ -431,6 +447,7 @@
                     all_services: allServices,
                     sentinel_status: sentinelStatus,
                     block_height: height,
+                    provider_totals: totals,
                 },
                 null,
                 2
@@ -515,6 +532,61 @@
     function formatAddressShort(addr) {
         if (!addr || addr.length < 12) return addr || "";
         return `${addr.slice(0, 6)}...${addr.slice(-8)}`;
+    }
+
+    function isServiceActive(statusVal) {
+        const rawStatus = statusVal === undefined ? "active" : String(statusVal).toLowerCase();
+        return rawStatus === "1" || rawStatus === "active" || rawStatus === "online" || rawStatus === "true";
+    }
+
+    function formatArkeoTotals(uarkeoVal) {
+        const num = Number(uarkeoVal || 0);
+        const arkeo = num / 1_000_000;
+        const arkeoStr = arkeo.toLocaleString("en-US", { minimumFractionDigits: 3, maximumFractionDigits: 3 });
+        const uStr = num.toLocaleString("en-US");
+        return { arkeo: `${arkeoStr} ARKEO`, uarkeo: `${uStr} uarkeo` };
+    }
+
+    function renderClaimTotals() {
+        const el = document.getElementById("claimTotals");
+        if (!el) return;
+        if (!providerServicesData || !providerServicesData.length) {
+            el.textContent = "No provider services found.";
+            el.classList.add("muted");
+            return;
+        }
+        const active = providerServicesData.filter((s) => isServiceActive(s && s.status));
+        if (!active.length) {
+            el.textContent = "No active services.";
+            el.classList.add("muted");
+            return;
+        }
+        const totalsMap = new Map();
+        (providerServiceTotals || []).forEach((t) => {
+            if (!t || !t.service) return;
+            const key = String(t.service).toLowerCase();
+            totalsMap.set(key, t);
+        });
+        const cards = active.map((s) => {
+            const rawId = s?.id ?? s?.service_id ?? s?.serviceID ?? s?.service ?? "";
+            const rawName = s?.name || s?.service || s?.label || String(rawId);
+            const serviceKey = String(rawName || rawId).toLowerCase();
+            const lookup = providerServiceLookup[rawId] || providerServiceLookup[String(rawId)] || providerServiceLookup[serviceKey];
+            const displayName = (lookup && (lookup.description || lookup.name || lookup.service)) || rawName || rawId;
+            const totalEntry = totalsMap.get(serviceKey);
+            const { arkeo, uarkeo } = formatArkeoTotals(totalEntry ? totalEntry.total_paid_uarkeo : 0);
+            const txCount = totalEntry ? totalEntry.tx_count || 0 : 0;
+            const contracts = totalEntry && Array.isArray(totalEntry.contracts) ? totalEntry.contracts.length : 0;
+            return `
+                <div class="claim-card">
+                    <div class="claim-title">${displayName || "(unknown service)"}</div>
+                    <div class="claim-metric">${arkeo}</div>
+                    <div class="claim-meta">${uarkeo} · txs: ${txCount}${contracts ? ` · contracts: ${contracts}` : ""}</div>
+                </div>
+            `;
+        });
+        el.classList.remove("muted");
+        el.innerHTML = cards.join("");
     }
 
     function setStatusDot(statusId, state) {

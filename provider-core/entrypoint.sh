@@ -10,6 +10,15 @@ strip_quotes() {
   printf '%s' "$val"
 }
 
+expand_tilde() {
+  local val="$1"
+  # Expand leading tilde to $HOME
+  case "$val" in
+    "~"*) val="${val/#\~/$HOME}" ;;
+  esac
+  printf '%s' "$val"
+}
+
 echo "Provider-core Admin Mode (hot wallet + web UI only)"
 
 KEY_NAME=${KEY_NAME:-provider}
@@ -350,6 +359,10 @@ CLEAN_PROVIDER_CONFIG_STORE_LOCATION=$(strip_quotes "${PROVIDER_CONFIG_STORE_LOC
 CLEAN_LOG_LEVEL=$(strip_quotes "${LOG_LEVEL:-$DEFAULT_LOG_LEVEL}")
 CLEAN_PROVIDER_PUBKEY=$(strip_quotes "${PROVIDER_PUBKEY:-$BECH32_PUBKEY}")
 CLEAN_PROVIDER_NAME=$(strip_quotes "${PROVIDER_NAME:-$DEFAULT_PROVIDER_NAME}")
+# Expand any leading tilde so sentinel sees absolute paths
+CLEAN_CLAIM_STORE_LOCATION=$(expand_tilde "$CLEAN_CLAIM_STORE_LOCATION")
+CLEAN_CONTRACT_CONFIG_STORE_LOCATION=$(expand_tilde "$CLEAN_CONTRACT_CONFIG_STORE_LOCATION")
+CLEAN_PROVIDER_CONFIG_STORE_LOCATION=$(expand_tilde "$CLEAN_PROVIDER_CONFIG_STORE_LOCATION")
 
 SENTINEL_ENV_PATH=/app/config/sentinel.env
 if [ ! -f "$SENTINEL_ENV_PATH" ]; then
