@@ -11,6 +11,7 @@ import socketserver
 import subprocess
 import threading
 import time
+import traceback
 import urllib.error
 import urllib.request
 import urllib.parse
@@ -38,6 +39,67 @@ SUBSCRIBER_INFO_FILE = os.path.join(CACHE_DIR, "subscriber_info.json")
 LOG_DIR = os.path.join(CACHE_DIR, "logs")
 _LISTENER_SERVERS: dict[int, dict] = {}
 _LISTENER_LOCK = threading.Lock()
+_NONCE_CACHE: dict[str, int] = {}
+_NONCE_LOCK = threading.Lock()
+
+
+def _read_persisted_nonce(listener_id: str | None, contract_id: str | int | None) -> int | None:
+    """Return persisted nonce for a listener/contract from listeners.json if present."""
+    if not listener_id or contract_id is None:
+        return None
+    try:
+        data = _ensure_listeners_file()
+        listeners = data.get("listeners") if isinstance(data, dict) else []
+        if not isinstance(listeners, list):
+            return None
+        cid_str = str(contract_id)
+        for l in listeners:
+            if not isinstance(l, dict):
+                continue
+            if str(l.get("id")) != str(listener_id):
+                continue
+            nc = l.get("nonce_cache")
+            if isinstance(nc, dict) and cid_str in nc:
+                try:
+                    return int(nc[cid_str])
+                except Exception:
+                    return None
+        return None
+    except Exception:
+        return None
+
+
+def _persist_listener_nonce(listener_id: str | None, contract_id: str | int | None, nonce: int | None) -> None:
+    """Persist the last nonce used for a contract into listeners.json."""
+    if not listener_id or contract_id is None or nonce is None:
+        return
+    try:
+        data = _ensure_listeners_file()
+        listeners = data.get("listeners") if isinstance(data, dict) else []
+        if not isinstance(listeners, list):
+            return
+        cid_str = str(contract_id)
+        changed = False
+        for l in listeners:
+            if not isinstance(l, dict):
+                continue
+            if str(l.get("id")) != str(listener_id):
+                continue
+            nc = l.get("nonce_cache")
+            if not isinstance(nc, dict):
+                nc = {}
+                l["nonce_cache"] = nc
+            try:
+                nc[cid_str] = int(nonce)
+            except Exception:
+                nc[cid_str] = nonce
+            l["updated_at"] = _timestamp()
+            changed = True
+            break
+        if changed:
+            _write_listeners(data)
+    except Exception:
+        pass
 
 def _build_sentinel_uri() -> str:
     port = os.getenv("SENTINEL_PORT") or "3636"
@@ -1250,6 +1312,38 @@ def _write_listeners(data: dict) -> None:
             pass
 
 
+def _normalize_top_services(entries) -> list[dict]:
+    """Normalize top_services entries to the current on-disk shape."""
+    normalized: list[dict] = []
+    for item in entries if isinstance(entries, list) else []:
+        if not isinstance(item, dict):
+            continue
+        pk = item.get("provider_pubkey") or item.get("pubkey")
+        svc = item.get("service_id") if item.get("service_id") is not None else item.get("service")
+        if not pk:
+            continue
+        entry: dict = {
+            "provider_pubkey": str(pk),
+        }
+        # keep service id for dedup/lookup, but avoid padding with empty string
+        if svc not in (None, ""):
+            entry["service_id"] = str(svc)
+        for key in (
+            "provider_moniker",
+            "sentinel_url",
+            "status",
+            "status_updated_at",
+            "rt_avg_ms",
+            "rt_count",
+            "rt_last_ms",
+            "rt_updated_at",
+        ):
+            if key in item:
+                entry[key] = item.get(key)
+        normalized.append(entry)
+    return normalized
+
+
 def _safe_int(val, default: int = 0) -> int:
     try:
         return int(str(val))
@@ -1381,8 +1475,7 @@ def _start_listener_server(listener: dict) -> tuple[bool, str | None]:
         return False, "invalid port"
 
     provider_pubkey, sentinel_url, provider_moniker = _resolve_listener_target(listener)
-    if not sentinel_url:
-        sentinel_url = SENTINEL_URI_DEFAULT
+    sentinel_url = _normalize_sentinel_url(sentinel_url or SENTINEL_URI_DEFAULT)
     if not sentinel_url:
         return False, "no sentinel URL available for listener"
 
@@ -1622,6 +1715,79 @@ def _sentinel_from_metadata_uri(uri: str | None) -> str | None:
     return base.rstrip("/")
 
 
+def _normalize_sentinel_url(url: str | None) -> str | None:
+    """Return a sentinel base URL without metadata.json suffix."""
+    if not url:
+        return None
+    url = url.strip()
+    if url.endswith("metadata.json") or url.rstrip("/").endswith("metadata.json"):
+        return _sentinel_from_metadata_uri(url)
+    return url
+
+
+def _active_provider_moniker(provider_pubkey: str | None) -> str | None:
+    """Lookup provider moniker from active_providers cache."""
+    if not provider_pubkey:
+        return None
+    try:
+        data = _load_cached("active_providers")
+    except Exception:
+        return None
+    prov_list = data.get("providers") if isinstance(data, dict) else []
+    if not isinstance(prov_list, list):
+        return None
+    for p in prov_list:
+        if not isinstance(p, dict):
+            continue
+        pk = p.get("pubkey") or p.get("pub_key") or p.get("pubKey")
+        if str(pk) != str(provider_pubkey):
+            continue
+        meta = p.get("metadata") or {}
+        try:
+            cfg = meta.get("config") or {}
+            mon = cfg.get("moniker") or meta.get("moniker")
+            if mon:
+                return mon
+        except Exception:
+            pass
+    return None
+
+
+def _active_service_lookup(provider_pubkey: str | None, service_id: str | int | None) -> dict:
+    """Lookup active_services entry by provider/service from cache."""
+    if not provider_pubkey or service_id is None:
+        return {}
+    try:
+        data = _load_cached("active_services")
+    except Exception:
+        return {}
+    entries = data.get("active_services") if isinstance(data, dict) else []
+    if not isinstance(entries, list):
+        return {}
+    sid_str = str(service_id)
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        pk = e.get("provider_pubkey")
+        sid_val = e.get("service_id") or e.get("service") or e.get("id")
+        if str(pk) == str(provider_pubkey) and str(sid_val) == sid_str:
+            return e
+    return {}
+
+
+def _extract_paygo_rate(raw: dict) -> dict | None:
+    """Return a single pay-as-you-go rate dict if available."""
+    if not isinstance(raw, dict):
+        return None
+    rates = raw.get("pay_as_you_go_rate") or raw.get("pay_as_you_go_rates")
+    if isinstance(rates, list) and rates:
+        item = rates[0]
+        return item if isinstance(item, dict) else None
+    if isinstance(rates, dict):
+        return rates
+    return None
+
+
 def _tail_file(path: str, max_lines: int = 200) -> str:
     """Return the last max_lines from a text file."""
     try:
@@ -1746,6 +1912,7 @@ def _candidate_providers(cfg: dict) -> list[dict]:
     """Build an ordered list of provider candidates for failover."""
     candidates: list[dict] = []
     top = cfg.get("top_services")
+    svc_id_for_lookup = cfg.get("service_id") or cfg.get("service")
     if isinstance(top, list):
         for ts in top:
             if not isinstance(ts, dict):
@@ -1753,22 +1920,48 @@ def _candidate_providers(cfg: dict) -> list[dict]:
             pk = ts.get("provider_pubkey")
             if not pk:
                 continue
-            mu = ts.get("metadata_uri")
-            sentinel_url = _sentinel_from_metadata_uri(mu) if _is_external(mu) else None
+            svc_for_ts = ts.get("service_id") or ts.get("service") or svc_id_for_lookup
+            active = _active_service_lookup(pk, svc_for_ts)
+            active_raw = active.get("raw") if isinstance(active, dict) else {}
+            mu = ts.get("metadata_uri") or (active.get("metadata_uri") if isinstance(active, dict) else None)
+            if not mu and isinstance(active_raw, dict):
+                mu = active_raw.get("metadata_uri")
+            sentinel_url = _normalize_sentinel_url(ts.get("sentinel_url")) if ts.get("sentinel_url") else None
+            if not sentinel_url and _is_external(mu):
+                sentinel_url = _sentinel_from_metadata_uri(mu)
+            if not sentinel_url:
+                # fallback: try parent cfg sentinel
+                sentinel_url = _normalize_sentinel_url(cfg.get("provider_sentinel_api"))
+            if not sentinel_url:
+                continue  # skip candidates without a usable sentinel URL
             settle = ts.get("settlement_duration")
             if settle is None:
-                settle = _lookup_settlement_duration(pk, cfg.get("service_id") or cfg.get("service"))
+                settle = active.get("settlement_duration") if isinstance(active, dict) else None
+            if settle is None:
+                settle = _lookup_settlement_duration(pk, svc_for_ts)
             rate = ts.get("pay_as_you_go_rate") if isinstance(ts.get("pay_as_you_go_rate"), dict) else None
+            if rate is None:
+                rate = _extract_paygo_rate(active_raw) if isinstance(active_raw, dict) else None
+            qpm = ts.get("queries_per_minute")
+            if qpm is None and isinstance(active_raw, dict):
+                qpm = active_raw.get("queries_per_minute")
+            min_dur = ts.get("min_contract_duration")
+            if min_dur is None and isinstance(active_raw, dict):
+                min_dur = active_raw.get("min_contract_duration")
+            max_dur = ts.get("max_contract_duration")
+            if max_dur is None and isinstance(active_raw, dict):
+                max_dur = active_raw.get("max_contract_duration")
+            moniker = ts.get("provider_moniker") or _active_provider_moniker(pk)
             candidates.append(
                 {
                     "provider_pubkey": pk,
-                    "provider_moniker": ts.get("provider_moniker"),
+                    "provider_moniker": moniker,
                     "sentinel_url": sentinel_url,
                     "settlement_duration": settle,
                     "pay_as_you_go_rate": rate,
-                    "queries_per_minute": ts.get("queries_per_minute"),
-                    "min_contract_duration": ts.get("min_contract_duration"),
-                    "max_contract_duration": ts.get("max_contract_duration"),
+                    "queries_per_minute": qpm,
+                    "min_contract_duration": min_dur,
+                    "max_contract_duration": max_dur,
                 }
             )
     # ensure configured provider is included (first if not already)
@@ -1802,11 +1995,28 @@ def _resolve_listener_target(listener: dict) -> tuple[str | None, str | None, st
     mon = listener.get("provider_moniker")
     if pk and sent:
         return pk, sent, mon
+    # Try active_services cache for sentinel/moniker
+    try:
+        svc_id = listener.get("service_id") or listener.get("service")
+        active = _active_service_lookup(pk, svc_id)
+        if active:
+            mu = active.get("metadata_uri") or (active.get("raw") or {}).get("metadata_uri")
+            if _is_external(mu):
+                sent = _sentinel_from_metadata_uri(mu)
+            if not mon:
+                mon = _active_provider_moniker(pk)
+            if pk and sent:
+                return pk, sent, mon
+    except Exception:
+        pass
     top = listener.get("top_services") or []
     if isinstance(top, list):
         for ts in top:
             if not isinstance(ts, dict):
                 continue
+            ts_sent = ts.get("sentinel_url")
+            if ts_sent:
+                return ts.get("provider_pubkey") or pk, ts_sent, ts.get("provider_moniker") or mon
             meta_uri = ts.get("metadata_uri")
             if not _is_external(meta_uri):
                 continue
@@ -1910,6 +2120,32 @@ def _claims_highest_nonce(sentinel: str, contract_id: str, client_pub: str) -> i
         except Exception:
             failed += 1
     return 0 if failed else 0
+
+
+def _nonce_cache_key(contract_id: str, client_pub: str) -> str:
+    return f"{contract_id}:{client_pub}"
+
+
+def _next_nonce_cached(contract_id: str, client_pub: str) -> int | None:
+    key = _nonce_cache_key(contract_id, client_pub)
+    with _NONCE_LOCK:
+        if key not in _NONCE_CACHE:
+            return None
+        _NONCE_CACHE[key] += 1
+        return _NONCE_CACHE[key]
+
+
+def _seed_nonce_cache(contract_id: str, client_pub: str, highest_nonce: int) -> int:
+    key = _nonce_cache_key(contract_id, client_pub)
+    with _NONCE_LOCK:
+        _NONCE_CACHE[key] = highest_nonce
+        return _NONCE_CACHE[key]
+
+
+def _peek_nonce_cache(contract_id: str, client_pub: str) -> int | None:
+    key = _nonce_cache_key(contract_id, client_pub)
+    with _NONCE_LOCK:
+        return _NONCE_CACHE.get(key)
 
 
 def _der_to_rs_hex(der: bytes) -> str:
@@ -2212,6 +2448,30 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        try:
+            return self._do_post_inner()
+        except Exception as e:
+            tb = traceback.format_exc()
+            try:
+                last = getattr(self.server, "last_candidate", {}) if hasattr(self.server, "last_candidate") else {}
+                last_nonce = getattr(self.server, "last_nonce", None)
+                last_nonce_source = getattr(self.server, "last_nonce_source", None)
+            except Exception:
+                last, last_nonce, last_nonce_source = {}, None, None
+            self._log("error", f"unhandled proxy exception: {e}\n{tb}")
+            payload = {
+                "error": "proxy_exception",
+                "detail": str(e),
+                "sentinel": last.get("sentinel"),
+                "provider": last.get("provider"),
+                "service_id": last.get("service_id"),
+                "service_name": last.get("service_name"),
+                "last_nonce": last_nonce,
+                "last_nonce_source": last_nonce_source,
+            }
+            return self._send_json(502, payload)
+
+    def _do_post_inner(self):
         cfg = self.server.cfg
         node = cfg.get("node_rpc") or ARKEOD_NODE
         sentinel = cfg.get("provider_sentinel_api") or SENTINEL_URI_DEFAULT
@@ -2256,6 +2516,8 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
         # Contract cache: populated lazily; avoid refetching every request
         contracts = None
         fetch_ms = 0
+        nonce_ms = 0
+        overhead_ms = 0
         fetched_once = False
 
         candidates = _candidate_providers(cfg)
@@ -2415,14 +2677,99 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                 }
                 return self._send_json(503, {"arkeo": meta, "error": "client_key_mismatch"}, extra_headers=headers)
 
-            nonce = _claims_highest_nonce(sentinel, cid, contract_client) + 1
-            sign_start = time.time()
-            sig_hex, sig_err = _sign_message(
-                client_key, cid, nonce, cfg.get("sign_template", PROXY_SIGN_TEMPLATE)
-            )
-            sign_ms = int((time.time() - sign_start) * 1000)
+            # Optimistic nonce: use cached counter; on nonce failure, sync from sentinel once and retry
+            # Seed nonce cache from persisted value if available
+            try:
+                persisted_nonce = _read_persisted_nonce(cfg.get("listener_id"), cid)
+                if persisted_nonce is not None:
+                    _seed_nonce_cache(cid, contract_client, persisted_nonce)
+            except Exception:
+                pass
+
+            nonce_start = time.time()
+            nonce_source = "cache"
+            nonce_cache_prev = _peek_nonce_cache(cid, contract_client)
+            nonce = _next_nonce_cached(cid, contract_client)
+            if nonce is None:
+                nonce_source = "sentinel"
+                nonce = _claims_highest_nonce(sentinel, cid, contract_client) + 1
+                _seed_nonce_cache(cid, contract_client, nonce)
+            nonce_ms = int((time.time() - nonce_start) * 1000)
+            try:
+                self.server.last_nonce = nonce
+                self.server.last_nonce_source = nonce_source
+                self.server.last_nonce_cache = _peek_nonce_cache(cid, contract_client)
+                self.server.last_candidate = {
+                    "provider": provider_filter,
+                    "sentinel": sentinel,
+                    "service_id": svc_id,
+                    "service_name": service,
+                }
+            except Exception:
+                pass
+
+            forward_start_time = None
+
+            def _sign_and_forward(nonce_val: int):
+                nonlocal forward_ms, forward_start_time
+                sign_start = time.time()
+                sig_hex_local, sig_err_local = _sign_message(
+                    client_key, cid, nonce_val, cfg.get("sign_template", PROXY_SIGN_TEMPLATE)
+                )
+                sign_ms_local = int((time.time() - sign_start) * 1000)
+                if not sig_hex_local:
+                    return None, None, sig_err_local, sign_ms_local
+                arkauth4 = f"{cid}:{contract_client}:{nonce_val}:{sig_hex_local}"
+                self._log("info", f"forwarding 4-part to sentinel={sentinel} svc={service} cid={cid} nonce={nonce_val} provider={provider_filter}")
+                forward_start_time = time.time()
+                code_local, resp_body_local, _ = _forward_to_sentinel(
+                    sentinel,
+                    service,
+                    body,
+                    arkauth4,
+                    timeout=_safe_int(cfg.get("timeout_secs", PROXY_TIMEOUT_SECS), PROXY_TIMEOUT_SECS),
+                    as_header=bool(cfg.get("arkauth_as_header", PROXY_ARKAUTH_AS_HEADER)),
+                )
+                if code_local == 401:
+                    self._log("warning", "401 on 4-part arkauth -> retrying 3-part")
+                    arkauth3 = f"{cid}:{nonce_val}:{sig_hex_local}"
+                    code_local, resp_body_local, _ = _forward_to_sentinel(
+                        sentinel,
+                        service,
+                        body,
+                        arkauth3,
+                        timeout=_safe_int(cfg.get("timeout_secs", PROXY_TIMEOUT_SECS), PROXY_TIMEOUT_SECS),
+                        as_header=bool(cfg.get("arkauth_as_header", PROXY_ARKAUTH_AS_HEADER)),
+                    )
+                forward_ms = int((time.time() - forward_start_time) * 1000)
+                return code_local, resp_body_local, sig_hex_local, sign_ms_local
+
+            code, resp_body, sig_hex, sign_ms = _sign_and_forward(nonce)
+
+            # On nonce/auth failure, sync from sentinel and retry once
+            def _is_nonce_error(code_val, body_val):
+                if code_val in (401, 403):
+                    return True
+                if isinstance(body_val, (bytes, bytearray)) and b"nonce" in body_val:
+                    return True
+                if isinstance(body_val, str) and "nonce" in body_val.lower():
+                    return True
+                return False
+
+            if _is_nonce_error(code, resp_body):
+                try:
+                    highest = _claims_highest_nonce(sentinel, cid, contract_client)
+                    _seed_nonce_cache(cid, contract_client, highest + 1)
+                    nonce = highest + 1
+                    nonce_source = "retry"
+                    code, resp_body, sig_hex, sign_ms = _sign_and_forward(nonce)
+                except Exception as e:
+                    sig_hex = None
+                    sig_err = str(e)
+                    sign_ms = sign_ms or 0
+
             if not sig_hex:
-                self._log("error", f"sign_failed: {sig_err} timing_ms fetch={fetch_ms} select={select_ms} sign={sign_ms}")
+                self._log("error", f"sign_failed: {sig_err} timing_ms fetch={fetch_ms} select_ms={select_ms} nonce_ms={nonce_ms} sign_ms={sign_ms}")
                 meta = _build_arkeo_meta_clean(active, nonce, svc_id, service, active.get("provider") if active else "", contract_client, sentinel, response_time_sec)
                 headers = {
                     "X-Arkeo-Contract-Id": meta.get("contract_id", ""),
@@ -2434,41 +2781,46 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                     {"arkeo": meta, "error": "sign_failed", "detail": sig_err},
                     extra_headers=headers,
                 )
-
-            arkauth4 = f"{cid}:{contract_client}:{nonce}:{sig_hex}"
-            self._log("info", f"forwarding 4-part to sentinel={sentinel} svc={service} cid={cid} nonce={nonce} provider={provider_filter}")
-            t0 = time.time()
-            code, resp_body, _ = _forward_to_sentinel(
-                sentinel,
-                service,
-                body,
-                arkauth4,
-                timeout=_safe_int(cfg.get("timeout_secs", PROXY_TIMEOUT_SECS), PROXY_TIMEOUT_SECS),
-                as_header=bool(cfg.get("arkauth_as_header", PROXY_ARKAUTH_AS_HEADER)),
-            )
-            if code == 401:
-                self._log("warning", "401 on 4-part arkauth -> retrying 3-part")
-                arkauth3 = f"{cid}:{nonce}:{sig_hex}"
-                code, resp_body, _ = _forward_to_sentinel(
-                    sentinel,
-                    service,
-                    body,
-                    arkauth3,
-                    timeout=_safe_int(cfg.get("timeout_secs", PROXY_TIMEOUT_SECS), PROXY_TIMEOUT_SECS),
-                    as_header=bool(cfg.get("arkauth_as_header", PROXY_ARKAUTH_AS_HEADER)),
-                )
-            response_time_sec = time.time() - t0
+            # response time for the actual forward; fall back to total if missing
+            base_start = forward_start_time or t_total_start
+            response_time_sec = time.time() - base_start
             total_time_sec = time.time() - t_total_start
             # Prefer total time for metrics if available
             if total_time_sec > response_time_sec:
                 response_time_sec = total_time_sec
-            forward_ms = int((time.time() - t0) * 1000)
+            if forward_ms == 0 and forward_start_time:
+                forward_ms = int((time.time() - forward_start_time) * 1000)
+            # Everything outside the measured buckets
+            measured = fetch_ms + select_ms + nonce_ms + sign_ms + forward_ms
+            overhead_ms = max(0, int(total_time_sec * 1000) - measured)
 
-            self._log("info", f"timings total_ms={int(total_time_sec*1000)} fetch_ms={fetch_ms} select_ms={select_ms} sign_ms={sign_ms} forward_ms={forward_ms} auto_create={auto_created_this_request}")
+            self._log(
+                "info",
+                (
+                    "timings total_ms=%d fetch_ms=%d select_ms=%d nonce_ms=%d sign_ms=%d "
+                    "forward_ms=%d overhead_ms=%d auto_create=%s"
+                )
+                % (
+                    int(total_time_sec * 1000),
+                    fetch_ms,
+                    select_ms,
+                    nonce_ms,
+                    sign_ms,
+                    forward_ms,
+                    overhead_ms,
+                    auto_created_this_request,
+                ),
+            )
 
             meta_full = _build_arkeo_meta_clean(active, nonce, svc_id, service, provider_filter, contract_client, sentinel, response_time_sec)
             self.server.last_code = code
             self.server.last_nonce = nonce
+            self.server.last_nonce_source = nonce_source
+            try:
+                self.server.last_nonce_cache = _peek_nonce_cache(cid, contract_client)
+                _persist_listener_nonce(cfg.get("listener_id"), cid, nonce)
+            except Exception:
+                self.server.last_nonce_cache = None
             # success → clear cooldown for this provider
             if provider_filter in cooldowns:
                 try:
@@ -2690,22 +3042,22 @@ def _test_payload_for_service(service_id, service_name):
     return evm_payload()
 
 
-def _test_listener_port(port: int, payload: bytes, headers: dict, timeout: float = 12.0) -> tuple[bool, str | None, str | None]:
-    """Attempt a JSON-RPC POST against the listener."""
+def _test_listener_port(port: int, payload: bytes, headers: dict, timeout: float = 12.0) -> tuple[bool, str | None, str | None, dict]:
+    """Attempt a JSON-RPC POST against the listener; return headers too."""
     url = f"http://127.0.0.1:{port}/"
     req = urllib.request.Request(url, data=payload, headers=headers, method="POST")
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             body = resp.read().decode("utf-8", errors="replace")
-            return True, body, None
+            return True, body, None, dict(resp.headers)
     except urllib.error.HTTPError as e:
         try:
             body = e.read().decode("utf-8", errors="replace")
         except Exception:
             body = None
-        return False, body, f"HTTP {e.code}: {e.reason}"
+        return False, body, f"HTTP {e.code}: {e.reason}", dict(e.headers) if e.headers else {}
     except Exception as e:
-        return False, None, str(e)
+        return False, None, str(e), {}
 
 
 def _min_payg_rate(raw: dict) -> tuple[int | None, str | None]:
@@ -3176,7 +3528,7 @@ def create_listener():
     now = _timestamp()
     svc_lookup = _load_active_service_types_lookup()
     svc_meta = svc_lookup.get(clean.get("service_id") or "", {})
-    best = _top_active_services_by_payg(clean.get("service_id") or "", limit=5)
+    best = _normalize_top_services(_top_active_services_by_payg(clean.get("service_id") or "", limit=5))
     provider_pk = (clean.get("provider_pubkey") or "").strip() or None
     provider_mon = None
     sentinel_url = (clean.get("sentinel_url") or "").strip() or None
@@ -3186,6 +3538,7 @@ def create_listener():
         mu = best[0].get("metadata_uri")
         if _is_external(mu):
             sentinel_url = _sentinel_from_metadata_uri(mu)
+    best = _normalize_top_services(best)
     if not sentinel_url:
         sentinel_url = SENTINEL_URI_DEFAULT
     new_entry = {
@@ -3270,15 +3623,19 @@ def update_listener(listener_id: str):
         new_top = custom_top if custom_top is not None else existing_top
         if (str(l.get("service_id")) != str(clean.get("service_id") or "")) or not new_top:
             new_top = best
-        l["top_services"] = new_top
+        l["top_services"] = _normalize_top_services(new_top)
         # derive provider/sentinel from top services primary (new order wins)
-        if new_top:
-            primary = new_top[0]
+        if l["top_services"]:
+            primary = l["top_services"][0]
             if isinstance(primary, dict):
                 provider_pk = primary.get("provider_pubkey") or provider_pk
                 provider_mon = primary.get("provider_moniker") or provider_mon
                 mu = primary.get("metadata_uri")
-                if _is_external(mu):
+                if not provider_mon:
+                    provider_mon = primary.get("provider_moniker")
+                if primary.get("sentinel_url"):
+                    sentinel_url = primary.get("sentinel_url")
+                elif _is_external(mu):
                     sentinel_url = _sentinel_from_metadata_uri(mu)
         l["provider_pubkey"] = provider_pk or l.get("provider_pubkey")
         l["provider_moniker"] = provider_mon or l.get("provider_moniker")
@@ -3368,7 +3725,7 @@ def refresh_listener_top_services(listener_id: str):
         return jsonify({"error": "listener not found"}), 404
 
     svc_id = found.get("service_id") or ""
-    best = _top_active_services_by_payg(svc_id, limit=3)
+    best = _normalize_top_services(_top_active_services_by_payg(svc_id, limit=3))
     found["top_services"] = best
     found["updated_at"] = _timestamp()
     listeners.sort(key=lambda x: x.get("port") if isinstance(x, dict) else 0)
@@ -3380,40 +3737,110 @@ def refresh_listener_top_services(listener_id: str):
 @app.get("/api/listeners/<listener_id>/test")
 def test_listener(listener_id: str):
     """Test connectivity to a listener port (eth_blockNumber JSON-RPC)."""
-    data = _ensure_listeners_file()
-    listeners = data.get("listeners") if isinstance(data, dict) else []
-    if not isinstance(listeners, list):
-        listeners = []
-    target = None
-    for l in listeners:
-        if not isinstance(l, dict):
-            continue
-        if str(l.get("id")) == str(listener_id):
-            target = l
-            break
-    if not target:
-        return jsonify({"error": "listener not found"}), 404
     try:
-        port = int(target.get("port"))
-    except Exception:
-        return jsonify({"error": "invalid port"}), 400
-    payload_bytes, headers, label = _test_payload_for_service(target.get("service_id"), target.get("service_name"))
-    ok, resp, err = _test_listener_port(port, payload_bytes, headers)
-    headers_cli = " ".join([f"-H '{k}: {v}'" for k, v in headers.items()])
-    cmd = (
-        "curl -X POST http://127.0.0.1:"
-        f"{port} {headers_cli} "
-        f"--data '{payload_bytes.decode()}'"
-    )
-    payload = {"ok": ok, "port": port, "command": cmd}
-    if label:
-        payload["test"] = label
-    if resp:
-        payload["response"] = resp
-    if err:
-        payload["error"] = err
-    status = 200 if ok else 500
-    return jsonify(payload), status
+        data = _ensure_listeners_file()
+        listeners = data.get("listeners") if isinstance(data, dict) else []
+        if not isinstance(listeners, list):
+            listeners = []
+        target = next((l for l in listeners if isinstance(l, dict) and str(l.get("id")) == str(listener_id)), None)
+        if not target:
+            return jsonify({"error": "listener not found"}), 404
+        try:
+            port = int(target.get("port"))
+        except Exception:
+            return jsonify({"error": "invalid port"}), 400
+
+        payload_bytes, headers, label = _test_payload_for_service(target.get("service_id"), target.get("service_name"))
+        ok, resp, err, resp_headers = _test_listener_port(port, payload_bytes, headers)
+        headers_cli = " ".join([f"-H '{k}: {v}'" for k, v in headers.items()])
+        cmd = (
+            "curl -X POST http://127.0.0.1:"
+            f"{port} {headers_cli} "
+            f"--data '{payload_bytes.decode()}'"
+        )
+
+        provider_pk, sentinel_url, provider_moniker = _resolve_listener_target(target)
+        sentinel_norm = _normalize_sentinel_url(sentinel_url or SENTINEL_URI_DEFAULT)
+        sentinel_target = None
+        try:
+            if sentinel_norm:
+                svc_path = str(target.get("service_name") or target.get("service_id") or "").strip()
+                sentinel_target = f"{sentinel_norm.rstrip('/')}/{svc_path}" if svc_path else sentinel_norm
+        except Exception:
+            sentinel_target = sentinel_norm
+
+        # Use the same candidate logic the runtime uses to surface the actual upstream info
+        runtime_cfg = {
+            "top_services": target.get("top_services") or [],
+            "service_id": target.get("service_id"),
+            "service": target.get("service"),
+            "provider_pubkey": target.get("provider_pubkey"),
+            "provider_sentinel_api": target.get("sentinel_url"),
+        }
+        candidates = _candidate_providers(runtime_cfg) or []
+        primary = candidates[0] if candidates else {}
+        cand_sentinel = _normalize_sentinel_url(primary.get("sentinel_url"))
+        cand_provider = primary.get("provider_pubkey")
+
+        payload = {
+            "ok": ok,
+            "port": port,
+            "command": cmd,
+        "service_id": target.get("service_id"),
+        "service_name": target.get("service_name"),
+        "provider_pubkey": provider_pk,
+        "provider_moniker": provider_moniker,
+        "sentinel_url": sentinel_norm,
+        "sentinel_target": sentinel_target,
+            "response_headers": resp_headers or {},
+            "candidate_sentinel": cand_sentinel,
+            "candidate_provider": cand_provider,
+        }
+
+        # Expose last proxy status if available
+        srv_entry = _LISTENER_SERVERS.get(port)
+        srv = srv_entry.get("server") if isinstance(srv_entry, dict) else None
+        if srv:
+            payload["last_code"] = getattr(srv, "last_code", None)
+            payload["last_nonce"] = getattr(srv, "last_nonce", None)
+            payload["last_nonce_source"] = getattr(srv, "last_nonce_source", None)
+            payload["last_nonce_cache"] = getattr(srv, "last_nonce_cache", None)
+            last_cand = getattr(srv, "last_candidate", None)
+            if isinstance(last_cand, dict):
+                payload["last_candidate_provider"] = last_cand.get("provider")
+                payload["last_candidate_sentinel"] = last_cand.get("sentinel")
+                payload["last_candidate_service_id"] = last_cand.get("service_id")
+                payload["last_candidate_service_name"] = last_cand.get("service_name")
+            active_contract = getattr(srv, "active_contract", None)
+            if isinstance(active_contract, dict):
+                payload["active_contract_id"] = active_contract.get("id")
+                payload["active_contract_height"] = active_contract.get("height")
+                payload["active_contract_provider"] = active_contract.get("provider")
+                payload["active_contract_service"] = active_contract.get("service")
+                try:
+                    client_pub = active_contract.get("client")
+                    cid = active_contract.get("id")
+                    if cid and client_pub:
+                        payload["nonce_cached"] = _peek_nonce_cache(str(cid), str(client_pub))
+                        payload["nonce_cache_key"] = _nonce_cache_key(str(cid), str(client_pub))
+                except Exception:
+                    pass
+        if isinstance(resp_headers, dict):
+            payload["arkeo_nonce"] = resp_headers.get("X-Arkeo-Nonce") or resp_headers.get("x-arkeo-nonce")
+            payload["arkeo_contract_id"] = resp_headers.get("X-Arkeo-Contract-Id") or resp_headers.get("x-arkeo-contract-id")
+            payload["arkeo_cost"] = resp_headers.get("X-Arkeo-Cost") or resp_headers.get("x-arkeo-cost")
+
+        if label:
+            payload["test"] = label
+        if resp:
+            payload["response"] = resp
+        if err:
+            payload["error"] = err
+
+        # Always return 200; payload.ok/error indicate result to keep UI polling simple
+        return jsonify(payload), 200
+    except Exception as e:
+        return jsonify({"error": "listener_test_failed", "detail": str(e)}), 500
 
 
 @app.get("/api/listeners/<listener_id>/logs")

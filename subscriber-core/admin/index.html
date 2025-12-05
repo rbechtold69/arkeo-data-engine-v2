@@ -719,8 +719,9 @@
                 ? (() => {
                     const rows = topServices.map((bp, idx) => {
                         const mon = bp && bp.provider_moniker;
-                        const inactive = !mon || mon === "(Inactive)";
-                        const name = mon || "(unknown)";
+                        const fallbackName = mon || l.provider_moniker || (bp && bp.provider_pubkey) || "(unknown)";
+                        const inactive = (!mon && !l.provider_moniker) || fallbackName === "(Inactive)";
+                        const name = fallbackName;
                         const rate = bp && bp.pay_as_you_go_rate && bp.pay_as_you_go_rate.amount !== undefined
                             ? `${bp.pay_as_you_go_rate.amount}${bp.pay_as_you_go_rate.denom || ""} / tx`
                             : "";
@@ -1033,6 +1034,14 @@
         let logText = "";
         const logContainer = () => document.getElementById("testLogPre");
         const summaryContainer = () => document.getElementById("testSummary");
+        const appendLog = (line) => {
+            logText = logText ? `${logText}\n${line}` : line;
+            const pre = logContainer();
+            if (pre) {
+                pre.textContent = logText;
+                pre.scrollTop = pre.scrollHeight;
+            }
+        };
         // open modal shell first
         showResultModal("Test Listener", "", true);
         const renderShell = () => {
@@ -1044,6 +1053,7 @@
         const successes = [];
         const failures = [];
         for (let i = 1; i <= runs; i++) {
+            appendLog(`Run ${i}/${runs}: sending test request...`);
             try {
                 const res = await fetch(apiUrl(`/api/listeners/${encodeURIComponent(id)}/test`), {
                     method: "GET",
@@ -1069,6 +1079,26 @@
                     cmd,
                     err,
                     respPretty,
+                    sentinel: data && data.sentinel_url,
+                    provider: data && data.provider_pubkey,
+                    providerMon: data && data.provider_moniker,
+                    serviceId: data && data.service_id,
+                    serviceName: data && data.service_name,
+                    sentinelTarget: data && data.sentinel_target,
+                    candidateSentinel: data && data.candidate_sentinel,
+                    candidateProvider: data && data.candidate_provider,
+                    lastCode: data && data.last_code,
+                    lastNonce: data && data.last_nonce,
+                    lastNonceSource: data && data.last_nonce_source,
+                    lastNonceCache: data && data.last_nonce_cache,
+                    lastCandProvider: data && data.last_candidate_provider,
+                    lastCandSentinel: data && data.last_candidate_sentinel,
+                    arkeoNonce: data && data.arkeo_nonce,
+                    arkeoContractId: data && data.arkeo_contract_id,
+                    arkeoCost: data && data.arkeo_cost,
+                    respHeaders: data && data.response_headers,
+                    nonceCached: data && data.nonce_cached,
+                    nonceCacheKey: data && data.nonce_cache_key,
                 });
                 if (err) {
                     failures.push(i);
@@ -1087,26 +1117,61 @@
             summaryHtml = `<div class="muted small">Success: ${successes.length ? successes.join(", ") : "0"} | Failed: ${failures.length ? failures.join(", ") : "0"}</div>`;
             const summaryEl = summaryContainer();
             if (summaryEl) summaryEl.innerHTML = summaryHtml;
+            const metaLines = [];
+            const last = results[results.length - 1] || {};
+            const sentinelDisplay = last.candidateSentinel || last.lastCandSentinel || last.sentinel_target || last.sentinel;
+            if (sentinelDisplay) {
+                metaLines.push(`Sentinel: ${sentinelDisplay}`);
+            }
+            const providerDisplay = last.provider || last.candidateProvider || last.lastCandProvider;
+            const providerMonDisplay = last.providerMon;
+            if (providerDisplay) metaLines.push(`Provider: ${providerDisplay}${providerMonDisplay ? ` (${providerMonDisplay})` : ""}`);
+            if (last.serviceId || last.serviceName) {
+                metaLines.push(`Service: ${last.serviceName || ""}${last.serviceId ? ` [${last.serviceId}]` : ""}`);
+            }
+            if (last.lastNonce !== undefined && last.lastNonce !== null) {
+                metaLines.push(`Last nonce used: ${last.lastNonce}`);
+            }
+            if (last.lastNonceSource) {
+                metaLines.push(`Nonce source: ${last.lastNonceSource}${last.lastNonceCache !== undefined && last.lastNonceCache !== null ? ` (cache now ${last.lastNonceCache})` : ""}`);
+            }
+            if (last.arkeoNonce) {
+                metaLines.push(`Nonce (from response): ${last.arkeoNonce}`);
+            }
+            if (last.nonceCached !== undefined && last.nonceCached !== null) {
+                metaLines.push(`Nonce cache: ${last.nonceCached}${last.nonceCacheKey ? ` [${last.nonceCacheKey}]` : ""}`);
+            }
+            if (last.lastCode !== undefined && last.lastCode !== null) {
+                metaLines.push(`Last upstream code: ${last.lastCode}`);
+            }
+            if (last.activeContractId) {
+                metaLines.push(`Active contract: ${last.activeContractId}${last.activeContractHeight ? ` @height ${last.activeContractHeight}` : ""}`);
+                if (last.activeContractProvider) {
+                    metaLines.push(`Contract provider: ${last.activeContractProvider}`);
+                }
+                if (last.activeContractService) {
+                    metaLines.push(`Contract service: ${last.activeContractService}`);
+                }
+            }
+            if (last.arkeoContractId) {
+                metaLines.push(`Contract (from response): ${last.arkeoContractId}`);
+            }
+            if (last.arkeoCost) {
+                metaLines.push(`Cost (from response): ${last.arkeoCost}`);
+            }
+            const metaText = metaLines.length ? metaLines.join("\n") + "\n" : "";
             const block = [
                 `--- Run ${i} ---`,
                 `Command: ${results[results.length - 1].cmd || ""}`,
+                metaText ? metaText.trimEnd() : null,
                 results[results.length - 1].err ? `Error: ${results[results.length - 1].err}` : `Response:\n${results[results.length - 1].respPretty}`
-            ].join("\n");
-            logText = logText ? `${logText}\n\n${block}` : block;
-            const pre = logContainer();
-            if (pre) {
-                pre.textContent = logText;
-                pre.scrollTop = pre.scrollHeight;
-            }
+            ].filter(Boolean).join("\n");
+            appendLog(block);
         }
         // Final summary update
         const summaryEl = summaryContainer();
         if (summaryEl) summaryEl.innerHTML = `<div class="muted small">Test complete.</div>${summaryHtml}`;
-        const pre = logContainer();
-        if (pre) {
-            pre.textContent = logText;
-            pre.scrollTop = pre.scrollHeight;
-        }
+        appendLog("All test runs finished.");
         if (refreshAfter) {
             await loadListeners();
         }

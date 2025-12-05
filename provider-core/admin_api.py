@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 import json
+import logging
 import os
 import re
 import shlex
 import subprocess
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -12,6 +14,14 @@ import yaml
 from flask import Flask, jsonify, request
 
 app = Flask(__name__)
+# Configure logging to stdout at INFO so supervisor captures our app logs
+handler = logging.StreamHandler(sys.stdout)
+handler.setLevel(logging.INFO)
+handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+app.logger.setLevel(logging.INFO)
+if not app.logger.handlers:
+    app.logger.addHandler(handler)
+app.logger.propagate = False
 
 def _build_sentinel_uri() -> str:
     port = os.getenv("SENTINEL_PORT") or "3636"
@@ -365,6 +375,14 @@ def bond_provider():
     if not service:
         return jsonify({"error": "service is required"}), 400
 
+    app.logger.info(
+        "bond-provider start service=%s bond=%s user=%s keyring=%s",
+        service,
+        bond,
+        user,
+        keyring_backend,
+    )
+
     # Step 1: get raw pubkey for the user
     raw_pubkey, bech32_pubkey, pubkey_err = derive_pubkeys(user, keyring_backend)
     if pubkey_err:
@@ -405,6 +423,7 @@ def bond_provider():
         "-y",
     ]
     code, bond_out = run_list(bond_cmd)
+    app.logger.info("bond-provider result code=%s service=%s", code, service)
     if code != 0:
         return jsonify(
             {
@@ -459,6 +478,15 @@ def bond_and_mod_provider():
 
     if not service:
         return jsonify({"error": "service is required"}), 400
+
+    app.logger.info(
+        "bond-mod-provider start service=%s bond=%s status=%s rpc_url=%s sentinel_uri=%s",
+        service,
+        bond,
+        status,
+        payload.get("rpc_url"),
+        sentinel_uri,
+    )
 
     # Resolve numeric service IDs to the service name (CLI expects name)
     resolved_service = service
@@ -655,7 +683,9 @@ def bond_and_mod_provider():
         cmd[insert_at:insert_at] = seq_arg
         return cmd, *run_list(cmd)
 
+    app.logger.info("bond-mod-provider mod sequence arg=%s", sequence_arg)
     mod_cmd, mod_code, mod_out = run_mod_with_sequence(sequence_arg)
+    app.logger.info("bond-mod-provider mod cmd=%s", mod_cmd)
 
     # Retry once on account-sequence mismatch by refetching or using the expected sequence
     if "account sequence mismatch" in str(mod_out):
@@ -689,6 +719,7 @@ def bond_and_mod_provider():
                     pass
                 time.sleep(1)
         mod_cmd, mod_code, mod_out = run_mod_with_sequence(retry_seq)
+        app.logger.info("bond-mod-provider retry mod with sequence=%s code=%s", retry_seq, mod_code)
 
     if mod_code != 0:
         return jsonify(

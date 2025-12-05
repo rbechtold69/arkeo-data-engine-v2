@@ -461,6 +461,142 @@ def write_cache(name: str, payload: Dict[str, Any]) -> None:
             pass
 
 
+def _load_listeners() -> Dict[str, Any]:
+    path = os.path.join(CACHE_DIR, "listeners.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _write_listeners(payload: Dict[str, Any]) -> None:
+    path = os.path.join(CACHE_DIR, "listeners.json")
+    tmp_path = f"{path}.tmp"
+    try:
+        with open(tmp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=True, indent=2)
+        os.replace(tmp_path, path)
+    except OSError:
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+
+
+def _sync_listeners_from_active(active_services_payload: Dict[str, Any], active_providers_payload: Dict[str, Any], provider_services_payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Update listeners.json top_services entries to reflect latest active service data."""
+    listeners_data = _load_listeners()
+    listeners = listeners_data.get("listeners") if isinstance(listeners_data, dict) else None
+    if not isinstance(listeners, list) or not listeners:
+        return {}
+
+    # Build provider moniker lookup from active_providers metadata
+    prov_meta: Dict[str, str] = {}
+    prov_list = active_providers_payload.get("providers") if isinstance(active_providers_payload, dict) else []
+    if isinstance(prov_list, list):
+        for p in prov_list:
+            if not isinstance(p, dict):
+                continue
+            pk = p.get("pubkey") or p.get("pub_key") or p.get("pubKey")
+            meta = p.get("metadata") or {}
+            moniker = ""
+            try:
+                cfg = meta.get("config") or {}
+                moniker = cfg.get("moniker") or ""
+            except Exception:
+                moniker = ""
+            if pk and moniker:
+                prov_meta[str(pk)] = moniker
+
+    # Build service lookup by (provider_pubkey, service_id) from active_services only (authoritative active set)
+    svc_lookup: Dict[tuple[str, str], Dict[str, Any]] = {}
+    svc_list = active_services_payload.get("active_services") if isinstance(active_services_payload, dict) else []
+    if isinstance(svc_list, list):
+        for s in svc_list:
+            if not isinstance(s, dict):
+                continue
+            pk = s.get("provider_pubkey")
+            sid = s.get("service_id") or s.get("service")
+            if pk is None or sid is None:
+                continue
+            key = (str(pk), str(sid))
+            raw = s.get("raw") or {}
+            svc_lookup[key] = {
+                "provider_pubkey": str(pk),
+                "status": raw.get("status") if isinstance(raw, dict) else None,
+            }
+
+    changed_any = False
+    listeners_updated = 0
+    services_updated = 0
+    services_dropped = 0
+    now = timestamp()
+
+    for listener in listeners:
+        if not isinstance(listener, dict):
+            continue
+        top = listener.get("top_services") or []
+        if not isinstance(top, list):
+            continue
+        listener_changed = False
+        new_top = []
+        seen = set()
+        for ts in top:
+            if not isinstance(ts, dict):
+                continue
+            pk = ts.get("provider_pubkey") or ts.get("pubkey")
+            sid = ts.get("service_id") or ts.get("service") or listener.get("service_id") or listener.get("service")
+            if pk is None or sid is None:
+                new_top.append(ts)
+                continue
+            key = (str(pk), str(sid))
+            if key in seen:
+                listener_changed = True
+                continue  # dedupe duplicates
+            seen.add(key)
+            svc = svc_lookup.get(key)
+            if svc:
+                merged = {
+                    "provider_pubkey": str(pk),
+                }
+                # refresh fields from active data
+                for k in ("status",):
+                    if svc.get(k) is not None:
+                        merged[k] = svc.get(k)
+                # preserve metrics/status timestamps if present
+                for k in ("rt_avg_ms", "rt_count", "rt_last_ms", "rt_updated_at", "status_updated_at"):
+                    if ts.get(k) is not None:
+                        merged[k] = ts.get(k)
+                mon = prov_meta.get(str(pk))
+                if mon:
+                    merged["provider_moniker"] = mon
+                new_top.append(merged)
+                listener_changed = True
+            else:
+                # No longer active -> drop it
+                listener_changed = True
+        listener["top_services"] = new_top
+        if listener_changed:
+            listener["updated_at"] = now
+            changed_any = True
+            listeners_updated += 1
+            services_updated += len(new_top)
+            services_dropped += len(top) - len(new_top)
+
+    if changed_any:
+        listeners_data["listeners"] = listeners
+        listeners_data["fetched_at"] = now
+        _write_listeners(listeners_data)
+    return {
+        "listeners": len(listeners) if isinstance(listeners, list) else 0,
+        "listeners_updated": listeners_updated,
+        "services_updated": services_updated,
+        "services_dropped": services_dropped,
+    }
+
+
 def fetch_once(commands: Dict[str, List[str]], record_status: bool = False) -> Dict[str, Dict[str, Any]]:
     results: Dict[str, Dict[str, Any]] = {}
     start_ts = timestamp()

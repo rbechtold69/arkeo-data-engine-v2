@@ -462,9 +462,7 @@
                 return;
             }
             setPre("bondResult", JSON.stringify(data, null, 2));
-            if (resOk && bondAndModSucceeded(data)) {
-                window.location.href = "index.html";
-            }
+            // Do not auto-redirect; keep the user on the form to review results.
         } catch (e) {
             setPre("bondResult", "Request failed: " + e);
         } finally {
