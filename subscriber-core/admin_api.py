@@ -2819,7 +2819,17 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                 response_time_sec = 0
                 if forward_ms == 0 and forward_start_time:
                     forward_ms = int((time.time() - forward_start_time) * 1000)
-                self._log("warning", f"forward failed code={code} provider={provider_filter} sentinel={sentinel}; not recording timings")
+                try:
+                    body_preview = ""
+                    if isinstance(resp_body, (bytes, bytearray)):
+                        body_preview = resp_body.decode(errors="ignore")
+                    else:
+                        body_preview = str(resp_body)
+                    if len(body_preview) > 400:
+                        body_preview = body_preview[:400] + "...[truncated]"
+                except Exception:
+                    body_preview = ""
+                self._log("warning", f"forward failed code={code} provider={provider_filter} sentinel={sentinel}; not recording timings body='{body_preview}'")
                 try:
                     _set_top_service_status(cfg.get("listener_id"), provider_filter, "Down")
                 except Exception:
@@ -2851,6 +2861,18 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                         _update_top_service_metrics(cfg.get("listener_id"), provider_filter, response_time_sec)
                 except Exception:
                     pass
+            try:
+                body_preview = ""
+                if isinstance(resp_body, (bytes, bytearray)):
+                    body_preview = resp_body.decode(errors="ignore")
+                else:
+                    body_preview = str(resp_body)
+                if len(body_preview) > 800:
+                    body_preview = body_preview[:800] + "...[truncated]"
+                self.server.last_upstream = {"code": code, "body": body_preview}
+            except Exception:
+                pass
+
             self.server.active_contract = active
             if hasattr(self.server, "active_contracts"):
                 self.server.active_contracts[provider_filter] = active
@@ -3819,6 +3841,10 @@ def test_listener(listener_id: str):
             payload["last_nonce"] = getattr(srv, "last_nonce", None)
             payload["last_nonce_source"] = getattr(srv, "last_nonce_source", None)
             payload["last_nonce_cache"] = getattr(srv, "last_nonce_cache", None)
+            last_up = getattr(srv, "last_upstream", None)
+            if isinstance(last_up, dict):
+                payload["last_upstream_code"] = last_up.get("code")
+                payload["last_upstream_body"] = last_up.get("body")
             last_cand = getattr(srv, "last_candidate", None)
             if isinstance(last_cand, dict):
                 payload["last_candidate_provider"] = last_cand.get("provider")

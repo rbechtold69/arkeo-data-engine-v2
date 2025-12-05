@@ -1099,6 +1099,7 @@
                     respHeaders: data && data.response_headers,
                     nonceCached: data && data.nonce_cached,
                     nonceCacheKey: data && data.nonce_cache_key,
+                    lastUpstreamBody: data && data.last_upstream_body,
                 });
                 if (err) {
                     failures.push(i);
@@ -1143,6 +1144,9 @@
             }
             if (last.lastCode !== undefined && last.lastCode !== null) {
                 metaLines.push(`Last upstream code: ${last.lastCode}`);
+            }
+            if (last.lastUpstreamBody) {
+                metaLines.push(`Upstream body: ${last.lastUpstreamBody}`);
             }
             if (last.activeContractId) {
                 metaLines.push(`Active contract: ${last.activeContractId}${last.activeContractHeight ? ` @height ${last.activeContractHeight}` : ""}`);
