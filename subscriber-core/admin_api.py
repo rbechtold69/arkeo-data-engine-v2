@@ -109,6 +109,7 @@ PROXY_ARKAUTH_AS_HEADER = str(os.getenv("PROXY_ARKAUTH_AS_HEADER", "false")).low
 PROXY_CONTRACT_TIMEOUT = int(os.getenv("PROXY_CONTRACT_TIMEOUT", "10"))
 PROXY_CONTRACT_LIMIT = int(os.getenv("PROXY_CONTRACT_LIMIT", "5000"))
 PROXY_OPEN_COOLDOWN = int(os.getenv("PROXY_OPEN_COOLDOWN", "300"))  # seconds to cool down a provider after open failure
+PROXY_CONTRACT_CACHE_TTL = int(os.getenv("PROXY_CONTRACT_CACHE_TTL", "45"))  # seconds; 0 disables TTL check
 SIGNHERE_HOME = os.path.join(Path.home(), ".arkeo")
 
 
@@ -2252,15 +2253,10 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
             client_pub = bech
             self.server.client_pubkey = bech
 
-        # refresh contracts once and iterate provider candidates (failover)
-        t0_fetch = time.time()
-        contracts = _fetch_contracts(node, timeout=PROXY_CONTRACT_TIMEOUT, active_only=True, client_filter=client_pub)
-        t_fetch_end = time.time()
-        fetch_ms = int((t_fetch_end - t0_fetch) * 1000)
-        if not contracts and (time.time() - t0_fetch) >= PROXY_CONTRACT_TIMEOUT:
-            self._log("error", "contract_lookup_timeout")
-            return self._send_json(503, {"error": "contract_lookup_timeout"})
-        self._log("info", f"contracts fetched count={len(contracts) if isinstance(contracts,list) else 0}")
+        # Contract cache: populated lazily; avoid refetching every request
+        contracts = None
+        fetch_ms = 0
+        fetched_once = False
 
         candidates = _candidate_providers(cfg)
         try:
@@ -2300,14 +2296,53 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                 last_meta = _build_arkeo_meta_clean(None, None, svc_id, service, provider_filter, client_pub, sentinel, 0)
                 continue
 
+            # ensure cache map exists
+            if not hasattr(self.server, "contract_cache"):
+                self.server.contract_cache = {}
+            contract_cache = self.server.contract_cache
+
             cur_h = _get_current_height(node)
             active = None
-            if hasattr(self.server, "active_contracts"):
+
+            def _cached_contract_still_active(cobj) -> bool:
+                if not isinstance(cobj, dict):
+                    return False
+                if _safe_int(cobj.get("settlement_height")) != 0:
+                    return False
+                if _safe_int(cobj.get("deposit")) <= 0:
+                    return False
+                if (_safe_int(cobj.get("height")) + _safe_int(cobj.get("duration"))) <= cur_h:
+                    return False
+                return True
+
+            cache_entry = contract_cache.get(provider_filter)
+            if cache_entry:
+                ttl_ok = PROXY_CONTRACT_CACHE_TTL <= 0 or (time.time() - cache_entry.get("cached_at", 0) < PROXY_CONTRACT_CACHE_TTL)
+                if ttl_ok and _cached_contract_still_active(cache_entry.get("contract")):
+                    active = cache_entry.get("contract")
+                    self._log("info", f"using cached contract id={active.get('id')} provider={provider_filter}")
+                else:
+                    try:
+                        contract_cache.pop(provider_filter, None)
+                    except Exception:
+                        pass
+
+            if not active and hasattr(self.server, "active_contracts"):
                 active = self.server.active_contracts.get(provider_filter)
-            if active and (_safe_int(active.get("height")) + _safe_int(active.get("duration")) <= cur_h):
-                active = None
+                if active and not _cached_contract_still_active(active):
+                    active = None
+
             if not active:
-                active = _select_active_contract(contracts, client_pub, svc_id, cur_h, provider_filter=provider_filter)
+                if not fetched_once:
+                    t0_fetch = time.time()
+                    contracts = _fetch_contracts(node, timeout=PROXY_CONTRACT_TIMEOUT, active_only=True, client_filter=client_pub)
+                    fetch_ms = int((time.time() - t0_fetch) * 1000)
+                    fetched_once = True
+                    if not contracts and fetch_ms >= PROXY_CONTRACT_TIMEOUT * 1000:
+                        self._log("error", "contract_lookup_timeout")
+                        return self._send_json(503, {"error": "contract_lookup_timeout"})
+                    self._log("info", f"contracts fetched count={len(contracts) if isinstance(contracts,list) else 0}")
+                active = _select_active_contract(contracts or [], client_pub, svc_id, cur_h, provider_filter=provider_filter)
 
             if not active and str(cfg.get("auto_create", PROXY_AUTO_CREATE)).lower() in ("1", "true", "yes", "on"):
                 self._log("info", f"no active contract -> attempting auto-create (provider={provider_filter})")
@@ -2453,6 +2488,10 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
             self.server.active_contract = active
             if hasattr(self.server, "active_contracts"):
                 self.server.active_contracts[provider_filter] = active
+            try:
+                contract_cache[provider_filter] = {"contract": active, "cached_at": time.time(), "height_cached": _safe_int(active.get("height"))}
+            except Exception:
+                pass
             self._log("info", f"proxy done code={code} cid={cid} nonce={nonce} provider={provider_filter}")
             decorate = str(cfg.get("decorate_response", PROXY_DECORATE_RESPONSE)).lower() in ("1", "true", "yes", "on")
 
