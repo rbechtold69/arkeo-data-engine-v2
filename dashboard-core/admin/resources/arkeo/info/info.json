@@ -1,0 +1,16 @@
+{
+  "name": "Arkeo",
+  "website": "https://arkeo.network",
+  "description": "Arkeo is an open data marketplace and blockchain that enables providers to publish data services and earn ARKEO as subscribers consume them.",
+  "explorer": "https://explorer.arkeo.network",
+  "symbol": "ARKEO",
+  "type": "coin",
+  "decimals": 8,
+  "status": "active",
+  "links": [
+    {
+      "name": "github",
+      "url": "https://github.com/arkeonetwork/arkeo"
+    }
+  ]
+}

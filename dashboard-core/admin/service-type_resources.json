@@ -1,0 +1,2372 @@
+{
+  "fetched_at": "2025-12-08T22:54:58.941325+00:00",
+  "exit_code": 0,
+  "cmd": [
+    "http://host.docker.internal:1317/arkeo/services"
+  ],
+  "data": {
+    "services": [
+      {
+        "service_id": 51,
+        "name": "agoric-mainnet-archivenode",
+        "description": "Agoric Mainnet Archivenode",
+        "chain": "agoric"
+      },
+      {
+        "service_id": 52,
+        "name": "agoric-mainnet-fullnode",
+        "description": "Agoric Mainnet Fullnode",
+        "chain": "agoric"
+      },
+      {
+        "service_id": 53,
+        "name": "agoric-testnet-archivenode",
+        "description": "Agoric Testnet Archivenode",
+        "chain": "agoric"
+      },
+      {
+        "service_id": 54,
+        "name": "agoric-testnet-fullnode",
+        "description": "Agoric Testnet Fullnode",
+        "chain": "agoric"
+      },
+      {
+        "service_id": 55,
+        "name": "akash-mainnet-archivenode",
+        "description": "Akash Mainnet Archivenode",
+        "chain": "akash"
+      },
+      {
+        "service_id": 56,
+        "name": "akash-mainnet-fullnode",
+        "description": "Akash Mainnet Fullnode",
+        "chain": "akash"
+      },
+      {
+        "service_id": 57,
+        "name": "akash-testnet-archivenode",
+        "description": "Akash Testnet Archivenode",
+        "chain": "akash"
+      },
+      {
+        "service_id": 58,
+        "name": "akash-testnet-fullnode",
+        "description": "Akash Testnet Fullnode",
+        "chain": "akash"
+      },
+      {
+        "service_id": 59,
+        "name": "allora-mainnet-archivenode",
+        "description": "Allora Mainnet Archivenode",
+        "chain": "allora"
+      },
+      {
+        "service_id": 60,
+        "name": "allora-mainnet-fullnode",
+        "description": "Allora Mainnet Fullnode",
+        "chain": "allora"
+      },
+      {
+        "service_id": 61,
+        "name": "allora-testnet-archivenode",
+        "description": "Allora Testnet Archivenode",
+        "chain": "allora"
+      },
+      {
+        "service_id": 62,
+        "name": "allora-testnet-fullnode",
+        "description": "Allora Testnet Fullnode",
+        "chain": "allora"
+      },
+      {
+        "service_id": 63,
+        "name": "aptos-mainnet-fullnode",
+        "description": "Aptos Mainnet Fullnode",
+        "chain": "aptos"
+      },
+      {
+        "service_id": 64,
+        "name": "aptos-testnet-fullnode",
+        "description": "Aptos Testnet Fullnode",
+        "chain": "aptos"
+      },
+      {
+        "service_id": 65,
+        "name": "arbitrum-mainnet-archivenode",
+        "description": "Arbitrum Mainnet Archivenode",
+        "chain": "arbitrum"
+      },
+      {
+        "service_id": 66,
+        "name": "arbitrum-mainnet-fullnode",
+        "description": "Arbitrum Mainnet Fullnode",
+        "chain": "arbitrum"
+      },
+      {
+        "service_id": 67,
+        "name": "arbitrum-mainnet-unchained",
+        "description": "Arbitrum Mainnet Unchained",
+        "chain": "arbitrum"
+      },
+      {
+        "service_id": 68,
+        "name": "arbitrum-testnet-archivenode",
+        "description": "Arbitrum Testnet Archivenode",
+        "chain": "arbitrum"
+      },
+      {
+        "service_id": 69,
+        "name": "arbitrum-testnet-fullnode",
+        "description": "Arbitrum Testnet Fullnode",
+        "chain": "arbitrum"
+      },
+      {
+        "service_id": 70,
+        "name": "arch-mainnet-archivenode",
+        "description": "Archway Mainnet Archivenode",
+        "chain": "arch"
+      },
+      {
+        "service_id": 71,
+        "name": "arch-mainnet-fullnode",
+        "description": "Archway Mainnet Fullnode",
+        "chain": "arch"
+      },
+      {
+        "service_id": 72,
+        "name": "arch-testnet-archivenode",
+        "description": "Archway Testnet Archivenode",
+        "chain": "arch"
+      },
+      {
+        "service_id": 73,
+        "name": "arch-testnet-fullnode",
+        "description": "Archway Testnet Fullnode",
+        "chain": "arch"
+      },
+      {
+        "service_id": 74,
+        "name": "arkeo-mainnet-archivenode",
+        "description": "Arkeo Mainnet Archivenode",
+        "chain": "arkeo"
+      },
+      {
+        "service_id": 2,
+        "name": "arkeo-mainnet-fullnode",
+        "description": "Arkeo Mainnet Fullnode",
+        "chain": "arkeo"
+      },
+      {
+        "service_id": 75,
+        "name": "arkeo-mainnet-unchained",
+        "description": "Arkeo Mainnet Unchained",
+        "chain": "arkeo"
+      },
+      {
+        "service_id": 76,
+        "name": "arkeo-testnet-archivenode",
+        "description": "Arkeo Testnet Archivenode",
+        "chain": "arkeo"
+      },
+      {
+        "service_id": 77,
+        "name": "arkeo-testnet-fullnode",
+        "description": "Arkeo Testnet Fullnode",
+        "chain": "arkeo"
+      },
+      {
+        "service_id": 78,
+        "name": "arkeo-testnet-unchained",
+        "description": "Arkeo Testnet Unchained",
+        "chain": "arkeo"
+      },
+      {
+        "service_id": 79,
+        "name": "aur-mainnet-fullnode",
+        "description": "Auroracoin Mainnet Fullnode",
+        "chain": "aur"
+      },
+      {
+        "service_id": 80,
+        "name": "avax-fuji-testnet-fullnode",
+        "description": "Avalanche (C-Chain) Fuji Testnet Fullnode",
+        "chain": "avalanchec"
+      },
+      {
+        "service_id": 81,
+        "name": "avax-fuji-testnet-unchained",
+        "description": "Avalanche (C-Chain) Fuji Testnet Unchained",
+        "chain": "avalanchec"
+      },
+      {
+        "service_id": 4,
+        "name": "avax-mainnet-archivenode",
+        "description": "Avalanche Mainnet Archivenode",
+        "chain": "avalanchec"
+      },
+      {
+        "service_id": 3,
+        "name": "avax-mainnet-fullnode",
+        "description": "Avalanche Mainnet Fullnode",
+        "chain": "avalanchec"
+      },
+      {
+        "service_id": 41,
+        "name": "avax-mainnet-unchained",
+        "description": "Avalanche Mainnet Unchained",
+        "chain": "avalanchec"
+      },
+      {
+        "service_id": 82,
+        "name": "azero-mainnet-archivenode",
+        "description": "AlephZero Mainnet Archivenode",
+        "chain": "azero"
+      },
+      {
+        "service_id": 83,
+        "name": "azero-mainnet-fullnode",
+        "description": "AlephZero Mainnet Fullnode",
+        "chain": "azero"
+      },
+      {
+        "service_id": 84,
+        "name": "azero-testnet-archivenode",
+        "description": "AlephZero Testnet Archivenode",
+        "chain": "azero"
+      },
+      {
+        "service_id": 85,
+        "name": "azero-testnet-fullnode",
+        "description": "AlephZero Testnet Fullnode",
+        "chain": "azero"
+      },
+      {
+        "service_id": 86,
+        "name": "babylon-mainnet-fullnode",
+        "description": "Babylon EVM Mainnet Fullnode",
+        "chain": "babylon"
+      },
+      {
+        "service_id": 87,
+        "name": "babylon-testnet-fullnode",
+        "description": "Babylon EVM Testnet Fullnode",
+        "chain": "babylon"
+      },
+      {
+        "service_id": 88,
+        "name": "base-mainnet-archivenode",
+        "description": "Base Mainnet Archivenode",
+        "chain": "base"
+      },
+      {
+        "service_id": 89,
+        "name": "base-mainnet-fullnode",
+        "description": "Base Mainnet Fullnode",
+        "chain": "base"
+      },
+      {
+        "service_id": 90,
+        "name": "base-mainnet-unchained",
+        "description": "Base Mainnet Unchained",
+        "chain": "base"
+      },
+      {
+        "service_id": 91,
+        "name": "base-testnet-archivenode",
+        "description": "Base Testnet Archivenode",
+        "chain": "base"
+      },
+      {
+        "service_id": 92,
+        "name": "base-testnet-fullnode",
+        "description": "Base Testnet Fullnode",
+        "chain": "base"
+      },
+      {
+        "service_id": 49,
+        "name": "bch-mainnet-blockbook",
+        "description": "Bitcoin Cash Mainnet Blockbook",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 5,
+        "name": "bch-mainnet-fullnode",
+        "description": "Bitcoin Cash Mainnet Fullnode",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 6,
+        "name": "bch-mainnet-lightnode",
+        "description": "Bitcoin Cash Mainnet Lightnode",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 33,
+        "name": "bch-mainnet-unchained",
+        "description": "Bitcoin Cash Mainnet Unchained",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 93,
+        "name": "bch-testnet-blockbook",
+        "description": "Bitcoin Cash Testnet Blockbook",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 94,
+        "name": "bch-testnet-fullnode",
+        "description": "Bitcoin Cash Testnet Fullnode",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 95,
+        "name": "bch-testnet-lightnode",
+        "description": "Bitcoin Cash Testnet Lightnode",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 96,
+        "name": "bch-testnet-unchained",
+        "description": "Bitcoin Cash Testnet Unchained",
+        "chain": "bitcoincash"
+      },
+      {
+        "service_id": 97,
+        "name": "bera-mainnet-archivenode",
+        "description": "Berachain Mainnet Archivenode",
+        "chain": "bera"
+      },
+      {
+        "service_id": 98,
+        "name": "bera-mainnet-fullnode",
+        "description": "Berachain Mainnet Fullnode",
+        "chain": "bera"
+      },
+      {
+        "service_id": 99,
+        "name": "bera-mainnet-unchained",
+        "description": "Berachain Mainnet Unchained",
+        "chain": "bera"
+      },
+      {
+        "service_id": 100,
+        "name": "bera-testnet-archivenode",
+        "description": "Berachain Testnet Archivenode",
+        "chain": "bera"
+      },
+      {
+        "service_id": 101,
+        "name": "bera-testnet-fullnode",
+        "description": "Berachain Testnet Fullnode",
+        "chain": "bera"
+      },
+      {
+        "service_id": 102,
+        "name": "blast-mainnet-archivenode",
+        "description": "Blast Mainnet Archivenode",
+        "chain": "blast"
+      },
+      {
+        "service_id": 103,
+        "name": "blast-mainnet-fullnode",
+        "description": "Blast Mainnet Fullnode",
+        "chain": "blast"
+      },
+      {
+        "service_id": 104,
+        "name": "blast-mainnet-unchained",
+        "description": "Blast Mainnet Unchained",
+        "chain": "blast"
+      },
+      {
+        "service_id": 105,
+        "name": "blast-testnet-archivenode",
+        "description": "Blast Testnet Archivenode",
+        "chain": "blast"
+      },
+      {
+        "service_id": 106,
+        "name": "blast-testnet-fullnode",
+        "description": "Blast Testnet Fullnode",
+        "chain": "blast"
+      },
+      {
+        "service_id": 7,
+        "name": "bnb-mainnet-fullnode",
+        "description": "BNB Beacon Chain Mainnet Fullnode",
+        "chain": "binance"
+      },
+      {
+        "service_id": 35,
+        "name": "bnb-mainnet-unchained",
+        "description": "BNB Beacon Chain Mainnet Unchained",
+        "chain": "binance"
+      },
+      {
+        "service_id": 9,
+        "name": "bsc-mainnet-archivenode",
+        "description": "Binance Smart Chain Mainnet Archivenode",
+        "chain": "smartchain"
+      },
+      {
+        "service_id": 8,
+        "name": "bsc-mainnet-fullnode",
+        "description": "Binance Smart Chain Mainnet Fullnode",
+        "chain": "smartchain"
+      },
+      {
+        "service_id": 36,
+        "name": "bsc-mainnet-unchained",
+        "description": "Binance Smart Chain Mainnet Unchained",
+        "chain": "smartchain"
+      },
+      {
+        "service_id": 107,
+        "name": "bsc-testnet-archivenode",
+        "description": "Binance Smart Chain Testnet Archivenode",
+        "chain": "smartchain"
+      },
+      {
+        "service_id": 108,
+        "name": "bsc-testnet-fullnode",
+        "description": "Binance Smart Chain Testnet Fullnode",
+        "chain": "smartchain"
+      },
+      {
+        "service_id": 47,
+        "name": "btc-mainnet-blockbook",
+        "description": "Bitcoin Mainnet Blockbook",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 10,
+        "name": "btc-mainnet-fullnode",
+        "description": "Bitcoin Mainnet Fullnode",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 11,
+        "name": "btc-mainnet-lightnode",
+        "description": "Bitcoin Mainnet Lightnode",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 34,
+        "name": "btc-mainnet-unchained",
+        "description": "Bitcoin Mainnet Unchained",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 109,
+        "name": "btc-testnet-blockbook",
+        "description": "Bitcoin Testnet Blockbook",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 110,
+        "name": "btc-testnet-fullnode",
+        "description": "Bitcoin Testnet Fullnode",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 111,
+        "name": "btc-testnet-lightnode",
+        "description": "Bitcoin Testnet Lightnode",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 112,
+        "name": "btc-testnet-unchained",
+        "description": "Bitcoin Testnet Unchained",
+        "chain": "bitcoin"
+      },
+      {
+        "service_id": 113,
+        "name": "btg-mainnet-fullnode",
+        "description": "Bitcoin Gold Mainnet Fullnode",
+        "chain": "bitcoingold"
+      },
+      {
+        "service_id": 12,
+        "name": "cardano-mainnet-relaynode",
+        "description": "Cardano Mainnet Relaynode",
+        "chain": "cardano"
+      },
+      {
+        "service_id": 114,
+        "name": "ccd-mainnet-fullnode",
+        "description": "Concordium Mainnet Fullnode",
+        "chain": "Concordium"
+      },
+      {
+        "service_id": 115,
+        "name": "celo-mainnet-archivenode",
+        "description": "Celo Mainnet Archivenode",
+        "chain": "celo"
+      },
+      {
+        "service_id": 116,
+        "name": "celo-mainnet-fullnode",
+        "description": "Celo Mainnet Fullnode",
+        "chain": "celo"
+      },
+      {
+        "service_id": 117,
+        "name": "celo-mainnet-unchained",
+        "description": "Celo Mainnet Unchained",
+        "chain": "celo"
+      },
+      {
+        "service_id": 118,
+        "name": "celo-testnet-archivenode",
+        "description": "Celo Testnet Archivenode",
+        "chain": "celo"
+      },
+      {
+        "service_id": 119,
+        "name": "celo-testnet-fullnode",
+        "description": "Celo Testnet Fullnode",
+        "chain": "celo"
+      },
+      {
+        "service_id": 120,
+        "name": "cere-mainnet-fullnode",
+        "description": "Cere Mainnet Fullnode",
+        "chain": "Cere"
+      },
+      {
+        "service_id": 121,
+        "name": "cfg-mainnet-archivenode",
+        "description": "Centrifuge Mainnet Archivenode",
+        "chain": "Cere"
+      },
+      {
+        "service_id": 122,
+        "name": "cfg-mainnet-fullnode",
+        "description": "Centrifuge Mainnet Fullnode",
+        "chain": "Centrifuge"
+      },
+      {
+        "service_id": 123,
+        "name": "cheqd-mainnet-archivenode",
+        "description": "Cheqd Mainnet Archivenode",
+        "chain": "Cheqd"
+      },
+      {
+        "service_id": 124,
+        "name": "cheqd-mainnet-fullnode",
+        "description": "Cheqd Mainnet Fullnode",
+        "chain": "Cheqd"
+      },
+      {
+        "service_id": 125,
+        "name": "cro-mainnet-archivenode",
+        "description": "Cronos Mainnet Archivenode",
+        "chain": "cronos"
+      },
+      {
+        "service_id": 126,
+        "name": "cro-mainnet-fullnode",
+        "description": "Cronos Mainnet Fullnode",
+        "chain": "cronos"
+      },
+      {
+        "service_id": 127,
+        "name": "cro-testnet-archivenode",
+        "description": "Cronos Testnet Archivenode",
+        "chain": "cronos"
+      },
+      {
+        "service_id": 128,
+        "name": "cro-testnet-fullnode",
+        "description": "Cronos Testnet Fullnode",
+        "chain": "cronos"
+      },
+      {
+        "service_id": 129,
+        "name": "d-mainnet-fullnode",
+        "description": "Denarius Mainnet Fullnode",
+        "chain": "Denarius"
+      },
+      {
+        "service_id": 130,
+        "name": "dash-mainnet-blockbook",
+        "description": "Dash Mainnet Blockbook",
+        "chain": "dash"
+      },
+      {
+        "service_id": 131,
+        "name": "dash-mainnet-fullnode",
+        "description": "Dash Mainnet Fullnode",
+        "chain": "dash"
+      },
+      {
+        "service_id": 132,
+        "name": "dcr-mainnet-fullnode",
+        "description": "Decred Mainnet Fullnode",
+        "chain": "decred"
+      },
+      {
+        "service_id": 133,
+        "name": "dfk-mainnet-archivenode",
+        "description": "DFK Mainnet Archivenode",
+        "chain": "DFK"
+      },
+      {
+        "service_id": 134,
+        "name": "dfk-mainnet-fullnode",
+        "description": "DFK Mainnet Fullnode",
+        "chain": "DFK"
+      },
+      {
+        "service_id": 135,
+        "name": "dfk-testnet-archivenode",
+        "description": "DFK Testnet Archivenode",
+        "chain": "DFK"
+      },
+      {
+        "service_id": 136,
+        "name": "dfk-testnet-fullnode",
+        "description": "DFK Testnet Fullnode",
+        "chain": "DFK"
+      },
+      {
+        "service_id": 137,
+        "name": "dgb-mainnet-fullnode",
+        "description": "DigiByte Mainnet Fullnode",
+        "chain": "digibyte"
+      },
+      {
+        "service_id": 50,
+        "name": "doge-mainnet-blockbook",
+        "description": "Dogecoin Mainnet Blockbook",
+        "chain": "doge"
+      },
+      {
+        "service_id": 14,
+        "name": "doge-mainnet-fullnode",
+        "description": "Dogecoin Mainnet Fullnode",
+        "chain": "doge"
+      },
+      {
+        "service_id": 15,
+        "name": "doge-mainnet-lightnode",
+        "description": "Dogecoin Mainnet Lightnode",
+        "chain": "doge"
+      },
+      {
+        "service_id": 39,
+        "name": "doge-mainnet-unchained",
+        "description": "Dogecoin Mainnet Unchained",
+        "chain": "doge"
+      },
+      {
+        "service_id": 138,
+        "name": "dvpn-mainnet-archivenode",
+        "description": "Sentinel Mainnet Archivenode",
+        "chain": "dvpn"
+      },
+      {
+        "service_id": 139,
+        "name": "dvpn-mainnet-fullnode",
+        "description": "Sentinel Mainnet Fullnode",
+        "chain": "dvpn"
+      },
+      {
+        "service_id": 140,
+        "name": "dym-mainnet-archivenode",
+        "description": "Dymension Mainnet Archivenode",
+        "chain": "dym"
+      },
+      {
+        "service_id": 141,
+        "name": "dym-mainnet-fullnode",
+        "description": "Dymension Mainnet Fullnode",
+        "chain": "dym"
+      },
+      {
+        "service_id": 142,
+        "name": "dym-mainnet-unchained",
+        "description": "Dymension Mainnet Unchained",
+        "chain": "dym"
+      },
+      {
+        "service_id": 143,
+        "name": "dym-testnet-archivenode",
+        "description": "Dymension Testnet Archivenode",
+        "chain": "dym"
+      },
+      {
+        "service_id": 144,
+        "name": "dym-testnet-fullnode",
+        "description": "Dymension Testnet Fullnode",
+        "chain": "dym"
+      },
+      {
+        "service_id": 145,
+        "name": "erowan-mainnet-archivenode",
+        "description": "Sifchain Mainnet Archivenode",
+        "chain": "erowan"
+      },
+      {
+        "service_id": 146,
+        "name": "erowan-mainnet-fullnode",
+        "description": "Sifchain Mainnet Fullnode",
+        "chain": "erowan"
+      },
+      {
+        "service_id": 16,
+        "name": "etc-mainnet-archivenode",
+        "description": "Ethereum Classic Mainnet Archivenode",
+        "chain": "classic"
+      },
+      {
+        "service_id": 147,
+        "name": "etc-mainnet-blockbook",
+        "description": "Ethereum Classic Mainnet Blockbook",
+        "chain": "classic"
+      },
+      {
+        "service_id": 17,
+        "name": "etc-mainnet-fullnode",
+        "description": "Ethereum Classic Mainnet Fullnode",
+        "chain": "classic"
+      },
+      {
+        "service_id": 18,
+        "name": "etc-mainnet-lightnode",
+        "description": "Ethereum Classic Mainnet Lightnode",
+        "chain": "classic"
+      },
+      {
+        "service_id": 148,
+        "name": "etc-mainnet-unchained",
+        "description": "Ethereum Classic Mainnet Unchained",
+        "chain": "classic"
+      },
+      {
+        "service_id": 149,
+        "name": "eth-holesky-testnet-blockbook",
+        "description": "Ethereum Holesky Testnet Blockbook",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 150,
+        "name": "eth-holesky-testnet-fullnode",
+        "description": "Ethereum Holesky Testnet Fullnode",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 151,
+        "name": "eth-holesky-testnet-unchained",
+        "description": "Ethereum Holesky Testnet Unchained",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 19,
+        "name": "eth-mainnet-archivenode",
+        "description": "Ethereum Mainnet Archivenode",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 152,
+        "name": "eth-mainnet-blockbook",
+        "description": "Ethereum Mainnet Blockbook",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 20,
+        "name": "eth-mainnet-fullnode",
+        "description": "Ethereum Mainnet Fullnode",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 21,
+        "name": "eth-mainnet-lightnode",
+        "description": "Ethereum Mainnet Lightnode",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 40,
+        "name": "eth-mainnet-unchained",
+        "description": "Ethereum Mainnet Unchained",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 153,
+        "name": "eth-sepolia-testnet-blockbook",
+        "description": "Ethereum Sepolia Testnet Blockbook",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 154,
+        "name": "eth-sepolia-testnet-fullnode",
+        "description": "Ethereum Sepolia Testnet Fullnode",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 155,
+        "name": "eth-sepolia-testnet-unchained",
+        "description": "Ethereum Sepolia Testnet Unchained",
+        "chain": "ethereum"
+      },
+      {
+        "service_id": 156,
+        "name": "evmos-mainnet-archivenode",
+        "description": "Evmos Mainnet Archivenode",
+        "chain": "evmos"
+      },
+      {
+        "service_id": 157,
+        "name": "evmos-mainnet-fullnode",
+        "description": "Evmos Mainnet Fullnode",
+        "chain": "evmos"
+      },
+      {
+        "service_id": 158,
+        "name": "evmos-testnet-archivenode",
+        "description": "Evmos Testnet Archivenode",
+        "chain": "evmos"
+      },
+      {
+        "service_id": 159,
+        "name": "evmos-testnet-fullnode",
+        "description": "Evmos Testnet Fullnode",
+        "chain": "evmos"
+      },
+      {
+        "service_id": 160,
+        "name": "fil-mainnet-fullnode",
+        "description": "Filecoin Mainnet Fullnode",
+        "chain": "filecoin"
+      },
+      {
+        "service_id": 161,
+        "name": "fil-mainnet-unchained",
+        "description": "Filecoin Mainnet Unchained",
+        "chain": "filecoin"
+      },
+      {
+        "service_id": 162,
+        "name": "fil-testnet-fullnode",
+        "description": "Filecoin Testnet Fullnode",
+        "chain": "filecoin"
+      },
+      {
+        "service_id": 163,
+        "name": "flare-mainnet-archivenode",
+        "description": "Flare Mainnet Archivenode",
+        "chain": "flare"
+      },
+      {
+        "service_id": 164,
+        "name": "flare-mainnet-fullnode",
+        "description": "Flare Mainnet Fullnode",
+        "chain": "flare"
+      },
+      {
+        "service_id": 165,
+        "name": "flare-mainnet-unchained",
+        "description": "Flare Mainnet Unchained",
+        "chain": "flare"
+      },
+      {
+        "service_id": 166,
+        "name": "flare-testnet-archivenode",
+        "description": "Flare Testnet Archivenode",
+        "chain": "flare"
+      },
+      {
+        "service_id": 167,
+        "name": "flare-testnet-fullnode",
+        "description": "Flare Testnet Fullnode",
+        "chain": "flare"
+      },
+      {
+        "service_id": 168,
+        "name": "flo-mainnet-fullnode",
+        "description": "Florincoin Mainnet Fullnode",
+        "chain": "flo"
+      },
+      {
+        "service_id": 169,
+        "name": "flow-mainnet-fullnode",
+        "description": "Flow Mainnet Fullnode",
+        "chain": "flow"
+      },
+      {
+        "service_id": 170,
+        "name": "flow-mainnet-unchained",
+        "description": "Flow Mainnet Unchained",
+        "chain": "flow"
+      },
+      {
+        "service_id": 171,
+        "name": "flow-testnet-fullnode",
+        "description": "Flow Testnet Fullnode",
+        "chain": "flow"
+      },
+      {
+        "service_id": 172,
+        "name": "frx-mainnet-archivenode",
+        "description": "Fraxtal Mainnet Archivenode",
+        "chain": "frx"
+      },
+      {
+        "service_id": 173,
+        "name": "frx-mainnet-fullnode",
+        "description": "Fraxtal Mainnet Fullnode",
+        "chain": "frx"
+      },
+      {
+        "service_id": 174,
+        "name": "frx-mainnet-unchained",
+        "description": "Fraxtal Mainnet Unchained",
+        "chain": "frx"
+      },
+      {
+        "service_id": 175,
+        "name": "frx-testnet-archivenode",
+        "description": "Fraxtal Testnet Archivenode",
+        "chain": "frx"
+      },
+      {
+        "service_id": 176,
+        "name": "frx-testnet-fullnode",
+        "description": "Fraxtal Testnet Fullnode",
+        "chain": "frx"
+      },
+      {
+        "service_id": 177,
+        "name": "ftc-mainnet-fullnode",
+        "description": "Feathercoin Mainnet Fullnode",
+        "chain": "ftc"
+      },
+      {
+        "service_id": 178,
+        "name": "ftm-mainnet-archivenode",
+        "description": "Fantom Mainnet Archivenode",
+        "chain": "fantom"
+      },
+      {
+        "service_id": 179,
+        "name": "ftm-mainnet-fullnode",
+        "description": "Fantom Mainnet Fullnode",
+        "chain": "fantom"
+      },
+      {
+        "service_id": 180,
+        "name": "ftm-mainnet-unchained",
+        "description": "Fantom Mainnet Unchained",
+        "chain": "fantom"
+      },
+      {
+        "service_id": 181,
+        "name": "ftm-testnet-archivenode",
+        "description": "Fantom Testnet Archivenode",
+        "chain": "fantom"
+      },
+      {
+        "service_id": 182,
+        "name": "ftm-testnet-fullnode",
+        "description": "Fantom Testnet Fullnode",
+        "chain": "fantom"
+      },
+      {
+        "service_id": 183,
+        "name": "fuse-mainnet-archivenode",
+        "description": "Fuse Mainnet Archivenode",
+        "chain": "fuse"
+      },
+      {
+        "service_id": 184,
+        "name": "fuse-mainnet-fullnode",
+        "description": "Fuse Mainnet Fullnode",
+        "chain": "fuse"
+      },
+      {
+        "service_id": 185,
+        "name": "fuse-testnet-archivenode",
+        "description": "Fuse Testnet Archivenode",
+        "chain": "fuse"
+      },
+      {
+        "service_id": 186,
+        "name": "fuse-testnet-fullnode",
+        "description": "Fuse Testnet Fullnode",
+        "chain": "fuse"
+      },
+      {
+        "service_id": 187,
+        "name": "gaia-mainnet-archivenode",
+        "description": "Cosmos Hub (Gaia) Mainnet Archivenode",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 188,
+        "name": "gaia-mainnet-fullnode",
+        "description": "Cosmos Hub (Gaia) Mainnet Fullnode",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 189,
+        "name": "gaia-mainnet-fullnode-grpc",
+        "description": "Cosmos Hub (Gaia) Mainnet Fullnode Grpc",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 46,
+        "name": "gaia-mainnet-grpc",
+        "description": "Gaia Mainnet GRPC",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 13,
+        "name": "gaia-mainnet-rpc",
+        "description": "Gaia Mainnet RPC",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 38,
+        "name": "gaia-mainnet-unchained",
+        "description": "Gaia Mainnet Unchained",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 190,
+        "name": "gaia-testnet-archivenode",
+        "description": "Cosmos Hub (Gaia) Testnet Archivenode",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 191,
+        "name": "gaia-testnet-fullnode",
+        "description": "Cosmos Hub (Gaia) Testnet Fullnode",
+        "chain": "cosmos"
+      },
+      {
+        "service_id": 192,
+        "name": "glmr-mainnet-archivenode",
+        "description": "Moonbeam Mainnet Archivenode",
+        "chain": "moonbeam"
+      },
+      {
+        "service_id": 193,
+        "name": "glmr-mainnet-fullnode",
+        "description": "Moonbeam Mainnet Fullnode",
+        "chain": "moonbeam"
+      },
+      {
+        "service_id": 194,
+        "name": "glmr-mainnet-unchained",
+        "description": "Moonbeam Mainnet Unchained",
+        "chain": "moonbeam"
+      },
+      {
+        "service_id": 195,
+        "name": "glmr-testnet-archivenode",
+        "description": "Moonbeam Testnet Archivenode",
+        "chain": "moonbeam"
+      },
+      {
+        "service_id": 196,
+        "name": "glmr-testnet-fullnode",
+        "description": "Moonbeam Testnet Fullnode",
+        "chain": "moonbeam"
+      },
+      {
+        "service_id": 197,
+        "name": "grs-mainnet-fullnode",
+        "description": "Groestlcoin Mainnet Fullnode",
+        "chain": "groestlcoin"
+      },
+      {
+        "service_id": 198,
+        "name": "hbar-mainnet-fullnode",
+        "description": "Hedera Mainnet Fullnode",
+        "chain": "hedera"
+      },
+      {
+        "service_id": 199,
+        "name": "hbar-mainnet-unchained",
+        "description": "Hedera Mainnet Unchained",
+        "chain": "hedera"
+      },
+      {
+        "service_id": 200,
+        "name": "hbar-testnet-fullnode",
+        "description": "Hedera Testnet Fullnode",
+        "chain": "hedera"
+      },
+      {
+        "service_id": 201,
+        "name": "hopr-mainnet-fullnode",
+        "description": "HOPR Mainnet Fullnode",
+        "chain": "hopr"
+      },
+      {
+        "service_id": 202,
+        "name": "hopr-testnet-fullnode",
+        "description": "HOPR Testnet Fullnode",
+        "chain": "hopr"
+      },
+      {
+        "service_id": 203,
+        "name": "imx-mainnet-archivenode",
+        "description": "Immutable Mainnet Archivenode",
+        "chain": "imx"
+      },
+      {
+        "service_id": 204,
+        "name": "imx-mainnet-fullnode",
+        "description": "Immutable Mainnet Fullnode",
+        "chain": "imx"
+      },
+      {
+        "service_id": 205,
+        "name": "imx-mainnet-unchained",
+        "description": "Immutable Mainnet Unchained",
+        "chain": "imx"
+      },
+      {
+        "service_id": 206,
+        "name": "imx-testnet-archivenode",
+        "description": "Immutable Testnet Archivenode",
+        "chain": "imx"
+      },
+      {
+        "service_id": 207,
+        "name": "imx-testnet-fullnode",
+        "description": "Immutable Testnet Fullnode",
+        "chain": "imx"
+      },
+      {
+        "service_id": 208,
+        "name": "initia-mainnet-archivenode",
+        "description": "Initia Mainnet Archivenode",
+        "chain": "initia"
+      },
+      {
+        "service_id": 209,
+        "name": "initia-mainnet-fullnode",
+        "description": "Initia Mainnet Fullnode",
+        "chain": "initia"
+      },
+      {
+        "service_id": 210,
+        "name": "inj-mainnet-archivenode",
+        "description": "Injective Protocol Mainnet Archivenode",
+        "chain": "nativeinjective"
+      },
+      {
+        "service_id": 211,
+        "name": "inj-mainnet-fullnode",
+        "description": "Injective Protocol Mainnet Fullnode",
+        "chain": "nativeinjective"
+      },
+      {
+        "service_id": 212,
+        "name": "inj-mainnet-unchained",
+        "description": "Injective Protocol Mainnet Unchained",
+        "chain": "nativeinjective"
+      },
+      {
+        "service_id": 213,
+        "name": "inj-testnet-archivenode",
+        "description": "Injective Protocol Testnet Archivenode",
+        "chain": "nativeinjective"
+      },
+      {
+        "service_id": 214,
+        "name": "inj-testnet-fullnode",
+        "description": "Injective Protocol Testnet Fullnode",
+        "chain": "nativeinjective"
+      },
+      {
+        "service_id": 215,
+        "name": "iota-mainnet-fullnode",
+        "description": "IOTA Mainnet Fullnode",
+        "chain": "iota"
+      },
+      {
+        "service_id": 216,
+        "name": "iotx-mainnet-fullnode",
+        "description": "IoTex Mainnet Fullnode",
+        "chain": "iotex"
+      },
+      {
+        "service_id": 217,
+        "name": "ixo-mainnet-archivenode",
+        "description": "IXO Mainnet Archivenode",
+        "chain": "ixo"
+      },
+      {
+        "service_id": 218,
+        "name": "ixo-mainnet-fullnode",
+        "description": "IXO Mainnet Fullnode",
+        "chain": "ixo"
+      },
+      {
+        "service_id": 219,
+        "name": "jackal-mainnet-archivenode",
+        "description": "Jackal Mainnet Archivenode",
+        "chain": "jackal"
+      },
+      {
+        "service_id": 220,
+        "name": "jackal-mainnet-fullnode",
+        "description": "Jackal Mainnet Fullnode",
+        "chain": "jackal"
+      },
+      {
+        "service_id": 221,
+        "name": "juno-mainnet-archivenode",
+        "description": "Juno Mainnet Archivenode",
+        "chain": "juno"
+      },
+      {
+        "service_id": 222,
+        "name": "juno-mainnet-fullnode",
+        "description": "Juno Mainnet Fullnode",
+        "chain": "juno"
+      },
+      {
+        "service_id": 223,
+        "name": "juno-mainnet-unchained",
+        "description": "Juno Mainnet Unchained",
+        "chain": "juno"
+      },
+      {
+        "service_id": 224,
+        "name": "juno-testnet-archivenode",
+        "description": "Juno Testnet Archivenode",
+        "chain": "juno"
+      },
+      {
+        "service_id": 225,
+        "name": "juno-testnet-fullnode",
+        "description": "Juno Testnet Fullnode",
+        "chain": "juno"
+      },
+      {
+        "service_id": 226,
+        "name": "kava-mainnet-archivenode",
+        "description": "Kava EVM Mainnet Archivenode",
+        "chain": "kava"
+      },
+      {
+        "service_id": 227,
+        "name": "kava-mainnet-fullnode",
+        "description": "Kava EVM Mainnet Fullnode",
+        "chain": "kava"
+      },
+      {
+        "service_id": 228,
+        "name": "kava-testnet-archivenode",
+        "description": "Kava EVM Testnet Archivenode",
+        "chain": "kava"
+      },
+      {
+        "service_id": 229,
+        "name": "kava-testnet-fullnode",
+        "description": "Kava EVM Testnet Fullnode",
+        "chain": "kava"
+      },
+      {
+        "service_id": 230,
+        "name": "klay-mainnet-archivenode",
+        "description": "Klaytn Mainnet Archivenode",
+        "chain": "klaytn"
+      },
+      {
+        "service_id": 231,
+        "name": "klay-mainnet-fullnode",
+        "description": "Klaytn Mainnet Fullnode",
+        "chain": "klaytn"
+      },
+      {
+        "service_id": 232,
+        "name": "klay-mainnet-unchained",
+        "description": "Klaytn Mainnet Unchained",
+        "chain": "klaytn"
+      },
+      {
+        "service_id": 233,
+        "name": "klay-testnet-archivenode",
+        "description": "Klaytn Testnet Archivenode",
+        "chain": "klaytn"
+      },
+      {
+        "service_id": 234,
+        "name": "klay-testnet-fullnode",
+        "description": "Klaytn Testnet Fullnode",
+        "chain": "klaytn"
+      },
+      {
+        "service_id": 235,
+        "name": "koii-mainnet-fullnode",
+        "description": "Koii Mainnet Fullnode",
+        "chain": "koii"
+      },
+      {
+        "service_id": 236,
+        "name": "lbtc-mainnet-fullnode",
+        "description": "Liquid Mainnet Fullnode",
+        "chain": "lbtc"
+      },
+      {
+        "service_id": 237,
+        "name": "linea-mainnet-archivenode",
+        "description": "Linea Mainnet Archivenode",
+        "chain": "linea"
+      },
+      {
+        "service_id": 238,
+        "name": "linea-mainnet-fullnode",
+        "description": "Linea Mainnet Fullnode",
+        "chain": "linea"
+      },
+      {
+        "service_id": 239,
+        "name": "linea-mainnet-unchained",
+        "description": "Linea Mainnet Unchained",
+        "chain": "linea"
+      },
+      {
+        "service_id": 240,
+        "name": "linea-testnet-archivenode",
+        "description": "Linea Testnet Archivenode",
+        "chain": "linea"
+      },
+      {
+        "service_id": 241,
+        "name": "linea-testnet-fullnode",
+        "description": "Linea Testnet Fullnode",
+        "chain": "linea"
+      },
+      {
+        "service_id": 242,
+        "name": "ln-mainnet-fullnode",
+        "description": "Lightning Network Mainnet Fullnode",
+        "chain": "ln"
+      },
+      {
+        "service_id": 48,
+        "name": "ltc-mainnet-blockbook",
+        "description": "Litecoin Mainnet Blockbook",
+        "chain": "litecoin"
+      },
+      {
+        "service_id": 22,
+        "name": "ltc-mainnet-fullnode",
+        "description": "Litecoin Mainnet Fullnode",
+        "chain": "litecoin"
+      },
+      {
+        "service_id": 23,
+        "name": "ltc-mainnet-lightnode",
+        "description": "Litecoin Mainnet Lightnode",
+        "chain": "litecoin"
+      },
+      {
+        "service_id": 42,
+        "name": "ltc-mainnet-unchained",
+        "description": "Litecoin Mainnet Unchained",
+        "chain": "litecoin"
+      },
+      {
+        "service_id": 243,
+        "name": "manta-mainnet-fullnode",
+        "description": "Manta Mainnet Fullnode",
+        "chain": "manta"
+      },
+      {
+        "service_id": 244,
+        "name": "manta-mainnet-unchained",
+        "description": "Manta Mainnet Unchained",
+        "chain": "manta"
+      },
+      {
+        "service_id": 245,
+        "name": "mantle-mainnet-archivenode",
+        "description": "Mantle Mainnet Archivenode",
+        "chain": "mantle"
+      },
+      {
+        "service_id": 246,
+        "name": "mantle-mainnet-fullnode",
+        "description": "Mantle Mainnet Fullnode",
+        "chain": "mantle"
+      },
+      {
+        "service_id": 247,
+        "name": "mantle-mainnet-unchained",
+        "description": "Mantle Mainnet Unchained",
+        "chain": "mantle"
+      },
+      {
+        "service_id": 248,
+        "name": "mantra-mainnet-archivenode",
+        "description": "Mantra Mainnet Archivenode",
+        "chain": "mantra"
+      },
+      {
+        "service_id": 249,
+        "name": "mantra-mainnet-fullnode",
+        "description": "Mantra Mainnet Fullnode",
+        "chain": "mantra"
+      },
+      {
+        "service_id": 250,
+        "name": "maya-mainnet-archivenode",
+        "description": "Maya Protocol Mainnet Archivenode",
+        "chain": "maya"
+      },
+      {
+        "service_id": 251,
+        "name": "maya-mainnet-fullnode",
+        "description": "Maya Protocol Mainnet Fullnode",
+        "chain": "maya"
+      },
+      {
+        "service_id": 252,
+        "name": "mina-mainnet-fullnode",
+        "description": "Mina Mainnet Fullnode",
+        "chain": "mina"
+      },
+      {
+        "service_id": 253,
+        "name": "mina-mainnet-unchained",
+        "description": "Mina Mainnet Unchained",
+        "chain": "mina"
+      },
+      {
+        "service_id": 1,
+        "name": "mock",
+        "description": "Mock",
+        "chain": "mock"
+      },
+      {
+        "service_id": 254,
+        "name": "mona-mainnet-fullnode",
+        "description": "MonaCoin Mainnet Fullnode"
+      },
+      {
+        "service_id": 255,
+        "name": "movr-mainnet-archivenode",
+        "description": "Moonriver Mainnet Archivenode",
+        "chain": "moonriver"
+      },
+      {
+        "service_id": 256,
+        "name": "movr-mainnet-fullnode",
+        "description": "Moonriver Mainnet Fullnode",
+        "chain": "moonriver"
+      },
+      {
+        "service_id": 257,
+        "name": "movr-testnet-archivenode",
+        "description": "Moonriver Testnet Archivenode",
+        "chain": "moonriver"
+      },
+      {
+        "service_id": 258,
+        "name": "movr-testnet-fullnode",
+        "description": "Moonriver Testnet Fullnode",
+        "chain": "moonriver"
+      },
+      {
+        "service_id": 259,
+        "name": "namada-mainnet-archivenode",
+        "description": "Namada Mainnet Archivenode",
+        "chain": "namada"
+      },
+      {
+        "service_id": 260,
+        "name": "namada-mainnet-fullnode",
+        "description": "Namada Mainnet Fullnode",
+        "chain": "namada"
+      },
+      {
+        "service_id": 261,
+        "name": "near-mainnet-fullnode",
+        "description": "NEAR Mainnet Fullnode",
+        "chain": "near"
+      },
+      {
+        "service_id": 262,
+        "name": "near-mainnet-unchained",
+        "description": "NEAR Mainnet Unchained",
+        "chain": "near"
+      },
+      {
+        "service_id": 263,
+        "name": "near-testnet-fullnode",
+        "description": "NEAR Testnet Fullnode",
+        "chain": "near"
+      },
+      {
+        "service_id": 264,
+        "name": "neutron-mainnet-archivenode",
+        "description": "Neutron Mainnet Archivenode",
+        "chain": "neutron"
+      },
+      {
+        "service_id": 265,
+        "name": "neutron-mainnet-fullnode",
+        "description": "Neutron Mainnet Fullnode",
+        "chain": "neutron"
+      },
+      {
+        "service_id": 266,
+        "name": "neutron-mainnet-unchained",
+        "description": "Neutron Mainnet Unchained",
+        "chain": "neutron"
+      },
+      {
+        "service_id": 267,
+        "name": "ngm-mainnet-archivenode",
+        "description": "e-Money Mainnet Archivenode",
+        "chain": "ngm"
+      },
+      {
+        "service_id": 268,
+        "name": "ngm-mainnet-fullnode",
+        "description": "e-Money Mainnet Fullnode",
+        "chain": "ngm"
+      },
+      {
+        "service_id": 269,
+        "name": "ngm-testnet-archivenode",
+        "description": "e-Money Testnet Archivenode",
+        "chain": "ngm"
+      },
+      {
+        "service_id": 270,
+        "name": "ngm-testnet-fullnode",
+        "description": "e-Money Testnet Fullnode",
+        "chain": "ngm"
+      },
+      {
+        "service_id": 271,
+        "name": "nibiru-mainnet-archivenode",
+        "description": "Nibiru Network Mainnet Archivenode",
+        "chain": "nibiru"
+      },
+      {
+        "service_id": 272,
+        "name": "nibiru-mainnet-fullnode",
+        "description": "Nibiru Network Mainnet Fullnode",
+        "chain": "nibiru"
+      },
+      {
+        "service_id": 273,
+        "name": "nlg-mainnet-fullnode",
+        "description": "Gulden Mainnet Fullnode",
+        "chain": "nlg"
+      },
+      {
+        "service_id": 274,
+        "name": "nmc-mainnet-fullnode",
+        "description": "Namecoin Mainnet Fullnode",
+        "chain": "nmc"
+      },
+      {
+        "service_id": 275,
+        "name": "nomic-mainnet-archivenode",
+        "description": "Nomic Mainnet Archivenode",
+        "chain": "nomic"
+      },
+      {
+        "service_id": 276,
+        "name": "nomic-mainnet-fullnode",
+        "description": "Nomic Mainnet Fullnode",
+        "chain": "nomic"
+      },
+      {
+        "service_id": 277,
+        "name": "one-mainnet-fullnode",
+        "description": "Harmony Mainnet Fullnode",
+        "chain": "harmony"
+      },
+      {
+        "service_id": 278,
+        "name": "one-testnet-fullnode",
+        "description": "Harmony Testnet Fullnode",
+        "chain": "harmony"
+      },
+      {
+        "service_id": 279,
+        "name": "optimism-mainnet-archivenode",
+        "description": "Optimism Mainnet Archivenode",
+        "chain": "optimism"
+      },
+      {
+        "service_id": 24,
+        "name": "optimism-mainnet-fullnode",
+        "description": "Optimism Mainnet Fullnode",
+        "chain": "optimism"
+      },
+      {
+        "service_id": 45,
+        "name": "optimism-mainnet-unchained",
+        "description": "Optimism Mainnet Unchained",
+        "chain": "optimism"
+      },
+      {
+        "service_id": 280,
+        "name": "osmosis-mainnet-archivenode",
+        "description": "Osmosis Mainnet Archivenode",
+        "chain": "osmosis"
+      },
+      {
+        "service_id": 25,
+        "name": "osmosis-mainnet-fullnode",
+        "description": "Osmosis Mainnet Fullnode",
+        "chain": "osmosis"
+      },
+      {
+        "service_id": 43,
+        "name": "osmosis-mainnet-unchained",
+        "description": "Osmosis Mainnet Unchained",
+        "chain": "osmosis"
+      },
+      {
+        "service_id": 281,
+        "name": "paloma-mainnet-archivenode",
+        "description": "Paloma Mainnet Archivenode",
+        "chain": "paloma"
+      },
+      {
+        "service_id": 282,
+        "name": "paloma-mainnet-fullnode",
+        "description": "Paloma Mainnet Fullnode",
+        "chain": "paloma"
+      },
+      {
+        "service_id": 283,
+        "name": "part-mainnet-fullnode",
+        "description": "Particl Mainnet Fullnode",
+        "chain": "part"
+      },
+      {
+        "service_id": 284,
+        "name": "penumbra-mainnet-archivenode",
+        "description": "Penumbra Mainnet Archivenode",
+        "chain": "penumbra"
+      },
+      {
+        "service_id": 285,
+        "name": "penumbra-mainnet-fullnode",
+        "description": "Penumbra Mainnet Fullnode",
+        "chain": "penumbra"
+      },
+      {
+        "service_id": 28,
+        "name": "polkadot-mainnet-archivenode",
+        "description": "Polkadot Mainnet Archivenode",
+        "chain": "polkadot"
+      },
+      {
+        "service_id": 26,
+        "name": "polkadot-mainnet-fullnode",
+        "description": "Polkadot Mainnet Fullnode",
+        "chain": "polkadot"
+      },
+      {
+        "service_id": 27,
+        "name": "polkadot-mainnet-lightnode",
+        "description": "Polkadot Mainnet Lightnode",
+        "chain": "polkadot"
+      },
+      {
+        "service_id": 286,
+        "name": "polkadot-testnet-archivenode",
+        "description": "Polkadot Testnet Archivenode",
+        "chain": "polkadot"
+      },
+      {
+        "service_id": 287,
+        "name": "polkadot-testnet-fullnode",
+        "description": "Polkadot Testnet Fullnode",
+        "chain": "polkadot"
+      },
+      {
+        "service_id": 288,
+        "name": "polkadot-testnet-lightnode",
+        "description": "Polkadot Testnet Lightnode",
+        "chain": "polkadot"
+      },
+      {
+        "service_id": 289,
+        "name": "polygon-Mumbai-testnet-fullnode",
+        "description": "Polygon Mumbai Testnet Fullnode",
+        "chain": "polygon"
+      },
+      {
+        "service_id": 290,
+        "name": "polygon-Mumbai-testnet-unchained",
+        "description": "Polygon Mumbai Testnet Unchained",
+        "chain": "polygon"
+      },
+      {
+        "service_id": 30,
+        "name": "polygon-mainnet-archivenode",
+        "description": "Polygon Mainnet Archivenode",
+        "chain": "polygon"
+      },
+      {
+        "service_id": 29,
+        "name": "polygon-mainnet-fullnode",
+        "description": "Polygon Mainnet Fullnode",
+        "chain": "polygon"
+      },
+      {
+        "service_id": 291,
+        "name": "polygon-mainnet-unchained",
+        "description": "Polygon Mainnet Unchained",
+        "chain": "polygon"
+      },
+      {
+        "service_id": 292,
+        "name": "ppc-mainnet-fullnode",
+        "description": "Peercoin Mainnet Fullnode",
+        "chain": "ppc"
+      },
+      {
+        "service_id": 293,
+        "name": "pyth-mainnet-fullnode",
+        "description": "Pyth Network Mainnet Fullnode",
+        "chain": "pyth"
+      },
+      {
+        "service_id": 294,
+        "name": "pyth-testnet-fullnode",
+        "description": "Pyth Network Testnet Fullnode",
+        "chain": "pyth"
+      },
+      {
+        "service_id": 295,
+        "name": "qtum-mainnet-blockbook",
+        "description": "Qtum Mainnet Blockbook",
+        "chain": "qtum"
+      },
+      {
+        "service_id": 296,
+        "name": "qtum-mainnet-fullnode",
+        "description": "Qtum Mainnet Fullnode",
+        "chain": "qtum"
+      },
+      {
+        "service_id": 297,
+        "name": "rdd-mainnet-fullnode",
+        "description": "Reddcoin Mainnet Fullnode",
+        "chain": "rdd"
+      },
+      {
+        "service_id": 298,
+        "name": "router-mainnet-archivenode",
+        "description": "Router Network Mainnet Archivenode",
+        "chain": "router"
+      },
+      {
+        "service_id": 299,
+        "name": "router-mainnet-fullnode",
+        "description": "Router Network Mainnet Fullnode",
+        "chain": "router"
+      },
+      {
+        "service_id": 300,
+        "name": "rvn-mainnet-blockbook",
+        "description": "Ravencoin Mainnet Blockbook",
+        "chain": "ravencoin"
+      },
+      {
+        "service_id": 301,
+        "name": "rvn-mainnet-fullnode",
+        "description": "Ravencoin Mainnet Fullnode",
+        "chain": "ravencoin"
+      },
+      {
+        "service_id": 302,
+        "name": "scroll-mainnet-archivenode",
+        "description": "Scroll Mainnet Archivenode",
+        "chain": "scroll"
+      },
+      {
+        "service_id": 303,
+        "name": "scroll-mainnet-fullnode",
+        "description": "Scroll Mainnet Fullnode",
+        "chain": "scroll"
+      },
+      {
+        "service_id": 304,
+        "name": "scroll-mainnet-unchained",
+        "description": "Scroll Mainnet Unchained",
+        "chain": "scroll"
+      },
+      {
+        "service_id": 305,
+        "name": "scroll-testnet-archivenode",
+        "description": "Scroll Testnet Archivenode",
+        "chain": "scroll"
+      },
+      {
+        "service_id": 306,
+        "name": "scroll-testnet-fullnode",
+        "description": "Scroll Testnet Fullnode",
+        "chain": "scroll"
+      },
+      {
+        "service_id": 307,
+        "name": "scrt-mainnet-archivenode",
+        "description": "Secret Network Mainnet Archivenode",
+        "chain": "secret"
+      },
+      {
+        "service_id": 308,
+        "name": "scrt-mainnet-fullnode",
+        "description": "Secret Network Mainnet Fullnode",
+        "chain": "secret"
+      },
+      {
+        "service_id": 309,
+        "name": "seda-mainnet-fullnode",
+        "description": "Seda Mainnet Fullnode",
+        "chain": "seda"
+      },
+      {
+        "service_id": 310,
+        "name": "sei-mainnet-archivenode",
+        "description": "Sei Mainnet Archivenode",
+        "chain": "sei"
+      },
+      {
+        "service_id": 311,
+        "name": "sei-mainnet-fullnode",
+        "description": "Sei Mainnet Fullnode",
+        "chain": "sei"
+      },
+      {
+        "service_id": 312,
+        "name": "sei-mainnet-unchained",
+        "description": "Sei Mainnet Unchained",
+        "chain": "sei"
+      },
+      {
+        "service_id": 313,
+        "name": "sei-testnet-archivenode",
+        "description": "Sei Testnet Archivenode",
+        "chain": "sei"
+      },
+      {
+        "service_id": 314,
+        "name": "sei-testnet-fullnode",
+        "description": "Sei Testnet Fullnode",
+        "chain": "sei"
+      },
+      {
+        "service_id": 315,
+        "name": "selfchain-mainnet-archivenode",
+        "description": "Selfchain Mainnet Archivenode",
+        "chain": "selfchain"
+      },
+      {
+        "service_id": 316,
+        "name": "selfchain-mainnet-fullnode",
+        "description": "Selfchain Mainnet Fullnode",
+        "chain": "selfchain"
+      },
+      {
+        "service_id": 317,
+        "name": "shardeum-mainnet-archivenode",
+        "description": "Shardeum Mainnet Archivenode",
+        "chain": "shardeum"
+      },
+      {
+        "service_id": 318,
+        "name": "shardeum-mainnet-fullnode",
+        "description": "Shardeum Mainnet Fullnode",
+        "chain": "shardeum"
+      },
+      {
+        "service_id": 319,
+        "name": "shardeum-mainnet-unchained",
+        "description": "Shardeum Mainnet Unchained",
+        "chain": "shardeum"
+      },
+      {
+        "service_id": 320,
+        "name": "shardeum-testnet-archivenode",
+        "description": "Shardeum Testnet Archivenode",
+        "chain": "shardeum"
+      },
+      {
+        "service_id": 321,
+        "name": "shardeum-testnet-fullnode",
+        "description": "Shardeum Testnet Fullnode",
+        "chain": "shardeum"
+      },
+      {
+        "service_id": 322,
+        "name": "smart-mainnet-fullnode",
+        "description": "SmartCash Mainnet Fullnode",
+        "chain": "smart"
+      },
+      {
+        "service_id": 31,
+        "name": "sol-mainnet-fullnode",
+        "description": "Solana Mainnet Fullnode",
+        "chain": "solana"
+      },
+      {
+        "service_id": 323,
+        "name": "sol-mainnet-unchained",
+        "description": "Solana Mainnet Unchained",
+        "chain": "solana"
+      },
+      {
+        "service_id": 324,
+        "name": "sol-testnet-fullnode",
+        "description": "Solana Testnet Fullnode",
+        "chain": "solana"
+      },
+      {
+        "service_id": 325,
+        "name": "somnia-mainnet-archivenode",
+        "description": "Somnia Mainnet Archivenode",
+        "chain": "somnia"
+      },
+      {
+        "service_id": 326,
+        "name": "somnia-mainnet-fullnode",
+        "description": "Somnia Mainnet Fullnode",
+        "chain": "somnia"
+      },
+      {
+        "service_id": 327,
+        "name": "starknet-mainnet-archivenode",
+        "description": "Starknet Mainnet Archivenode",
+        "chain": "starknet"
+      },
+      {
+        "service_id": 328,
+        "name": "starknet-mainnet-fullnode",
+        "description": "Starknet Mainnet Fullnode",
+        "chain": "starknet"
+      },
+      {
+        "service_id": 329,
+        "name": "starknet-testnet-archivenode",
+        "description": "Starknet Testnet Archivenode",
+        "chain": "starknet"
+      },
+      {
+        "service_id": 330,
+        "name": "starknet-testnet-fullnode",
+        "description": "Starknet Testnet Fullnode",
+        "chain": "starknet"
+      },
+      {
+        "service_id": 331,
+        "name": "stride-mainnet-archivenode",
+        "description": "Stride Mainnet Archivenode",
+        "chain": "stride"
+      },
+      {
+        "service_id": 332,
+        "name": "stride-mainnet-fullnode",
+        "description": "Stride Mainnet Fullnode",
+        "chain": "stride"
+      },
+      {
+        "service_id": 333,
+        "name": "sui-mainnet-fullnode",
+        "description": "SUI Mainnet Fullnode",
+        "chain": "sui"
+      },
+      {
+        "service_id": 334,
+        "name": "sui-testnet-fullnode",
+        "description": "SUI Testnet Fullnode",
+        "chain": "sui"
+      },
+      {
+        "service_id": 335,
+        "name": "supra-mainnet-archivenode",
+        "description": "SUPRA Mainnet Archivenode",
+        "chain": "supra"
+      },
+      {
+        "service_id": 336,
+        "name": "supra-mainnet-fullnode",
+        "description": "SUPRA Mainnet Fullnode",
+        "chain": "supra"
+      },
+      {
+        "service_id": 337,
+        "name": "sys-mainnet-fullnode",
+        "description": "Syscoin Mainnet Fullnode",
+        "chain": "syscoin"
+      },
+      {
+        "service_id": 338,
+        "name": "taiko-mainnet-archivenode",
+        "description": "Taiko Mainnet Archivenode",
+        "chain": "Taiko"
+      },
+      {
+        "service_id": 339,
+        "name": "taiko-mainnet-fullnode",
+        "description": "Taiko Mainnet Fullnode",
+        "chain": "Taiko"
+      },
+      {
+        "service_id": 340,
+        "name": "taiko-mainnet-unchained",
+        "description": "Taiko Mainnet Unchained",
+        "chain": "Taiko"
+      },
+      {
+        "service_id": 341,
+        "name": "taiko-testnet-archivenode",
+        "description": "Taiko Testnet Archivenode",
+        "chain": "Taiko"
+      },
+      {
+        "service_id": 342,
+        "name": "taiko-testnet-fullnode",
+        "description": "Taiko Testnet Fullnode",
+        "chain": "Taiko"
+      },
+      {
+        "service_id": 393,
+        "name": "tao-indexer-subquery",
+        "description": "Bittensor TAO Indexer Subquery",
+        "chain": "tao"
+      },
+      {
+        "service_id": 392,
+        "name": "tao-indexer-subsquid",
+        "description": "Bittensor TAO Indexer Subsquid",
+        "chain": "tao"
+      },
+      {
+        "service_id": 387,
+        "name": "tao-mainnet-archivenode",
+        "description": "Bittensor TAO Archive Node",
+        "chain": "tao"
+      },
+      {
+        "service_id": 388,
+        "name": "tao-mainnet-fullnode",
+        "description": "Bittensor TAO Full Node",
+        "chain": "tao"
+      },
+      {
+        "service_id": 389,
+        "name": "tao-mainnet-lightnode",
+        "description": "Bittensor TAO Light Node",
+        "chain": "tao"
+      },
+      {
+        "service_id": 391,
+        "name": "tao-testnet-archivenode",
+        "description": "Bittensor TAO Testnet Archive Node",
+        "chain": "tao"
+      },
+      {
+        "service_id": 390,
+        "name": "tao-testnet-fullnode",
+        "description": "Bittensor TAO Testnet Full Node",
+        "chain": "tao"
+      },
+      {
+        "service_id": 343,
+        "name": "thorchain-mainnet-archivenode",
+        "description": "Thorchain Mainnet Archivenode",
+        "chain": "thorchain"
+      },
+      {
+        "service_id": 32,
+        "name": "thorchain-mainnet-fullnode",
+        "description": "THORChain Mainnet Fullnode",
+        "chain": "thorchain"
+      },
+      {
+        "service_id": 44,
+        "name": "thorchain-mainnet-unchained",
+        "description": "THORChain Mainnet Unchained",
+        "chain": "thorchain"
+      },
+      {
+        "service_id": 344,
+        "name": "tia-mainnet-archivenode",
+        "description": "Celestia Mainnet Archivenode",
+        "chain": "tia"
+      },
+      {
+        "service_id": 345,
+        "name": "tia-mainnet-fullnode",
+        "description": "Celestia Mainnet Fullnode",
+        "chain": "tia"
+      },
+      {
+        "service_id": 346,
+        "name": "tia-mainnet-unchained",
+        "description": "Celestia Mainnet Unchained",
+        "chain": "tia"
+      },
+      {
+        "service_id": 347,
+        "name": "tia-testnet-archivenode",
+        "description": "Celestia Testnet Archivenode",
+        "chain": "tia"
+      },
+      {
+        "service_id": 348,
+        "name": "tia-testnet-fullnode",
+        "description": "Celestia Testnet Fullnode",
+        "chain": "tia"
+      },
+      {
+        "service_id": 349,
+        "name": "ton-mainnet-fullnode",
+        "description": "TON Mainnet Fullnode",
+        "chain": "ton"
+      },
+      {
+        "service_id": 350,
+        "name": "ton-testnet-fullnode",
+        "description": "TON Testnet Fullnode",
+        "chain": "ton"
+      },
+      {
+        "service_id": 351,
+        "name": "trx-mainnet-archivenode",
+        "description": "Tron Mainnet Archivenode",
+        "chain": "tron"
+      },
+      {
+        "service_id": 352,
+        "name": "trx-mainnet-fullnode",
+        "description": "Tron Mainnet Fullnode",
+        "chain": "tron"
+      },
+      {
+        "service_id": 353,
+        "name": "trx-mainnet-unchained",
+        "description": "Tron Mainnet Unchained",
+        "chain": "tron"
+      },
+      {
+        "service_id": 354,
+        "name": "trx-testnet-archivenode",
+        "description": "Tron Testnet Archivenode",
+        "chain": "tron"
+      },
+      {
+        "service_id": 355,
+        "name": "trx-testnet-fullnode",
+        "description": "Tron Testnet Fullnode",
+        "chain": "tron"
+      },
+      {
+        "service_id": 356,
+        "name": "union-mainnet-archivenode",
+        "description": "Union Mainnet Archivenode",
+        "chain": "union"
+      },
+      {
+        "service_id": 357,
+        "name": "union-mainnet-fullnode",
+        "description": "Union Mainnet Fullnode",
+        "chain": "union"
+      },
+      {
+        "service_id": 0,
+        "name": "unknown",
+        "description": "Unknown"
+      },
+      {
+        "service_id": 37,
+        "name": "unknown-2",
+        "description": "Unknown"
+      },
+      {
+        "service_id": 358,
+        "name": "via-mainnet-fullnode",
+        "description": "Viacoin Mainnet Fullnode",
+        "chain": "viacoin"
+      },
+      {
+        "service_id": 359,
+        "name": "vtc-mainnet-fullnode",
+        "description": "Vertcoin Mainnet Fullnode",
+        "chain": "vtc"
+      },
+      {
+        "service_id": 360,
+        "name": "xdai-mainnet-archivenode",
+        "description": "Gnosis Chain Mainnet Archivenode",
+        "chain": "xdai"
+      },
+      {
+        "service_id": 361,
+        "name": "xdai-mainnet-fullnode",
+        "description": "Gnosis Chain Mainnet Fullnode",
+        "chain": "xdai"
+      },
+      {
+        "service_id": 362,
+        "name": "xdai-mainnet-unchained",
+        "description": "Gnosis Chain Mainnet Unchained",
+        "chain": "xdai"
+      },
+      {
+        "service_id": 363,
+        "name": "xdai-testnet-archivenode",
+        "description": "Gnosis Chain Testnet Archivenode",
+        "chain": "xdai"
+      },
+      {
+        "service_id": 364,
+        "name": "xdai-testnet-fullnode",
+        "description": "Gnosis Chain Testnet Fullnode",
+        "chain": "xdai"
+      },
+      {
+        "service_id": 365,
+        "name": "xec-mainnet-fullnode",
+        "description": "eCash Mainnet Fullnode",
+        "chain": "ecash"
+      },
+      {
+        "service_id": 366,
+        "name": "xlm-mainnet-fullnode",
+        "description": "Stellar Mainnet Fullnode",
+        "chain": "stellar"
+      },
+      {
+        "service_id": 367,
+        "name": "xlm-testnet-fullnode",
+        "description": "Stellar Testnet Fullnode",
+        "chain": "stellar"
+      },
+      {
+        "service_id": 368,
+        "name": "xprt-mainnet-archivenode",
+        "description": "Persistence Mainnet Archivenode",
+        "chain": "persistence"
+      },
+      {
+        "service_id": 369,
+        "name": "xprt-mainnet-fullnode",
+        "description": "Persistence Mainnet Fullnode",
+        "chain": "persistence"
+      },
+      {
+        "service_id": 370,
+        "name": "zec-mainnet-blockbook",
+        "description": "Zcash Mainnet Blockbook",
+        "chain": "zcash"
+      },
+      {
+        "service_id": 371,
+        "name": "zec-mainnet-fullnode",
+        "description": "Zcash Mainnet Fullnode",
+        "chain": "zcash"
+      },
+      {
+        "service_id": 372,
+        "name": "zircuit-mainnet-archivenode",
+        "description": "Zircuit Mainnet Archivenode",
+        "chain": "zircuit"
+      },
+      {
+        "service_id": 373,
+        "name": "zircuit-mainnet-fullnode",
+        "description": "Zircuit Mainnet Fullnode",
+        "chain": "zircuit"
+      },
+      {
+        "service_id": 374,
+        "name": "zircuit-mainnet-unchained",
+        "description": "Zircuit Mainnet Unchained",
+        "chain": "zircuit"
+      },
+      {
+        "service_id": 375,
+        "name": "zircuit-testnet-archivenode",
+        "description": "Zircuit Testnet Archivenode",
+        "chain": "zircuit"
+      },
+      {
+        "service_id": 376,
+        "name": "zircuit-testnet-fullnode",
+        "description": "Zircuit Testnet Fullnode",
+        "chain": "zircuit"
+      },
+      {
+        "service_id": 377,
+        "name": "zkfair-mainnet-archivenode",
+        "description": "zkFair Mainnet Archivenode",
+        "chain": "zkfair"
+      },
+      {
+        "service_id": 378,
+        "name": "zkfair-mainnet-fullnode",
+        "description": "zkFair Mainnet Fullnode",
+        "chain": "zkfair"
+      },
+      {
+        "service_id": 379,
+        "name": "zkfair-mainnet-unchained",
+        "description": "zkFair Mainnet Unchained",
+        "chain": "zkfair"
+      },
+      {
+        "service_id": 380,
+        "name": "zkfair-testnet-archivenode",
+        "description": "zkFair Testnet Archivenode",
+        "chain": "zkfair"
+      },
+      {
+        "service_id": 381,
+        "name": "zkfair-testnet-fullnode",
+        "description": "zkFair Testnet Fullnode",
+        "chain": "zkfair"
+      },
+      {
+        "service_id": 382,
+        "name": "zksync-mainnet-archivenode",
+        "description": "ZkSync Mainnet Archivenode",
+        "chain": "zksync"
+      },
+      {
+        "service_id": 383,
+        "name": "zksync-mainnet-fullnode",
+        "description": "ZkSync Mainnet Fullnode",
+        "chain": "zksync"
+      },
+      {
+        "service_id": 384,
+        "name": "zksync-mainnet-unchained",
+        "description": "ZkSync Mainnet Unchained",
+        "chain": "zksync"
+      },
+      {
+        "service_id": 385,
+        "name": "zksync-testnet-archivenode",
+        "description": "ZkSync Testnet Archivenode",
+        "chain": "zksync"
+      },
+      {
+        "service_id": 386,
+        "name": "zksync-testnet-fullnode",
+        "description": "ZkSync Testnet Fullnode",
+        "chain": "zksync"
+      }
+    ]
+  }
+}

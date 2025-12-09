@@ -1,20 +1,242 @@
-    const { useState, useEffect, useMemo } = React;
+    const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
-    // ============================================================================
-    // EXPANDED SERVICES - All supported chains
-    // ============================================================================
+    const BLOCK_TIME_FALLBACK = 5.79954919;
+    const ARKEO_DIVISOR = 100_000_000;
+    const CHAIN_ICON_SLUGS = {
+      agoric: "agoric",
+      akash: "akash",
+      aptos: "aptos",
+      arbitrum: "arbitrum",
+      avax: "avalanchec",
+      base: "base",
+      bch: "bitcoincash",
+      bnb: "binance",
+      bsc: "smartchain",
+      btc: "bitcoin",
+      btg: "bitcoingold",
+      cardano: "cardano",
+      celo: "celo",
+      cro: "cronos",
+      dash: "dash",
+      dcr: "decred",
+      dgb: "digibyte",
+      doge: "doge",
+      etc: "classic",
+      eth: "ethereum",
+      "eth-sepolia": "sepolia",
+      evmos: "evmos",
+      fil: "filecoin",
+      ftm: "fantom",
+      gaia: "cosmos",
+      glmr: "moonbeam",
+      grs: "groestlcoin",
+      hbar: "hedera",
+      inj: "nativeinjective",
+      iotx: "iotex",
+      juno: "juno",
+      kava: "kava",
+      klay: "klaytn",
+      linea: "linea",
+      ltc: "litecoin",
+      manta: "manta",
+      mantle: "mantle",
+      movr: "moonriver",
+      near: "near",
+      neutron: "neutron",
+      one: "harmony",
+      optimism: "optimism",
+      osmosis: "osmosis",
+      polkadot: "polkadot",
+      polygon: "polygon",
+      "polygon-Mumbai": "polygonmumbai",
+      qtum: "qtum",
+      rvn: "ravencoin",
+      scroll: "scroll",
+      scrt: "secret",
+      sei: "sei",
+      sol: "solana",
+      stride: "stride",
+      sui: "sui",
+      sys: "syscoin",
+      taiko: "",
+      thorchain: "thorchain",
+      tia: "tia",
+      ton: "ton",
+      trx: "tron",
+      via: "viacoin",
+      xdai: "xdai",
+      xec: "ecash",
+      xlm: "stellar",
+      xprt: "persistence",
+      zec: "zcash",
+      zksync: "zksync",
+      allora: "allora",
+      arch: "arch",
+      arkeo: "arkeo",
+      aur: "aur",
+      azero: "azero",
+      babylon: "babylon",
+      bera: "bera",
+      blast: "blast",
+      ccd: "",
+      cere: "",
+      cfg: "",
+      cheqd: "",
+      d: "",
+      dfk: "",
+      dvpn: "dvpn",
+      dym: "dym",
+      erowan: "erowan",
+      flare: "flare",
+      flo: "flo",
+      flow: "flow",
+      frx: "frx",
+      ftc: "ftc",
+      fuse: "fuse",
+      hopr: "hopr",
+      imx: "imx",
+      initia: "initia",
+      iota: "iota",
+      ixo: "ixo",
+      jackal: "jackal",
+      kavaevm: "kavaevm",
+      koii: "koii",
+      lbtc: "lbtc",
+      ln: "ln",
+      mantaevm: "mantaevm",
+      mantra: "mantra",
+      maya: "maya",
+      mina: "mina",
+      mock: "mock",
+      namada: "namada",
+      ngm: "ngm",
+      nibiru: "nibiru",
+      nlg: "nlg",
+      nmc: "nmc",
+      nomic: "nomic",
+      paloma: "paloma",
+      part: "part",
+      penumbra: "penumbra",
+      ppc: "ppc",
+      pyth: "pyth",
+      rdd: "rdd",
+      router: "router",
+      seda: "seda",
+      selfchain: "selfchain",
+      shardeum: "shardeum",
+      smart: "smart",
+      somnia: "somnia",
+      starknet: "starknet",
+      supra: "supra",
+      tao: "tao",
+      union: "union",
+      vtc: "vtc",
+      zircuit: "zircuit",
+      zkfair: "zkfair",
+    };
+    const PROVIDER_ENV_EXAMPLE = `KEY_NAME=provider
+KEY_KEYRING_BACKEND=test
+KEY_MNEMONIC=
+CHAIN_ID="arkeo-main-v1"
 
-    const SERVICES = [
-      { id: 1, name: 'Arkeo', icon: '⚡' },
-      { id: 2, name: 'Ethereum', icon: '◆' },
-      { id: 3, name: 'Cosmos Hub', icon: '⚛' },
-      { id: 4, name: 'Osmosis', icon: '🧪' },
-      { id: 5, name: 'Bitcoin', icon: '₿' },
-      { id: 6, name: 'Base', icon: '🔵' },
-      { id: 7, name: 'Solana', icon: '◎' },
-      { id: 8, name: 'Avalanche', icon: '🔺' },
-      { id: 9, name: 'BNB Chain', icon: '⬡' },
-    ];
+ARKEOD_HOME=~/.arkeo
+EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657
+ARKEO_REST_API_PORT=http://provider1.innovationtheory.com:1317
+
+SENTINEL_NODE=http://provider-core-1.innovationtheory.com
+SENTINEL_PORT=3636
+
+ADMIN_PORT=8080
+ADMIN_API_PORT=9999`;
+    const PROVIDER_RUN_CMD = `# create host dirs
+mkdir -p ~/provider-core/config ~/provider-core/cache ~/provider-core/arkeo
+
+# stop/remove any existing container with this name
+docker stop provider-core || true
+docker rm provider-core || true
+
+# pull latest image (optional but recommended)
+docker pull ghcr.io/arkeonetwork/provider-core:latest
+
+# run
+docker run -d --name provider-core --restart=unless-stopped \\
+  --env-file ~/provider.env \\
+  -e ENV_ADMIN_PORT=8080 \\
+  -p 8080:8080 -p 3636:3636 -p 9999:9999 \\
+  -v ~/provider-core/config:/app/config \\
+  -v ~/subscriber-core/cache:/app/cache \\
+  -v ~/provider-core/arkeo:/root/.arkeo \\
+  ghcr.io/arkeonetwork/provider-core:latest`;
+    const SUBSCRIBER_ENV_EXAMPLE = `SUBSCRIBER_NAME=Arkeo Core Subscriber
+
+KEY_NAME=subscriber
+KEY_KEYRING_BACKEND=test
+KEY_MNEMONIC=
+CHAIN_ID="arkeo-main-v1"
+
+ARKEOD_HOME=~/.arkeo
+EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657
+EXTERNAL_ARKEO_REST_API=http://provider1.innovationtheory.com:1317
+EXTERNAL_SENTINEL_NODE=http://docker.innovationtheory.com:3636
+
+ADMIN_PORT=8079
+ADMIN_API_PORT=9998`;
+    const SUBSCRIBER_RUN_CMD = `# create host dirs
+mkdir -p ~/subscriber-core/config ~/subscriber-core/cache ~/subscriber-core/arkeo
+
+# stop/remove any existing container with this name
+docker stop subscriber-core || true
+docker rm subscriber-core || true
+
+# pull latest image (optional but recommended)
+docker pull ghcr.io/arkeonetwork/subscriber-core:latest
+
+# run
+docker run -d --name subscriber-core --restart=unless-stopped \\
+  --env-file ~/subscriber-core/subscriber.env \\
+  -e ENV_ADMIN_PORT=8079 \\
+  -p 8079:8079 -p 9998:9998 -p 62001-62100:62001-62100 \\
+  -v ~/subscriber-core/config:/app/config \\
+  -v ~/subscriber-core/cache:/app/cache \\
+  -v ~/subscriber-core/arkeo:/root/.arkeo \\
+  ghcr.io/arkeonetwork/subscriber-core:latest`;
+    const resolveApiBase = () => {
+      if (window.API_BASE) return window.API_BASE;
+      const portHint = window.ENV_ADMIN_API_PORT || window.ADMIN_API_PORT || null;
+      const loc = window.location;
+      const host = loc.hostname;
+      const proto = loc.protocol;
+      const currentPort = loc.port;
+      // If served from 8077 (static UI), default API to 9996
+      if (currentPort === '8077') {
+        return `${proto}//${host}:9996`;
+      }
+      // If an explicit port hint is provided, use it
+      if (portHint) {
+        return `${proto}//${host}:${portHint}`;
+      }
+      // Fallback to same origin
+      return `${proto}//${host}${currentPort ? `:${currentPort}` : ''}`;
+    };
+    const API_BASE = resolveApiBase();
+
+    const chainSlugFromServiceName = (name = "") => {
+      const lower = String(name || "").toLowerCase();
+      if (!lower) return "";
+      const prefix = lower.split("-")[0];
+      return CHAIN_ICON_SLUGS[prefix] || "";
+    };
+
+    const chainIconUrl = (slug) => {
+      if (!slug) return null;
+      return `/resources/${slug}/info/logo.png`;
+    };
+
+    const TIME_WINDOWS = {
+      daily: 86400,
+      weekly: 604800,
+      monthly: 2592000,
+    };
 
     // Location regions for filtering
     const REGIONS = [
@@ -29,217 +251,6 @@
       { id: 'sa', name: 'South America', icon: '🌎' },
     ];
 
-    // ============================================================================
-    // MOCK DATA - With earnings history
-    // ============================================================================
-
-const MOCK_PROVIDERS = [
-  {
-    id: 'p1',
-        pubKey: 'arkeopub1addwnpepqg7xvkz3k5tq8snx4d3q',
-        moniker: 'Red_5 Validator',
-        description: 'High-performance multi-chain RPC infrastructure with 99.9% uptime guarantee',
-        location: 'USA, East Coast',
-        region: 'na-east',
-        infrastructure: 'Bare Metal',
-        status: 'ONLINE',
-        totalContracts: 47,
-        activeContracts: 12,
-        uptime: 99.8,
-        avgLatency: 45,
-        reputation: 4.9,
-        earnings: {
-          daily: 1250000000,
-          weekly: 8750000000,
-          monthly: 35000000000,
-        },
-        services: [
-          { id: 1, name: 'Arkeo', paygoRate: '1' },
-          { id: 3, name: 'Cosmos Hub', paygoRate: '1' },
-          { id: 5, name: 'Bitcoin', paygoRate: '2' },
-        ],
-      },
-      {
-        id: 'p2',
-        pubKey: 'arkeopub1addwnpepqf8xvkz3k5tq8snx4d3r',
-        moniker: 'Liquify Nodes',
-        description: 'Enterprise-grade blockchain infrastructure serving institutions worldwide',
-        location: 'Germany, Frankfurt',
-        region: 'eu-central',
-        infrastructure: 'AWS',
-        status: 'ONLINE',
-        totalContracts: 156,
-        activeContracts: 34,
-        uptime: 99.95,
-        avgLatency: 32,
-        reputation: 5.0,
-        earnings: {
-          daily: 4500000000,
-          weekly: 31500000000,
-          monthly: 126000000000,
-        },
-        services: [
-          { id: 2, name: 'Ethereum', paygoRate: '5' },
-          { id: 4, name: 'Osmosis', paygoRate: '2' },
-          { id: 6, name: 'Base', paygoRate: '3' },
-          { id: 8, name: 'Avalanche', paygoRate: '4' },
-        ],
-      },
-      {
-        id: 'p3',
-        pubKey: 'arkeopub1addwnpepqh9xvkz3k5tq8snx4d3s',
-        moniker: 'CosmosRPC Pro',
-        description: 'Specialized Cosmos ecosystem RPC provider with global edge nodes',
-        location: 'Singapore',
-        region: 'asia-south',
-        infrastructure: 'Google Cloud',
-        status: 'ONLINE',
-        totalContracts: 89,
-        activeContracts: 21,
-        uptime: 99.7,
-        avgLatency: 28,
-        reputation: 4.7,
-        earnings: {
-          daily: 2100000000,
-          weekly: 14700000000,
-          monthly: 58800000000,
-        },
-        services: [
-          { id: 1, name: 'Arkeo', paygoRate: '1' },
-          { id: 3, name: 'Cosmos Hub', paygoRate: '1' },
-          { id: 4, name: 'Osmosis', paygoRate: '1' },
-          { id: 7, name: 'Solana', paygoRate: '3' },
-        ],
-      },
-      {
-        id: 'p4',
-        pubKey: 'arkeopub1addwnpepqi0xvkz3k5tq8snx4d3t',
-        moniker: 'NodeStake',
-        description: 'Professional validator and RPC services for 50+ blockchain networks',
-        location: 'Netherlands',
-        region: 'eu-west',
-        infrastructure: 'Hetzner',
-        status: 'ONLINE',
-        totalContracts: 112,
-        activeContracts: 28,
-        uptime: 99.6,
-        avgLatency: 38,
-        reputation: 4.8,
-        earnings: {
-          daily: 3200000000,
-          weekly: 22400000000,
-          monthly: 89600000000,
-        },
-        services: [
-          { id: 2, name: 'Ethereum', paygoRate: '4' },
-          { id: 3, name: 'Cosmos Hub', paygoRate: '1' },
-          { id: 9, name: 'BNB Chain', paygoRate: '2' },
-          { id: 5, name: 'Bitcoin', paygoRate: '2' },
-        ],
-      },
-      {
-        id: 'p5',
-        pubKey: 'arkeopub1addwnpepqj1xvkz3k5tq8snx4d3u',
-        moniker: 'Pacific Nodes',
-        description: 'Low-latency RPC endpoints optimized for Asia-Pacific region',
-        location: 'Tokyo, Japan',
-        region: 'asia-east',
-        infrastructure: 'Bare Metal',
-        status: 'ONLINE',
-        totalContracts: 67,
-        activeContracts: 18,
-        uptime: 99.5,
-        avgLatency: 22,
-        reputation: 4.6,
-        earnings: {
-          daily: 1800000000,
-          weekly: 12600000000,
-          monthly: 50400000000,
-        },
-        services: [
-          { id: 7, name: 'Solana', paygoRate: '2' },
-          { id: 2, name: 'Ethereum', paygoRate: '4' },
-          { id: 1, name: 'Arkeo', paygoRate: '1' },
-        ],
-      },
-      {
-        id: 'p6',
-        pubKey: 'arkeopub1addwnpepqk2xvkz3k5tq8snx4d3v',
-        moniker: 'WestCoast RPC',
-        description: 'Fast and reliable nodes serving the Western Americas',
-        location: 'Los Angeles, USA',
-        region: 'na-west',
-        infrastructure: 'Bare Metal',
-        status: 'ONLINE',
-        totalContracts: 45,
-        activeContracts: 14,
-        uptime: 99.4,
-        avgLatency: 35,
-        reputation: 4.5,
-        earnings: {
-          daily: 980000000,
-          weekly: 6860000000,
-          monthly: 27440000000,
-        },
-        services: [
-          { id: 6, name: 'Base', paygoRate: '2' },
-          { id: 7, name: 'Solana', paygoRate: '2' },
-          { id: 8, name: 'Avalanche', paygoRate: '3' },
-        ],
-      },
-      {
-        id: 'p7',
-        pubKey: 'arkeopub1addwnpepql3xvkz3k5tq8snx4d3w',
-        moniker: 'Sydney Chain',
-        description: 'Premium RPC services for Oceania with ultra-low latency',
-        location: 'Sydney, Australia',
-        region: 'oceania',
-        infrastructure: 'AWS',
-        status: 'ONLINE',
-        totalContracts: 34,
-        activeContracts: 9,
-        uptime: 99.3,
-        avgLatency: 48,
-        reputation: 4.4,
-        earnings: {
-          daily: 720000000,
-          weekly: 5040000000,
-          monthly: 20160000000,
-        },
-        services: [
-          { id: 2, name: 'Ethereum', paygoRate: '5' },
-          { id: 9, name: 'BNB Chain', paygoRate: '2' },
-          { id: 4, name: 'Osmosis', paygoRate: '1' },
-        ],
-      },
-      {
-        id: 'p8',
-        pubKey: 'arkeopub1addwnpepqm4xvkz3k5tq8snx4d3x',
-        moniker: 'Budget RPC',
-        description: 'Affordable RPC endpoints for developers and small projects',
-        location: 'Virginia, USA',
-        region: 'na-east',
-        infrastructure: 'Bare Metal',
-        status: 'OFFLINE',
-        totalContracts: 23,
-        activeContracts: 0,
-        uptime: 94.2,
-        avgLatency: 85,
-        reputation: 3.8,
-        earnings: {
-          daily: 0,
-          weekly: 150000000,
-          monthly: 890000000,
-        },
-    services: [
-      { id: 1, name: 'Arkeo', paygoRate: '0.5' },
-    ],
-  },
-];
-
-// Estimated subscribers (placeholder demo metric)
-const SUBSCRIBERS_EST = 12480;
-
     const SMART_SELECT_CRITERIA = [
       { id: 'price', label: 'Lowest Price', icon: '💰', description: 'Find the cheapest rate per query' },
       { id: 'latency', label: 'Fastest Response', icon: '⚡', description: 'Lowest latency for speed-critical apps' },
@@ -247,22 +258,33 @@ const SUBSCRIBERS_EST = 12480;
     ];
 
     // Utilities
-    const formatArkeo = (uarkeo, decimals = 2) => {
-      const val = parseInt(uarkeo) / 1_000_000;
-      if (val >= 1_000_000) return (val / 1_000_000).toFixed(1) + 'M';
-      if (val >= 1_000) return (val / 1_000).toFixed(1) + 'K';
-      return val.toFixed(decimals);
+    const formatArkeo = (uarkeo = 0, decimals = 2) => {
+      const val = parseInt(uarkeo || 0, 10) / ARKEO_DIVISOR;
+      if (val >= 1_000_000) return (val / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (val >= 1_000) return (val / 1_000).toFixed(1).replace(/\.0$/, '') + 'K';
+      const fixed = val.toFixed(decimals);
+      return decimals > 0 ? fixed.replace(/\.?0+$/, '') : fixed;
     };
 
-    const getEarningsByRange = (provider, range) => {
-      const { earnings } = provider;
-      switch (range) {
-        case 'daily': return earnings.daily;
-        case 'weekly': return earnings.weekly;
-        case 'monthly': return earnings.monthly;
-        case 'all_time': return Math.round(earnings.monthly * 6);
-        default: return earnings.monthly;
-      }
+    const blocksForRange = (range, blockTimeSeconds) => {
+      const secs = TIME_WINDOWS[range];
+      if (!secs) return null;
+      const bt = parseFloat(blockTimeSeconds || BLOCK_TIME_FALLBACK) || BLOCK_TIME_FALLBACK;
+      return Math.max(1, Math.round(secs / bt));
+    };
+
+    const getEarningsByRange = (provider, range, latestHeight, blockTimeSeconds, heightOverride = null, blockTimeOverride = null) => {
+      const heightRef = heightOverride ?? latestHeight;
+      const contracts = provider.contracts || [];
+      const heightLimitBlocks = blocksForRange(range, blockTimeOverride ?? blockTimeSeconds);
+      const cutoff = heightRef && heightLimitBlocks ? heightRef - heightLimitBlocks : null;
+      return contracts.reduce((sum, c) => {
+        const paid = parseInt(c.paid || 0, 10);
+        const hRaw = c.height || c.settlement_height || c.raw?.height || c.raw?.settlement_height;
+        const h = hRaw !== undefined ? parseInt(hRaw, 10) : null;
+        if (cutoff && h && h < cutoff) return sum;
+        return sum + (isFinite(paid) ? paid : 0);
+      }, 0);
     };
 
     const TIME_RANGES = [
@@ -274,7 +296,7 @@ const SUBSCRIBERS_EST = 12480;
 
     const SORT_OPTIONS = [
       { id: 'cost', label: 'Best Cost' },
-      { id: 'reliability', label: 'Best Reliability' },
+      { id: 'reliability', label: 'Reliability' },
     ];
 
     // Icons
@@ -348,6 +370,11 @@ const SUBSCRIBERS_EST = 12480;
           <path d="M12 7V13M12 13L14 11M12 13L10 11M4 14H6.67452C7.1637 14 7.40829 14 7.63846 14.0553C7.84254 14.1043 8.03763 14.1851 8.21657 14.2947C8.4184 14.4184 8.59136 14.5914 8.93726 14.9373L9.06274 15.0627C9.40865 15.4086 9.5816 15.5816 9.78343 15.7053C9.96237 15.8149 10.1575 15.8957 10.3615 15.9447C10.5917 16 10.8363 16 11.3255 16H12.6745C13.1637 16 13.4083 16 13.6385 15.9447C13.8425 15.8957 14.0376 15.8149 14.2166 15.7053C14.4184 15.5816 14.5914 15.4086 14.9373 15.0627L15.0627 14.9373C15.4086 14.5914 15.5816 14.4184 15.7834 14.2947C15.9624 14.1851 16.1575 14.1043 16.3615 14.0553C16.5917 14 16.8363 14 17.3255 14H20M7.2 4H16.8C17.9201 4 18.4802 4 18.908 4.21799C19.2843 4.40973 19.5903 4.71569 19.782 5.09202C20 5.51984 20 6.07989 20 7.2V16.8C20 17.9201 20 18.4802 19.782 18.908C19.5903 19.2843 19.2843 19.5903 18.908 19.782C18.4802 20 17.9201 20 16.8 20H7.2C6.0799 20 5.51984 20 5.09202 19.782C4.71569 19.5903 4.40973 19.2843 4.21799 18.908C4 18.4802 4 17.9201 4 16.8V7.2C4 6.0799 4 5.51984 4.21799 5.09202C4.40973 4.71569 4.71569 4.40973 5.09202 4.21799C5.51984 4 6.0799 4 7.2 4Z" />
         </svg>
       ),
+      Transactions: () => (
+        <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" xmlns="http://www.w3.org/2000/svg">
+          <path d="M2,7 L20,7 M16,2 L21,7 L16,12 M22,17 L4,17 M8,12 L3,17 L8,22" />
+        </svg>
+      ),
       CheckCircle: () => (
         <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
           <path fillRule="evenodd" d="M3 10a7 7 0 019.307-6.611 1 1 0 00.658-1.889 9 9 0 105.98 7.501 1 1 0 00-1.988.22A7 7 0 113 10zm14.75-5.338a1 1 0 00-1.5-1.324l-6.435 7.28-3.183-2.593a1 1 0 00-1.264 1.55l3.929 3.2a1 1 0 001.38-.113l7.072-8z" clipRule="evenodd" />
@@ -383,8 +410,8 @@ const SUBSCRIBERS_EST = 12480;
     const InfrastructureBadge = () => null;
 
     // Earnings Display Component
-    const EarningsDisplay = ({ earnings, range, onRangeChange }) => {
-      const [period, setPeriod] = useState('daily');
+    const EarningsDisplay = ({ earnings, range, onRangeChange, decimals = 2 }) => {
+      const [period, setPeriod] = useState('all_time');
       const activePeriod = range || period;
 
       const periods = [
@@ -412,7 +439,7 @@ const SUBSCRIBERS_EST = 12480;
               ))}
             </div>
           </div>
-          <p className="text-xl font-bold text-emerald-400">{formatArkeo(earnings[activePeriod])} <span className="text-sm font-normal">ARKEO</span></p>
+          <p className="text-xl font-bold text-emerald-400">{formatArkeo(earnings[activePeriod], decimals)} <span className="text-sm font-normal">ARKEO</span></p>
         </div>
       );
     };
@@ -454,12 +481,18 @@ const SUBSCRIBERS_EST = 12480;
       );
     };
 
-    const DataServiceFilter = ({ selected, onSelect }) => {
+    const DataServiceFilter = ({ selected, onSelect, options }) => {
       const [isOpen, setIsOpen] = useState(false);
       const [query, setQuery] = useState('');
-      const options = [{ id: 'all', name: 'All Types', icon: '🌐' }, ...SERVICES];
-      const active = options.find(o => o.id === selected) || options[0];
-      const filtered = options.filter(o => o.name.toLowerCase().includes(query.toLowerCase()));
+      const normalizedOpts = (options || []).map((o) => ({
+        id: o?.id ?? '',
+        name: typeof o?.name === 'string' ? o.name : String(o?.name ?? ''),
+        icon: o?.icon || '🌐',
+        iconUrl: o?.iconUrl || '',
+      }));
+      const opts = [{ id: 'all', name: 'Active Types', icon: '🌐', iconUrl: '' }, ...normalizedOpts];
+      const active = opts.find(o => o.id === selected) || opts[0];
+      const filtered = opts.filter(o => (o.name || '').toLowerCase().includes((query || '').toLowerCase()));
 
       return (
         <div className="relative">
@@ -487,7 +520,13 @@ const SUBSCRIBERS_EST = 12480;
                     onClick={() => { onSelect(opt.id); setIsOpen(false); setQuery(''); }}
                     className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center gap-2 ${selected === opt.id ? 'bg-arkeo/15 text-white' : 'text-secondaryText hover:bg-[#1E222C]'}`}
                   >
-                    <span>{opt.icon}</span>
+                    {opt.iconUrl ? (
+                      <span className="w-7 h-7 rounded-full overflow-hidden bg-[#0f121a] flex items-center justify-center border border-[var(--border)]">
+                        <img src={opt.iconUrl} alt={opt.name} className="w-6 h-6 object-contain" />
+                      </span>
+                    ) : (
+                      <span className="w-7 h-7 rounded-full bg-[#0f121a] flex items-center justify-center border border-[var(--border)] text-sm">{opt.icon}</span>
+                    )}
                     <span>{opt.name}</span>
                   </button>
                 ))}
@@ -569,26 +608,27 @@ const SUBSCRIBERS_EST = 12480;
     };
 
     // Provider Card
-    const ProviderCard = ({ provider, onOpenContract, serviceFilter, timeRange, onRangeChange }) => {
-      const isOnline = provider.status === 'ONLINE';
-      
-      return (
+  const ProviderCard = ({ provider, onOpenContract, serviceFilter, timeRange, onRangeChange, earnings }) => {
+    const isOnline = provider.status === 'ONLINE';
+    const selectedService =
+      serviceFilter && serviceFilter !== 'all'
+        ? (provider.services || []).find(s => String(s.id) === String(serviceFilter))
+        : null;
+    
+    return (
         <div className={`card-surface backdrop-blur rounded-2xl overflow-hidden transition-all ${isOnline ? 'hover:border-arkeo/60 hover:shadow-[0_10px_30px_rgba(59,224,255,0.12)]' : 'opacity-70'}`}>
-          <div className="p-5">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-bold text-lg text-white">{provider.moniker}</h3>
+            <div className="p-5">
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-bold text-lg text-white">{provider.moniker}</h3>
                   <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${isOnline ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-red-500/20 text-red-400 border border-red-500/30'}`}>{provider.status}</span>
                 </div>
-                <div className="flex items-center gap-2 text-secondaryText text-sm">
-                  <span className="flex items-center gap-1"><Icons.Globe />{provider.location}</span>
-                </div>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {[provider.location, provider.region].filter(Boolean).map((loc, idx) => (
-                    <span key={idx} className="px-2 py-0.5 rounded-full text-xs font-medium bg-[#1E222C] text-secondaryText border border-[#1E222C]">{loc}</span>
-                  ))}
-                </div>
+                {provider.location && (
+                  <div className="flex items-center gap-2 text-secondaryText text-sm">
+                    <span className="flex items-center gap-1"><Icons.Globe />{provider.location}</span>
+                  </div>
+                )}
               </div>
               <a href={`provider.html?id=${provider.id}`} className="flex items-center gap-1 text-secondaryText hover:text-white text-sm px-2 py-1 rounded-lg hover:bg-[#1E222C]" title="View provider details">
                 Details <Icons.External />
@@ -597,14 +637,31 @@ const SUBSCRIBERS_EST = 12480;
 
             <p className="text-secondaryText text-sm mb-4 line-clamp-2">{provider.description}</p>
 
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <div className="text-center p-2 rounded-lg bg-[#1E222C]"><p className="text-lg font-bold text-white">{provider.uptime}%</p><p className="text-xs text-secondaryText">Reliability</p></div>
-              <div className="text-center p-2 rounded-lg bg-[#1E222C]"><p className="text-lg font-bold text-white">{serviceFilter === 'all' ? provider.services.length : provider.services.filter(s => s.id === serviceFilter).length}</p><p className="text-xs text-secondaryText">Data Services</p></div>
-            </div>
+            {selectedService ? (
+              <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="text-center p-2 rounded-lg bg-[#1E222C]">
+                  <p className="text-xs text-secondaryText mb-1">Cost</p>
+                  <p className="text-lg font-bold text-white">
+                    {formatArkeo(selectedService.paygoRate, 8)} <span className="text-xs text-secondaryText">ARKEO/query</span>
+                  </p>
+                </div>
+                <div className="text-center p-2 rounded-lg bg-[#1E222C]">
+                  <p className="text-xs text-secondaryText mb-1">Data Services</p>
+                  <p className="text-lg font-bold text-white">{serviceFilter === 'all' ? provider.services.length : provider.services.filter(s => String(s.id) === String(serviceFilter)).length}</p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2 mb-4">
+                <div className="text-center p-2 rounded-lg bg-[#1E222C]">
+                  <p className="text-xs text-secondaryText mb-1">Data Services</p>
+                  <p className="text-lg font-bold text-white">{provider.services.length}</p>
+                </div>
+              </div>
+            )}
 
             {/* Earnings Display */}
             <div className="mb-4">
-              <EarningsDisplay earnings={provider.earnings} range={timeRange} onRangeChange={onRangeChange} />
+              <EarningsDisplay earnings={earnings} range={timeRange} onRangeChange={onRangeChange} decimals={8} />
             </div>
           </div>
         </div>
@@ -612,7 +669,7 @@ const SUBSCRIBERS_EST = 12480;
     };
 
     // Smart Select Modal - Updated with all services
-    const SmartSelectModal = ({ isOpen, onClose, onSuccess, timeRange, onRangeChange }) => {
+    const SmartSelectModal = ({ isOpen, onClose, onSuccess, timeRange, onRangeChange, providers, serviceOptions, computeEarnings }) => {
       const [selectedService, setSelectedService] = useState(null);
       const [selectedCriteria, setSelectedCriteria] = useState('price');
       const [step, setStep] = useState(1);
@@ -624,7 +681,7 @@ const SUBSCRIBERS_EST = 12480;
       if (!isOpen) return null;
 
       const findBestProvider = () => {
-        const providersWithService = MOCK_PROVIDERS.filter(p => p.status === 'ONLINE' && p.services.some(s => s.id === selectedService));
+        const providersWithService = (providers || []).filter(p => p.status === 'ONLINE' && p.services.some(s => s.id === selectedService));
         if (providersWithService.length === 0) return null;
         
         let sorted;
@@ -693,9 +750,11 @@ const SUBSCRIBERS_EST = 12480;
                       <h3 className="text-lg font-semibold text-white mb-4">Select Service / Chain</h3>
                       <p className="text-secondaryText text-sm mb-4">Choose from all supported blockchains on the Arkeo marketplace</p>
                       <div className="grid grid-cols-3 gap-3">
-                        {SERVICES.map(svc => (
+                        {(serviceOptions || []).filter(s => s.id !== 'all').map(svc => (
                           <button key={svc.id} onClick={() => setSelectedService(svc.id)} className={`p-4 rounded-xl border-2 text-center transition-all ${selectedService === svc.id ? 'border-primary bg-primary/10' : 'border-[var(--border)] bg-[var(--surface)] hover:border-primary/40'}`}>
-                            <span className="text-2xl mb-2 block">{svc.icon}</span>
+                            <span className="text-2xl mb-2 block">
+                              {svc.iconUrl ? <img src={svc.iconUrl} alt={svc.name} className="w-8 h-8 mx-auto rounded-full" /> : (svc.icon || '🌐')}
+                            </span>
                             <p className="font-medium text-white text-sm">{svc.name}</p>
                           </button>
                         ))}
@@ -731,7 +790,7 @@ const SUBSCRIBERS_EST = 12480;
                           <div><p className="text-2xl font-bold text-white">{recommendedProvider.location}</p><p className="text-xs text-secondaryText">Location</p></div>
                         </div>
                       </div>
-                  <EarningsDisplay earnings={recommendedProvider.earnings} range={timeRange} onRangeChange={onRangeChange} />
+                  <EarningsDisplay earnings={computeEarnings ? computeEarnings(recommendedProvider) : { daily: 0, weekly: 0, monthly: 0, all_time: 0 }} range={timeRange} onRangeChange={onRangeChange} />
                     </>
                   )}
 
@@ -762,11 +821,10 @@ const SUBSCRIBERS_EST = 12480;
     };
 
     // Become Provider Modal
-    const BecomeProviderModal = ({ isOpen, onClose }) => {
-      const [step, setStep] = useState(1);
-      const [setupType, setSetupType] = useState(null);
+    const BecomeProviderModal = ({ isOpen, onClose, onCopy, providerEnvExample, providerRunCmd }) => {
+      const [step, setStep] = useState(2);
 
-      useEffect(() => { if (isOpen) { setStep(1); setSetupType(null); } }, [isOpen]);
+      useEffect(() => { if (isOpen) { setStep(2); } }, [isOpen]);
 
       if (!isOpen) return null;
 
@@ -785,108 +843,113 @@ const SUBSCRIBERS_EST = 12480;
             </div>
 
             <div className="p-6">
-              {step === 1 && (
-                <>
-                  <h3 className="text-lg font-semibold text-white mb-2">Choose Setup Method</h3>
-                  <p className="text-secondaryText mb-6">Select how you'd like to set up your provider</p>
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <button onClick={() => { setSetupType('docker'); setStep(2); }} className="p-6 rounded-2xl border-2 border-[var(--border)] bg-[var(--surface)] hover:border-arkeo/60 hover:bg-arkeo/5 transition-all text-left group">
-                    <div className="w-14 h-14 bg-arkeo/15 rounded-2xl flex items-center justify-center mb-4 text-arkeo group-hover:scale-110 transition-transform"><Icons.Docker /></div>
-                      <h4 className="text-lg font-bold text-white mb-2">Docker Setup</h4>
-                      <p className="text-secondaryText text-sm mb-4">Recommended. Pre-configured container with admin UI.</p>
-                      <ul className="space-y-2 text-sm text-arkeo">
-                        <li>✓ One-command setup</li>
-                        <li>✓ Built-in management UI</li>
-                        <li>✓ Auto-updates</li>
-                      </ul>
-                    </button>
-                    <button onClick={() => { setSetupType('manual'); setStep(2); }} className="p-6 rounded-2xl border-2 border-[var(--border)] bg-[var(--surface)] hover:border-arkeo/60 hover:bg-arkeo/5 transition-all text-left group">
-                    <div className="w-14 h-14 bg-arkeo/15 rounded-2xl flex items-center justify-center mb-4 text-arkeo group-hover:scale-110 transition-transform"><Icons.Wand /></div>
-                      <h4 className="text-lg font-bold text-white mb-2">Manual Setup</h4>
-                      <p className="text-secondaryText text-sm mb-4">For advanced users wanting full control.</p>
-                      <ul className="space-y-2 text-sm text-arkeo">
-                        <li>✓ Full customization</li>
-                        <li>✓ Use existing nodes</li>
-                        <li>✓ Advanced config</li>
-                      </ul>
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {step === 2 && setupType === 'docker' && (
+              {step === 2 && (
                 <>
                   <div className="flex items-center gap-2 text-arkeo mb-4"><Icons.Docker /><span className="font-medium">Docker Setup</span></div>
                   <h3 className="text-lg font-semibold text-white mb-4">Quick Start</h3>
                   <div className="space-y-4">
-                    <div className="card-surface rounded-xl p-4">
-                      <p className="text-sm text-secondaryText mb-2">1. Clone the repository</p>
-                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)]">git clone https://github.com/arkeonetwork/arkeo-docker-core.git</code>
+                    <div className="card-surface rounded-xl p-4 relative">
+                      <button onClick={() => onCopy?.(providerEnvExample)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
+                      <p className="text-sm text-secondaryText mb-2">1. Create your env file (~/provider.env)</p>
+                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
+                        {providerEnvExample}
+                      </code>
                     </div>
-                    <div className="card-surface rounded-xl p-4">
-                      <p className="text-sm text-secondaryText mb-2">2. Navigate to provider-core</p>
-                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)]">cd arkeo-docker-core/provider-core</code>
+                    <div className="card-surface rounded-xl p-4 relative">
+                      <button onClick={() => onCopy?.(providerRunCmd)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
+                      <p className="text-sm text-secondaryText mb-2">2. Pull and run the container</p>
+                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
+                        {providerRunCmd}
+                      </code>
                     </div>
-                    <div className="card-surface rounded-xl p-4">
-                      <p className="text-sm text-secondaryText mb-2">3. Start the container</p>
-                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)]">docker-compose up -d</code>
-                    </div>
-                    <div className="card-surface rounded-xl p-4">
-                      <p className="text-sm text-secondaryText mb-2">4. Access Admin UI</p>
-                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)]">Open http://localhost:3000</code>
+                    <div className="card-surface rounded-xl p-4 relative">
+                      <button onClick={() => onCopy?.('http://localhost:8080')} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
+                      <p className="text-sm text-secondaryText mb-2">3. Open the Admin UI</p>
+                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)] whitespace-pre-wrap">http://localhost:8080</code>
                     </div>
                     <div className="bg-primary/10 border border-primary/40 rounded-xl p-4">
-                      <p className="text-arkeo text-sm">💡 The Admin UI will guide you through connecting nodes, setting rates, and bonding.</p>
+                      <p className="text-arkeo text-sm">💡 On first run, copy the hotwallet mnemonic from logs into provider.env. Then add services, bond, and announce to the marketplace.</p>
                     </div>
                   </div>
-                  <div className="mt-6 flex gap-3">
-                    <button onClick={() => setStep(1)} className="flex-1 px-4 py-3 rounded-xl font-medium secondary-btn hover:brightness-110">Back</button>
-                    <a href="https://github.com/arkeonetwork/arkeo-docker-core" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
-                      View on GitHub <Icons.External />
-                    </a>
-                  </div>
-                </>
-              )}
+                <div className="mt-6 flex gap-3">
+                  <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-medium secondary-btn hover:brightness-110">Back</button>
+                  <a href="https://github.com/arkeonetwork/arkeo-docker-core" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
+                    View on GitHub <Icons.External />
+                  </a>
+                </div>
+              </>
+            )}
 
-              {step === 2 && setupType === 'manual' && (
-                <>
-                  <div className="flex items-center gap-2 text-arkeo mb-4"><Icons.Wand /><span className="font-medium">Manual Setup</span></div>
-                  <h3 className="text-lg font-semibold text-white mb-4">Manual Configuration</h3>
-                  <div className="space-y-4">
-                    <div className="card-surface rounded-xl p-4">
-                      <h4 className="font-medium text-white mb-2">Prerequisites</h4>
-                      <ul className="space-y-1 text-sm text-secondaryText">
-                        <li>• Running blockchain full node</li>
-                        <li>• Arkeo wallet with ARKEO for bonding</li>
-                        <li>• Server with public IP</li>
-                        <li>• arkeod and sentinel binaries</li>
-                      </ul>
-                    </div>
-                    <div className="card-surface rounded-xl p-4">
-                      <h4 className="font-medium text-white mb-2">Steps</h4>
-                      <ol className="space-y-2 text-sm text-secondaryText list-decimal list-inside">
-                        <li>Bond ARKEO as collateral</li>
-                        <li>Configure Sentinel</li>
-                        <li>Set pricing</li>
-                        <li>Host metadata.json</li>
-                        <li>Start Sentinel service</li>
-                      </ol>
-                    </div>
-                  </div>
-                  <div className="mt-6 flex gap-3">
-                    <button onClick={() => setStep(1)} className="flex-1 px-4 py-3 rounded-xl font-medium secondary-btn hover:brightness-110">Back</button>
-                    <a href="https://docs.arkeo.network/arkeo-for-data-providers/setup" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
-                      View Docs <Icons.External />
-                    </a>
-                  </div>
-                </>
-              )}
             </div>
           </div>
         </div>
       );
     };
 
+    // Become Subscriber Modal
+    const BecomeSubscriberModal = ({ isOpen, onClose, onCopy, subscriberEnvExample, subscriberRunCmd }) => {
+      const [step, setStep] = useState(2);
+
+      useEffect(() => { if (isOpen) { setStep(2); } }, [isOpen]);
+
+      if (!isOpen) return null;
+
+      return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={onClose}>
+          <div className="card-surface rounded-2xl max-w-3xl w-full shadow-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-[var(--border)]">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-arkeo/15 text-arkeo"><Icons.Wand /></div>
+                <div>
+                  <h2 className="text-xl font-bold text-white">Become a Data Subscriber</h2>
+                  <p className="text-secondaryText text-sm">Start using ARKEO</p>
+                </div>
+              </div>
+              <button onClick={onClose} className="p-2 hover:bg-[#1E222C] rounded-xl text-secondaryText"><Icons.Close /></button>
+            </div>
+
+            <div className="p-6">
+              {step === 2 && (
+                <>
+                  <div className="flex items-center gap-2 text-arkeo mb-4"><Icons.Docker /><span className="font-medium">Docker Setup</span></div>
+                  <h3 className="text-lg font-semibold text-white mb-4">Quick Start</h3>
+                  <div className="space-y-4">
+                    <div className="card-surface rounded-xl p-4 relative">
+                      <button onClick={() => onCopy?.(subscriberEnvExample)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
+                      <p className="text-sm text-secondaryText mb-2">1. Create your env file (~/subscriber.env)</p>
+                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
+                        {subscriberEnvExample}
+                      </code>
+                    </div>
+                    <div className="card-surface rounded-xl p-4 relative">
+                      <button onClick={() => onCopy?.(subscriberRunCmd)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
+                      <p className="text-sm text-secondaryText mb-2">2. Pull and run the container</p>
+                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
+                        {subscriberRunCmd}
+                      </code>
+                    </div>
+                    <div className="card-surface rounded-xl p-4 relative">
+                      <button onClick={() => onCopy?.('http://localhost:8079')} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
+                      <p className="text-sm text-secondaryText mb-2">3. Open the Admin UI</p>
+                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)] whitespace-pre-wrap">http://localhost:8079</code>
+                    </div>
+                  <div className="bg-primary/10 border border-primary/40 rounded-xl p-4">
+                    <p className="text-arkeo text-sm">💡 On first run, copy the hotwallet mnemonic from logs into subscriber.env. Then add listeners, open contracts, and consume data.</p>
+                  </div>
+                </div>
+                <div className="mt-6 flex gap-3">
+                  <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-medium secondary-btn hover:brightness-110">Back</button>
+                  <a href="https://github.com/arkeonetwork/arkeo-docker-core" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
+                    View on GitHub <Icons.External />
+                  </a>
+                </div>
+              </>
+            )}
+            </div>
+          </div>
+        </div>
+      );
+    };
     // How It Works Modal (one-time popup and on-demand)
     const HowItWorksModal = ({ isOpen, onClose, timeRange, onRangeChange }) => {
       if (!isOpen) return null;
@@ -944,7 +1007,7 @@ const SUBSCRIBERS_EST = 12480;
     };
 
     // Open Contract Modal
-    const OpenContractModal = ({ provider, isOpen, onClose, onSuccess, timeRange, onRangeChange }) => {
+    const OpenContractModal = ({ provider, earnings, isOpen, onClose, onSuccess, timeRange, onRangeChange, serviceOptions }) => {
       const [selectedService, setSelectedService] = useState(null);
       const [txState, setTxState] = useState('idle');
 
@@ -953,7 +1016,7 @@ const SUBSCRIBERS_EST = 12480;
       if (!isOpen || !provider) return null;
 
       const service = provider.services.find(s => s.id === selectedService);
-      const cost = service ? (parseInt(service.paygoRate) * 10000) / 1_000_000 : 0;
+      const cost = service ? (parseInt(service.paygoRate) * 10000) / ARKEO_DIVISOR : 0;
 
       const handleSubmit = async () => {
         setTxState('signing');
@@ -1002,17 +1065,20 @@ const SUBSCRIBERS_EST = 12480;
                 </div>
               </div>
               
-              <EarningsDisplay earnings={provider.earnings} range={timeRange} onRangeChange={onRangeChange} />
+              <EarningsDisplay earnings={earnings || { daily: 0, weekly: 0, monthly: 0, all_time: 0 }} range={timeRange} onRangeChange={onRangeChange} />
               
               <div>
                 <label className="block text-sm font-medium text-secondaryText mb-2">Select Service</label>
                 <div className="grid grid-cols-2 gap-2">
                   {provider.services.map(svc => {
-                    const svcInfo = SERVICES.find(s => s.id === svc.id);
+                    const svcInfo = (serviceOptions || []).find(s => s.id === svc.id);
                     return (
                       <button key={svc.id} onClick={() => setSelectedService(svc.id)} className={`p-3 rounded-xl text-left ${selectedService === svc.id ? 'bg-primary/10 border-2 border-primary' : 'bg-[var(--surface)] border-2 border-transparent hover:border-primary/40'}`}>
-                        <p className="font-medium text-white text-sm">{svcInfo?.icon} {svc.name}</p>
-                        <p className="text-xs text-secondaryText">{formatArkeo(svc.paygoRate, 6)} ARKEO/query</p>
+                        <p className="font-medium text-white text-sm flex items-center gap-2">
+                          {svcInfo?.iconUrl ? <img src={svcInfo.iconUrl} alt={svc.name} className="w-5 h-5 rounded-full" /> : (svcInfo?.icon || '🌐')}
+                          <span>{svc.name}</span>
+                        </p>
+                        <p className="text-xs text-secondaryText">{formatArkeo(svc.paygoRate, 8)} ARKEO/query</p>
                       </button>
                     );
                   })}
@@ -1037,62 +1103,314 @@ const SUBSCRIBERS_EST = 12480;
 
     // Main App
     function App() {
+      const [providers, setProviders] = useState([]);
+      const [counts, setCounts] = useState(null);
+      const [dashboardInfo, setDashboardInfo] = useState(null);
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState(null);
+      const [rangeTotals, setRangeTotals] = useState(null);
+      const [activeServices, setActiveServices] = useState([]);
+      const [activeServiceTypes, setActiveServiceTypes] = useState([]);
       const [showBecomeProvider, setShowBecomeProvider] = useState(false);
       const [showContractModal, setShowContractModal] = useState(false);
       const [showHowItWorks, setShowHowItWorks] = useState(false);
+      const [showSubscriberModal, setShowSubscriberModal] = useState(false);
       const [contractProvider, setContractProvider] = useState(null);
       const [serviceFilter, setServiceFilter] = useState('all');
       const [regionFilter, setRegionFilter] = useState('all');
       const [providerSearch, setProviderSearch] = useState('');
-      const [timeRange, setTimeRange] = useState('daily');
-      const [sortBy, setSortBy] = useState('reliability');
+      const [timeRange, setTimeRange] = useState('all_time');
+      const [sortBy, setSortBy] = useState('cost');
       const [showOffline, setShowOffline] = useState(false);
       const [notification, setNotification] = useState(null);
       const [hideInfoBlock, setHideInfoBlock] = useState(false);
       const [showCookieBanner, setShowCookieBanner] = useState(false);
       const [showPrivacyModal, setShowPrivacyModal] = useState(false);
       const [optOutSale, setOptOutSale] = useState(false);
-      const timeRangeLabel = useMemo(() => TIME_RANGES.find(t => t.id === timeRange)?.label || 'Daily', [timeRange]);
+      const showNotif = useCallback((msg) => {
+        setNotification(msg);
+        setTimeout(() => setNotification(null), 3000);
+      }, []);
+      const handleCopy = useCallback((txt) => {
+        if (!txt) return;
+        try {
+          navigator.clipboard?.writeText(txt);
+        } catch (e) {
+          // ignore clipboard failures
+        }
+        showNotif('Copied!');
+      }, [showNotif]);
+      const latestHeight = useMemo(() => {
+        if (!dashboardInfo || dashboardInfo.block_height === undefined || dashboardInfo.block_height === null) return null;
+        const h = parseInt(dashboardInfo.block_height, 10);
+        return Number.isFinite(h) ? h : null;
+      }, [dashboardInfo]);
+      const blockTimeSeconds = useMemo(() => {
+        const val = parseFloat(dashboardInfo?.block_time_seconds || BLOCK_TIME_FALLBACK);
+        return Number.isFinite(val) ? val : BLOCK_TIME_FALLBACK;
+      }, [dashboardInfo]);
+      const normalizeProviders = useCallback((payload) => {
+        const list = Array.isArray(payload?.providers) ? payload.providers : [];
+        return list.map((p, idx) => {
+          const meta = p.metadata || {};
+          const raw = p.provider || {};
+          const metaConfig = typeof meta === 'object' ? (meta.config || {}) : {};
+          const name = meta.name || meta.moniker || raw.moniker || raw.name || `Provider ${idx + 1}`;
+          const description = meta.description || meta.desc || raw.description || raw.desc || '';
+          const location = meta.location || meta.geo || metaConfig.location || raw.location || '';
+          const region = meta.region || metaConfig.region || raw.region || 'all';
+          const statusVal = p.status;
+          const isOnline = statusVal === 1 || statusVal === '1' || statusVal === true || (typeof statusVal === 'string' && statusVal.toLowerCase() === 'online');
+          const servicesRaw = Array.isArray(p.services) ? p.services : [];
+          const services = servicesRaw.map((s) => {
+            const id = s.id ?? s.service_id ?? s.service ?? s.serviceId;
+            const svcName = s.name || s.display || s.slug || s.type || `Service ${id ?? ''}`.trim();
+            const payAmt = s.pay_as_you_go_rate?.amount ?? s.raw?.pay_as_you_go_rate?.amount ?? (Array.isArray(s.raw?.pay_as_you_go_rates) ? s.raw.pay_as_you_go_rates[0]?.amount : 0) ?? 0;
+            const denom = s.pay_as_you_go_rate?.denom ?? s.raw?.pay_as_you_go_rate?.denom ?? 'uarkeo';
+            const chainSlug = chainSlugFromServiceName(svcName);
+            const iconUrl = chainIconUrl(chainSlug);
+            return { id: id ?? svcName, name: svcName, paygoRate: payAmt || 0, denom, raw: s.raw || s, iconUrl };
+          });
+          const contracts = Array.isArray(p.contracts) ? p.contracts : [];
+          return {
+            id: p.pubkey || `provider-${idx}`,
+            pubKey: p.pubkey,
+            moniker: name,
+            description,
+            location: location || 'Unknown',
+            region: region || 'all',
+            infrastructure: meta.infrastructure || '',
+            status: isOnline ? 'ONLINE' : 'OFFLINE',
+            totalContracts: contracts.length,
+            activeContracts: contracts.length,
+            uptime: meta.uptime || raw.uptime || 0,
+            avgLatency: meta.latency || raw.latency || null,
+            reputation: meta.reputation || raw.reputation || null,
+            earnings: {},
+            services,
+            contracts,
+          };
+        });
+      }, []);
+      const loadData = useCallback(async () => {
+        try {
+          setLoading(true);
+          setError(null);
+          const [countsRes, providersRes, infoRes, activeSvcRes, activeSvcTypesRes] = await Promise.all([
+            fetch(`${API_BASE}/api/cache-counts`).then(r => r.json()).catch(() => ({})),
+            fetch(`${API_BASE}/api/providers-with-contracts`).then(r => r.json()).catch(() => ({})),
+            fetch(`${API_BASE}/api/dashboard-info`).then(r => r.json()).catch(() => ({})),
+            fetch(`${API_BASE}/api/active-services`).then(r => r.json()).catch(() => ({})),
+            fetch(`${API_BASE}/api/active-service-types`).then(r => r.json()).catch(() => ({})),
+          ]);
+          setCounts(countsRes || {});
+          setDashboardInfo(infoRes || {});
+          setProviders(normalizeProviders(providersRes || {}));
+          const activeSvcList = Array.isArray(activeSvcRes?.active_services) ? activeSvcRes.active_services : [];
+          setActiveServices(activeSvcList);
+          const activeSvcTypesList = Array.isArray(activeSvcTypesRes?.active_service_types) ? activeSvcTypesRes.active_service_types : [];
+          setActiveServiceTypes(activeSvcTypesList);
+        } catch (e) {
+          setError('Failed to load data');
+        } finally {
+          setLoading(false);
+        }
+      }, [API_BASE, normalizeProviders]);
+      const fetchRangeTotals = useCallback(async (rangeParam) => {
+        try {
+          const res = await fetch(`${API_BASE}/api/contracts-range?range=${encodeURIComponent(rangeParam)}`);
+          const data = await res.json();
+          setRangeTotals(data || null);
+        } catch (e) {
+          setRangeTotals(null);
+        }
+      }, [API_BASE]);
+      useEffect(() => { loadData(); }, [loadData]);
+
+      useEffect(() => {
+        fetchRangeTotals(timeRange);
+      }, [timeRange, fetchRangeTotals]);
+
+      useEffect(() => {
+        const interval = setInterval(() => {
+          loadData();
+          fetchRangeTotals(timeRange);
+        }, 60000);
+        return () => clearInterval(interval);
+      }, [loadData, fetchRangeTotals, timeRange]);
+      const timeRangeLabel = useMemo(() => TIME_RANGES.find(t => t.id === timeRange)?.label || 'All Time', [timeRange]);
 
       const filteredProviders = useMemo(() => {
-        const filtered = MOCK_PROVIDERS.filter(p => {
+        const filtered = providers.filter(p => {
           if (!showOffline && p.status !== 'ONLINE') return false;
-          if (serviceFilter !== 'all' && !p.services.some(s => s.id === serviceFilter)) return false;
+          if (serviceFilter !== 'all' && !p.services.some(s => String(s.id) === String(serviceFilter))) return false;
           if (regionFilter !== 'all' && p.region !== regionFilter) return false;
           if (providerSearch && !p.moniker.toLowerCase().includes(providerSearch.toLowerCase())) return false;
           return true;
         });
 
-        return filtered.sort((a, b) => {
+        const sorted = filtered.sort((a, b) => {
           if (sortBy === 'cost') {
             const rateFor = (p) => {
-              const rates = serviceFilter === 'all' ? p.services : p.services.filter(s => s.id === serviceFilter);
+              const rates = serviceFilter === 'all' ? p.services : p.services.filter(s => String(s.id) === String(serviceFilter));
               const min = rates.reduce((acc, s) => Math.min(acc, parseFloat(s.paygoRate || '9999')), 9999);
               return isFinite(min) ? min : 9999;
             };
             return rateFor(a) - rateFor(b);
           }
-          // reliability: uptime desc
-          return b.uptime - a.uptime;
+          return (b.uptime || 0) - (a.uptime || 0);
         });
-      }, [serviceFilter, regionFilter, providerSearch, sortBy, showOffline]);
+
+        // If a specific service is selected, force Best Cost sort
+        if (serviceFilter !== 'all') {
+          return sorted.sort((a, b) => {
+            const rateFor = (p) => {
+              const rates = p.services.filter(s => String(s.id) === String(serviceFilter));
+              const min = rates.reduce((acc, s) => Math.min(acc, parseFloat(s.paygoRate || '9999')), 9999);
+              return isFinite(min) ? min : 9999;
+            };
+            return rateFor(a) - rateFor(b);
+          });
+        }
+
+        return sorted;
+      }, [providers, serviceFilter, regionFilter, providerSearch, sortBy, showOffline]);
+
+  const serviceOptions = useMemo(() => {
+    const map = new Map();
+    const sourceList = Array.isArray(activeServiceTypes) ? activeServiceTypes : [];
+    sourceList.forEach((s) => {
+      const key = String(s.service_id ?? s.id ?? '');
+      if (!key || key === 'all') return;
+      const svcType = s.service_type || {};
+      const name = svcType.description || svcType.name || s.service || s.name || s.service_id || key;
+      const slugRaw = svcType.chain || chainSlugFromServiceName(svcType.name || name);
+      const slug = typeof slugRaw === 'string' ? slugRaw.trim().toLowerCase() : '';
+      const iconUrl = chainIconUrl(slug);
+      if (!map.has(key)) {
+        map.set(key, { id: key, name, icon: iconUrl || '🌐', iconUrl });
+      }
+    });
+    return Array.from(map.values());
+  }, [activeServiceTypes]);
 
   const summary = useMemo(() => {
     const providers = filteredProviders;
+    const heightHint = rangeTotals?.latest_height ?? latestHeight;
+    const blockTime = rangeTotals?.block_time_seconds ?? blockTimeSeconds;
+    const volumeForRange = providers.reduce((sum, p) => sum + getEarningsByRange(p, timeRange, latestHeight, blockTime, heightHint, blockTime), 0);
+    const contractsForRange = providers.reduce((sum, p) => {
+      const cutoffBlocks = blocksForRange(timeRange, blockTime);
+      const cutoff = heightHint && cutoffBlocks ? heightHint - cutoffBlocks : null;
+      const contracts = Array.isArray(p.contracts) ? p.contracts : [];
+      const filtered = contracts.filter((c) => {
+        if (!cutoff) return true;
+        const h = c.height || c.settlement_height || c.raw?.height || c.raw?.settlement_height;
+        const hInt = h !== undefined ? parseInt(h, 10) : null;
+        return hInt === null || Number.isNaN(hInt) ? true : hInt >= cutoff;
+      });
+      return sum + filtered.length;
+    }, 0);
+    const volumeResolved = rangeTotals?.total_paid_uarkeo ?? volumeForRange;
+    const transactionsResolved = rangeTotals?.total_transactions ?? contractsForRange;
     return {
-      providers: providers.length,
+      providers: counts?.active_providers ?? providers.length,
       online: providers.filter(p => p.status === 'ONLINE').length,
-      contracts: providers.reduce((sum, p) => sum + p.activeContracts, 0),
-      volume: providers.reduce((sum, p) => sum + getEarningsByRange(p, timeRange), 0),
-      dailyVolume: providers.reduce((sum, p) => sum + getEarningsByRange(p, 'today'), 0),
-      services: providers.reduce((sum, p) => {
-        const count = serviceFilter === 'all' ? p.services.length : p.services.filter(s => s.id === serviceFilter).length;
+      contracts: counts?.contracts ?? providers.reduce((sum, p) => sum + p.activeContracts, 0),
+      volume: volumeResolved,
+      dailyVolume: volumeResolved,
+      services: counts?.active_services ?? providers.reduce((sum, p) => {
+        const count = serviceFilter === 'all' ? p.services.length : p.services.filter(s => String(s.id) === String(serviceFilter)).length;
         return sum + count;
       }, 0),
-      subscribers: SUBSCRIBERS_EST,
-      validators: providers.filter(p => p.status === 'ONLINE').length,
+      subscribers: counts?.subscribers ?? 0,
+      validators: counts?.validators_active ?? counts?.validators_bonded ?? 0,
+      transactions: transactionsResolved,
+      dataTypes: counts?.supported_chains ?? serviceOptions.length,
     };
-  }, [filteredProviders, timeRange, serviceFilter]);
+  }, [filteredProviders, timeRange, serviceFilter, counts, latestHeight, blockTimeSeconds, serviceOptions, rangeTotals]);
+
+  const buildEarnings = (provider) => {
+    const heightHint = rangeTotals?.latest_height ?? latestHeight;
+    const blockHint = rangeTotals?.block_time_seconds ?? blockTimeSeconds;
+    return {
+      daily: getEarningsByRange(provider, 'daily', latestHeight, blockTimeSeconds, heightHint, blockHint),
+      weekly: getEarningsByRange(provider, 'weekly', latestHeight, blockTimeSeconds, heightHint, blockHint),
+      monthly: getEarningsByRange(provider, 'monthly', latestHeight, blockTimeSeconds, heightHint, blockHint),
+      all_time: getEarningsByRange(provider, 'all_time', latestHeight, blockTimeSeconds, heightHint, blockHint),
+    };
+  };
+
+  const contractProviderEarnings = useMemo(() => {
+    if (!contractProvider) return null;
+    return buildEarnings(contractProvider);
+  }, [contractProvider, latestHeight, blockTimeSeconds, rangeTotals]);
+
+  const chartRef = useRef(null);
+  const chartInstanceRef = useRef(null);
+
+  const providerEarningsChartData = useMemo(() => {
+    const data = filteredProviders.map((p) => {
+      const earnings = buildEarnings(p);
+      const val = earnings?.[timeRange] ? earnings[timeRange] / ARKEO_DIVISOR : 0;
+      return { label: p.moniker || p.id, value: val };
+    }).filter(d => d.value > 0);
+    data.sort((a, b) => b.value - a.value);
+    return data.slice(0, 10);
+  }, [filteredProviders, timeRange, buildEarnings]);
+
+  useEffect(() => {
+    const ctx = chartRef.current?.getContext('2d');
+    if (!ctx || typeof Chart === 'undefined') return;
+    const labels = providerEarningsChartData.map(d => d.label);
+    const values = providerEarningsChartData.map(d => d.value);
+    if (chartInstanceRef.current) {
+      chartInstanceRef.current.data.labels = labels;
+      chartInstanceRef.current.data.datasets[0].data = values;
+      chartInstanceRef.current.update();
+      return;
+    }
+    chartInstanceRef.current = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'ARKEO Earned',
+            data: values,
+            backgroundColor: 'rgba(59, 224, 255, 0.35)',
+            borderColor: 'rgba(59, 224, 255, 0.8)',
+            borderWidth: 1.5,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (context) => `${context.parsed.y.toFixed(6)} ARKEO`,
+            },
+          },
+        },
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: (val) => `${val}`,
+            },
+            grid: { color: 'rgba(255,255,255,0.05)' },
+          },
+          x: {
+            ticks: { color: '#A9AFC0' },
+            grid: { display: false },
+          },
+        },
+      },
+    });
+  }, [providerEarningsChartData]);
 
       const earningsMomentum = useMemo(() => {
         const totalRange = summary.volume || 0;
@@ -1102,8 +1420,6 @@ const SUBSCRIBERS_EST = 12480;
         const total = series.reduce((a, b) => a + b, 0);
         return { labels, series, total };
       }, [summary.volume]);
-
-      const showNotif = (msg) => { setNotification(msg); setTimeout(() => setNotification(null), 3000); };
 
       useEffect(() => {
         try {
@@ -1159,7 +1475,11 @@ const SUBSCRIBERS_EST = 12480;
 
       return (
         <div className="min-h-screen bg-background text-white">
-          {notification && <div className="fixed top-4 right-4 z-50 px-5 py-3 rounded-xl bg-emerald-500 text-white font-medium shadow-xl animate-pulse">{notification}</div>}
+          {notification && (
+            <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] px-5 py-3 rounded-xl bg-emerald-500 text-white font-medium shadow-xl animate-pulse pointer-events-none">
+              {notification}
+            </div>
+          )}
 
           <header className="sticky top-0 z-40 backdrop-blur-xl bg-background/90 border-b border-border relative overflow-hidden">
             <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(59,224,255,0.12),transparent_50%),radial-gradient(circle_at_bottom_left,rgba(59,224,255,0.08),transparent_45%)]" />
@@ -1176,7 +1496,7 @@ const SUBSCRIBERS_EST = 12480;
                   <button onClick={() => setShowBecomeProvider(true)} className="primary-gradient text-white font-semibold px-4 py-2.5 rounded-xl transition-all primary-shadow flex items-center gap-2">
                     <Icons.Server /> I Want to Provide Data
                   </button>
-                  <button onClick={() => setShowHowItWorks(true)} className="primary-gradient text-white font-semibold px-4 py-2.5 rounded-xl transition-all primary-shadow flex items-center gap-2">
+                  <button onClick={() => setShowSubscriberModal(true)} className="primary-gradient text-white font-semibold px-4 py-2.5 rounded-xl transition-all primary-shadow flex items-center gap-2">
                     <Icons.Wand /> I Want to Use Data
                   </button>
                   <a href="https://app.osmosis.zone/?from=USDC&to=ARKEO" target="_blank" rel="noopener noreferrer"
@@ -1189,6 +1509,8 @@ const SUBSCRIBERS_EST = 12480;
           </header>
 
           <main className="max-w-7xl mx-auto px-4 py-8">
+            {loading && <div className="mb-4 px-4 py-3 rounded-xl bg-[var(--surface)] border border-[var(--border)] text-secondaryText text-sm">Loading latest marketplace data…</div>}
+            {error && <div className="mb-4 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/40 text-red-200 text-sm">{error}</div>}
             <div className="card-surface rounded-2xl p-6 mb-8 relative overflow-hidden">
               <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(circle_at_top_right,rgba(59,224,255,0.18),transparent_50%),radial-gradient(circle_at_bottom_left,rgba(59,224,255,0.12),transparent_45%)]" />
               <div className="relative z-10 grid md:grid-cols-3 gap-6 items-stretch">
@@ -1212,36 +1534,41 @@ const SUBSCRIBERS_EST = 12480;
                   <div className="card-surface rounded-2xl p-4 border border-[var(--border)] h-full flex flex-col">
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <p className="text-secondaryText text-xs">{timeRangeLabel} provider earnings (demo data)</p>
-                        <p className="text-sm text-white font-semibold">Daily ARKEO paid out</p>
+                        <p className="text-sm text-white font-semibold">Top Providers (by ARKEO Earnings)</p>
                       </div>
-                      <p className="text-arkeo text-sm font-semibold">Peak: {formatArkeo(Math.max(...earningsMomentum.series), 0)} ARKEO</p>
+                      <div className="flex gap-1">
+                        {['daily', 'weekly', 'monthly', 'all_time'].map(r => (
+                          <button
+                            key={r}
+                            onClick={(e) => { e.stopPropagation(); setTimeRange(r); fetchRangeTotals(r); }}
+                            className={`px-2 py-1 rounded text-xs font-medium transition-all ${timeRange === r ? 'bg-arkeo text-slate-900' : 'text-secondaryText hover:bg-[#1E222C]'}`}
+                          >
+                            {TIME_RANGES.find(t => t.id === r)?.label || r}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex items-end gap-2 h-full min-h-[220px]">
-                      {earningsMomentum.series.map((val, idx) => {
-                        const max = Math.max(...earningsMomentum.series, 0.0001);
-                        const height = Math.max(12, (val / max) * 100);
-                        return (
-                          <div key={idx} className="flex-1 flex flex-col items-center gap-2">
-                            <div className="w-full rounded-lg primary-gradient primary-shadow" style={{ height: `${height}%` }} />
-                            <span className="text-secondaryText text-xs">{earningsMomentum.labels[idx]}</span>
-                          </div>
-                        );
-                      })}
+                    <div className="h-full min-h-[220px]">
+                      {providerEarningsChartData.length > 0 ? (
+                        <canvas ref={chartRef} height="220"></canvas>
+                      ) : (
+                        <div className="text-secondaryText text-sm text-center py-10">No earnings data available for this range.</div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4 mb-8">
-              <StatsCard icon={<Icons.Coin />} label="Arkeo Earned" value={formatArkeo(summary.volume, 0)} color="text-arkeo" />
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <StatsCard icon={<Icons.Coin />} label="ARKEO Earned" value={formatArkeo(summary.volume, 8)} color="text-arkeo" />
+              <StatsCard icon={<Icons.Transactions />} label="Transactions" value={summary.transactions} color="text-arkeo" />
               <StatsCard icon={<Icons.Provider />} label="Providers" value={summary.providers} color="text-arkeo" />
-              <StatsCard icon={<Icons.Services />} label="Services" value={summary.services} color="text-arkeo" />
-              <StatsCard icon={<Icons.Validators />} label="Validators" value={summary.validators} color="text-arkeo" />
-              <StatsCard icon={<Icons.Contracts />} label="Contracts" value={summary.contracts} color="text-arkeo" />
               <StatsCard icon={<Icons.Subscribers />} label="Subscribers" value={summary.subscribers.toLocaleString()} color="text-arkeo" />
-              <StatsCard icon={<Icons.DataTypes />} label="Data Types" value={SERVICES.length} color="text-arkeo" />
+              <StatsCard icon={<Icons.Services />} label="Services" value={summary.services} color="text-arkeo" />
+              <StatsCard icon={<Icons.Contracts />} label="Contracts" value={summary.contracts} color="text-arkeo" />
+              <StatsCard icon={<Icons.Validators />} label="Validators" value={summary.validators} color="text-arkeo" />
+              <StatsCard icon={<Icons.DataTypes />} label="Active Types" value={summary.dataTypes} color="text-arkeo" />
             </div>
 
             {!hideInfoBlock && (
@@ -1309,23 +1636,26 @@ const SUBSCRIBERS_EST = 12480;
                 <input type="text" placeholder="Search providers..." value={providerSearch} onChange={e => setProviderSearch(e.target.value)} className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-xl pl-11 pr-4 py-3 text-white placeholder-secondaryText focus:border-arkeo focus:ring-1 focus:ring-arkeo" style={{ paddingLeft: '2.75rem' }} />
                 <div className="absolute left-4 top-1/2 -translate-y-1/2 text-secondaryText"><Icons.Search /></div>
               </div>
-              <DataServiceFilter selected={serviceFilter} onSelect={setServiceFilter} />
+              <DataServiceFilter selected={serviceFilter} onSelect={setServiceFilter} options={serviceOptions} />
               <LocationFilter selectedRegion={regionFilter} onSelect={setRegionFilter} />
               <SimpleDropdown label="Time Range" selected={timeRange} options={TIME_RANGES} onChange={setTimeRange} />
               <SortDropdown selected={sortBy} options={SORT_OPTIONS} onChange={setSortBy} showOffline={showOffline} onToggleOffline={setShowOffline} />
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {filteredProviders.map(provider => (
+              {filteredProviders.map(provider => {
+                const providerEarnings = buildEarnings(provider);
+                return (
                 <ProviderCard
                   key={provider.id}
                   provider={provider}
+                  earnings={providerEarnings}
                   serviceFilter={serviceFilter}
                   timeRange={timeRange}
                   onRangeChange={setTimeRange}
                   onOpenContract={(p) => { setContractProvider(p); setShowContractModal(true); }}
                 />
-              ))}
+              );})}
             </div>
 
             {filteredProviders.length === 0 && (
@@ -1364,20 +1694,35 @@ const SUBSCRIBERS_EST = 12480;
             />
           )}
 
-          <BecomeProviderModal isOpen={showBecomeProvider} onClose={() => setShowBecomeProvider(false)} />
+          <BecomeProviderModal
+            isOpen={showBecomeProvider}
+            onClose={() => setShowBecomeProvider(false)}
+            onCopy={handleCopy}
+            providerEnvExample={PROVIDER_ENV_EXAMPLE}
+            providerRunCmd={PROVIDER_RUN_CMD}
+          />
           <OpenContractModal
             provider={contractProvider}
+            earnings={contractProviderEarnings}
             isOpen={showContractModal}
             onClose={() => setShowContractModal(false)}
             onSuccess={() => { showNotif('✓ Contract opened!'); setShowContractModal(false); }}
             timeRange={timeRange}
             onRangeChange={setTimeRange}
+            serviceOptions={serviceOptions}
           />
           <HowItWorksModal
             isOpen={showHowItWorks}
             onClose={() => setShowHowItWorks(false)}
             timeRange={timeRange}
             onRangeChange={setTimeRange}
+          />
+          <BecomeSubscriberModal
+            isOpen={showSubscriberModal}
+            onClose={() => setShowSubscriberModal(false)}
+            onCopy={handleCopy}
+            subscriberEnvExample={SUBSCRIBER_ENV_EXAMPLE}
+            subscriberRunCmd={SUBSCRIBER_RUN_CMD}
           />
           <PrivacyModal
             isOpen={showPrivacyModal}

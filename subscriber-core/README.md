@@ -14,7 +14,7 @@ SUBSCRIBER_NAME=Arkeo Core Subscriber
 
 KEY_NAME=subscriber
 KEY_KEYRING_BACKEND=test
-KEY_MNEMONIC=coach teach unfold exchange holiday orient sibling tenant soap motor magnet play rather early please primary age sweet destroy evolve exile wire canyon exit
+KEY_MNEMONIC=
 CHAIN_ID="arkeo-main-v1"
 
 ARKEOD_HOME=~/.arkeo

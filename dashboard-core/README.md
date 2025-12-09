@@ -50,5 +50,6 @@ Env knobs:
 - `CACHE_FETCH_INTERVAL` (default `300`) seconds for the background sync loop; set to `0` to disable.
 - `BLOCK_HEIGHT_INTERVAL` (default `60`) seconds for updating `dashboard_info.json` with latest block height.
 - `BLOCK_TIME_SECONDS` (default `5.79954919`) average block time baked into `dashboard_info.json`.
+- `ALLOW_LOCAL_METADATA` (default `0`) set to `1` to allow `metadata_uri` hosts on localhost/127.0.0.1 during testing.
 
 UI is currently header/footer only; API endpoints mirror the subscriber sync surface (`/api/cache-refresh`, `/api/cache-status`, `/api/cache-counts`, `/api/providers-with-contracts`, `/api/block-height`, etc.).

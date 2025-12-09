@@ -37,6 +37,10 @@ except ValueError:
 STATUS_FILE = os.path.join(CACHE_DIR, "_sync_status.json")
 # Chain parameter minimum bond for active services (100,000,000 uarkeo)
 BOND_THRESHOLD_UARKEO = 100_000_000
+# Allow localhost/127.x metadata_uri for testing if set to "1"
+ALLOW_LOCAL_METADATA = os.getenv("ALLOW_LOCAL_METADATA", "0") == "1"
+# Static service type metadata (to merge chain fields) now lives under /app/admin
+SERVICE_TYPE_RESOURCES_PATH = os.getenv("SERVICE_TYPE_RESOURCES_PATH", "/app/admin/service-type_resources.json")
 
 
 def run_list(cmd: List[str]) -> Tuple[int, str]:
@@ -165,6 +169,75 @@ def fetch_metadata_uri(url: str, timeout: float = 5.0) -> Tuple[Any, str | None,
         return body, None, 1
 
 
+def merge_service_types_with_resources(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge service-types payload with static resources to add chain when available."""
+    try:
+        with open(SERVICE_TYPE_RESOURCES_PATH, "r", encoding="utf-8") as f:
+            static_data = json.load(f)
+    except Exception:
+        return payload
+    services_static = []
+    data_static = static_data.get("data") if isinstance(static_data, dict) else {}
+    if isinstance(data_static, list):
+        services_static = data_static
+    elif isinstance(data_static, dict):
+        services_static = data_static.get("services") or data_static.get("service") or data_static.get("result") or []
+    if not isinstance(services_static, list):
+        return payload
+    id_lookup: Dict[str, str] = {}
+    name_lookup: Dict[str, str] = {}
+    for s in services_static:
+        if not isinstance(s, dict):
+            continue
+        chain_val = s.get("chain")
+        if not chain_val:
+            continue
+        sid = s.get("service_id") or s.get("id")
+        if sid is not None:
+            id_lookup[str(sid)] = chain_val
+        name_val = s.get("name") or s.get("service")
+        if name_val:
+            name_lookup[str(name_val).lower()] = chain_val
+
+    data_live = payload.get("data")
+    live_list = []
+    if isinstance(data_live, list):
+        live_list = data_live
+    elif isinstance(data_live, dict):
+        live_list = data_live.get("services") or data_live.get("service") or data_live.get("result") or []
+    if not isinstance(live_list, list):
+        return payload
+    changed = False
+    for svc in live_list:
+        if not isinstance(svc, dict):
+            continue
+        if svc.get("chain"):
+            continue
+        sid = svc.get("service_id") or svc.get("id")
+        sname = svc.get("name") or svc.get("service")
+        chain_val = None
+        if sid is not None and str(sid) in id_lookup:
+            chain_val = id_lookup[str(sid)]
+        elif sname and str(sname).lower() in name_lookup:
+            chain_val = name_lookup[str(sname).lower()]
+        if chain_val is not None:
+            svc["chain"] = chain_val
+            changed = True
+    if not changed:
+        return payload
+    if isinstance(data_live, list):
+        payload["data"] = live_list
+    elif isinstance(data_live, dict):
+        if isinstance(data_live.get("services"), list):
+            data_live["services"] = live_list
+        elif isinstance(data_live.get("service"), list):
+            data_live["service"] = live_list
+        elif isinstance(data_live.get("result"), list):
+            data_live["result"] = live_list
+        payload["data"] = data_live
+    return payload
+
+
 def _is_external(uri: str | None) -> bool:
     if not uri:
         return False
@@ -173,10 +246,11 @@ def _is_external(uri: str | None) -> bool:
         host = (parsed.hostname or "").lower()
         if not parsed.scheme or not host:
             return False
-        if host == "localhost":
-            return False
-        if host.startswith("127."):
-            return False
+        if not ALLOW_LOCAL_METADATA:
+            if host == "localhost":
+                return False
+            if host.startswith("127."):
+                return False
         return True
     except Exception:
         return False
@@ -549,6 +623,7 @@ def fetch_once(commands: Dict[str, List[str]], record_status: bool = False) -> D
         for name, cmd in commands.items():
             if name == "service-types":
                 payload = fetch_services_rest()
+                payload = merge_service_types_with_resources(payload)
             else:
                 code, out = run_list(cmd)
                 payload = normalize_result(name, code, out, cmd)

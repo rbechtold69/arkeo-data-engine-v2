@@ -4,7 +4,8 @@ import os
 import subprocess
 from collections import deque
 from datetime import datetime, timezone
-from flask import Flask, jsonify
+import math
+from flask import Flask, jsonify, request
 
 from cache_fetcher import (
     build_commands as cache_build_commands,
@@ -30,6 +31,10 @@ LOG_FILES = {
 }
 
 DASHBOARD_INFO_FILE = os.getenv("DASHBOARD_INFO_FILE", "/app/cache/dashboard_info.json")
+try:
+    BLOCK_TIME_SECONDS = float(os.getenv("BLOCK_TIME_SECONDS", "5.79954919"))
+except ValueError:
+    BLOCK_TIME_SECONDS = 5.79954919
 
 
 def run_list(cmd: list[str]) -> tuple[int, str]:
@@ -297,6 +302,15 @@ def providers_with_contracts():
                     "subscriber": c.get("subscriber"),
                     "provider": c.get("provider"),
                     "status": c.get("status"),
+                    "paid": c.get("paid"),
+                    "height": c.get("height") or c.get("start_height") or c.get("created_height"),
+                    "duration": c.get("duration"),
+                    "rate": c.get("rate"),
+                    "deposit": c.get("deposit"),
+                    "type": c.get("type"),
+                    "settlement_height": c.get("settlement_height"),
+                    "settlement_duration": c.get("settlement_duration"),
+                    "raw": c,
                 }
             )
         combined.append(
@@ -448,6 +462,127 @@ def dashboard_info():
     except Exception:
         payload = {}
     return jsonify(payload)
+
+
+@app.get("/api/active-services")
+def active_services():
+    """Return the cached active_services.json contents."""
+    payload = {}
+    try:
+        payload = _load_cached("active_services") or {}
+    except Exception:
+        payload = {}
+    return jsonify(payload)
+
+
+@app.get("/api/active-service-types")
+def active_service_types():
+    """Return the cached active_service_types.json contents."""
+    payload = {}
+    try:
+        payload = _load_cached("active_service_types") or {}
+    except Exception:
+        payload = {}
+    return jsonify(payload)
+
+
+def _blocks_for_range(range_name: str) -> int | None:
+    """Return number of blocks for a named window (daily/weekly/monthly) based on BLOCK_TIME_SECONDS."""
+    secs_map = {
+        "daily": 86400,
+        "weekly": 604800,
+        "monthly": 2592000,
+    }
+    secs = secs_map.get(range_name)
+    if not secs:
+        return None
+    bt = BLOCK_TIME_SECONDS if isinstance(BLOCK_TIME_SECONDS, (int, float)) else 5.79954919
+    if bt <= 0:
+        return None
+    return max(1, int(math.ceil(secs / bt)))
+
+
+def _parse_contract_height(contract: dict) -> int | None:
+    for key in ("height", "start_height", "created_height", "settlement_height"):
+        if key in contract:
+            try:
+                return int(contract.get(key))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
+def _contract_provider_pubkey(contract: dict) -> str | None:
+    for key in ("provider", "provider_pubkey", "provider_pub_key", "providerPubKey"):
+        if key in contract:
+            val = contract.get(key)
+            if val:
+                return str(val)
+    return None
+
+
+@app.get("/api/contracts-range")
+def contracts_range():
+    """Return contracts filtered by a time window (daily/weekly/monthly/all_time)."""
+    range_param = (request.args.get("range") or "daily").lower()
+    if range_param not in ("daily", "weekly", "monthly", "all_time"):
+        range_param = "daily"
+    provider_filter = request.args.get("provider") or request.args.get("pubkey") or request.args.get("provider_pubkey")
+    provider_filter = str(provider_filter) if provider_filter else None
+    block_window = _blocks_for_range(range_param) if range_param != "all_time" else None
+    contracts_raw = _load_cached("provider-contracts")
+    contracts_list = contracts_raw.get("data", {}).get("contracts") or contracts_raw.get("data", {}).get("contract") or []
+    if not isinstance(contracts_list, list):
+        contracts_list = []
+    latest_height, height_err = _latest_block_height()
+    cutoff = None
+    if latest_height is not None and block_window:
+        cutoff = latest_height - block_window
+    filtered = []
+    for c in contracts_list:
+        if not isinstance(c, dict):
+            continue
+        if provider_filter:
+            pk = _contract_provider_pubkey(c)
+            if not pk or str(pk) != provider_filter:
+                continue
+        if cutoff is not None:
+            h = _parse_contract_height(c)
+            if h is not None and h < cutoff:
+                continue
+        # Ignore unused contracts (nonce == 0)
+        try:
+            if int(c.get("nonce") or 0) == 0:
+                continue
+        except (TypeError, ValueError):
+            pass
+        filtered.append(c)
+    total_paid = 0
+    total_tx = 0
+    for c in filtered:
+        try:
+            total_paid += int(c.get("paid") or 0)
+        except (TypeError, ValueError):
+            pass
+        try:
+            total_tx += int(c.get("nonce") or 1)
+        except (TypeError, ValueError):
+            total_tx += 1
+    return jsonify(
+        {
+            "range": range_param,
+            "block_time_seconds": BLOCK_TIME_SECONDS,
+            "block_window": block_window,
+            "latest_height": latest_height,
+            "height_error": height_err,
+            "cutoff_height": cutoff,
+            "count": len(filtered),
+            "provider_filter": provider_filter,
+            "total_paid_uarkeo": total_paid,
+            "total_transactions": total_tx,
+            "contracts": filtered,
+        }
+    )
 
 
 if __name__ == "__main__":

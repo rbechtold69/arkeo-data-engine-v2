@@ -40,6 +40,7 @@ COPY config/ /app/config/
 COPY admin/ /app/admin/
 COPY admin_api.py /app/admin_api.py
 COPY cache_fetcher.py /app/cache_fetcher.py
+COPY dashboard_info.py /app/dashboard_info.py
 
 # Supervisor + entrypoint
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf

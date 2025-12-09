@@ -210,11 +210,20 @@
         }
     }
 
+    async function syncJsonCaches() {
+        try {
+            await fetch(apiUrl("/api/cache-sync"), { cache: "no-store" });
+        } catch (e) {
+            // swallow errors; next interval will retry
+        }
+    }
+
     document.addEventListener("DOMContentLoaded", () => {
         updateMetrics();
         refreshLogs();
         pollSyncStatus();
         setInterval(pollSyncStatus, 5000);
+        setInterval(syncJsonCaches, 150000); // 2.5 minutes
     });
 </script>
 </body>
