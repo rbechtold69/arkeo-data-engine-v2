@@ -41,11 +41,11 @@ def _build_sentinel_uri() -> str:
 
 DEFAULT_KEY_NAME = "provider"
 DEFAULT_KEYRING = "test"
-DEFAULT_CHAIN_ID = "arkeo-main-v2"
+DEFAULT_CHAIN_ID = "arkeo-main-v1"
 DEFAULT_ARKEOD_HOME = "~/.arkeo"
-DEFAULT_ARKEOD_NODE = "tcp://host.docker.internal:26657"
-DEFAULT_ARKEO_REST = "http://host.docker.internal:1317"
-DEFAULT_SENTINEL_NODE = "http://host.docker.internal"
+DEFAULT_ARKEOD_NODE = "tcp://127.0.0.1:26657"
+DEFAULT_ARKEO_REST = "http://127.0.0.1:1317"
+DEFAULT_SENTINEL_NODE = "http://127.0.0.1"
 DEFAULT_SENTINEL_PORT = "3636"
 DEFAULT_ADMIN_PORT = "8080"
 DEFAULT_ADMIN_API_PORT = "9999"
@@ -61,6 +61,21 @@ def _strip_quotes(val: str | None) -> str:
     if len(val) >= 2 and val[0] == val[-1] and val[0] in ("'", '"'):
         val = val[1:-1]
     return val
+
+
+def _ensure_tcp_scheme(url: str | None) -> str:
+    """Force RPC URLs to use tcp:// scheme; leave empty or already-tcp unchanged."""
+    if not url:
+        return ""
+    s = str(url).strip()
+    lower = s.lower()
+    if lower.startswith("tcp://"):
+        return s
+    if lower.startswith("http://"):
+        return "tcp://" + s[len("http://") :]
+    if lower.startswith("https://"):
+        return "tcp://" + s[len("https://") :]
+    return s
 
 ARKEOD_NODE = _strip_quotes(
     os.getenv("ARKEOD_NODE")
@@ -104,7 +119,6 @@ ENV_EXPORT_KEYS = [
     "LOCATION",
     "PORT",
     "SOURCE_CHAIN",
-    "PROVIDER_HUB_URI",
     "ARKEO_REST_API_PORT",
     "EVENT_STREAM_HOST",
     "FREE_RATE_LIMIT",
@@ -146,7 +160,7 @@ def _normalize_base(url: str | None, default_port: str | None = None, default_sc
     return url
 
 
-def _probe_url(base: str, path_override: str | None = None, timeout: float = 4.0) -> dict:
+def _probe_url(base: str, path_override: str | None = None, timeout: float = 4.0, headers: dict | None = None) -> dict:
     """Probe a URL from inside the container."""
     base = (base or "").strip()
     if not base:
@@ -163,11 +177,15 @@ def _probe_url(base: str, path_override: str | None = None, timeout: float = 4.0
             target = f"{base}{sep}{path_override}"
     start = time.time()
     try:
-        req = urllib.request.Request(target, method="GET")
+        req = urllib.request.Request(target, method="GET", headers=headers or {})
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             status = getattr(resp, "status", None) or resp.getcode()
+            ok = 200 <= (status or 0) < 400
+            # Treat 401 as reachable but unauthorized so status pills don't go red when auth is enabled.
+            if status == 401:
+                ok = True
             return {
-                "ok": 200 <= (status or 0) < 400,
+                "ok": ok,
                 "url": base,
                 "target": target,
                 "status": status,
@@ -224,6 +242,12 @@ def run_with_input(cmd: list[str], input_text: str) -> tuple[int, str]:
         return 1, str(e)
 
 
+def _is_local_request() -> bool:
+    """Return True when the caller is loopback/localhost."""
+    addr = (request.remote_addr or "").strip()
+    return addr in ("127.0.0.1", "::1", "0:0:0:0:0:0:0:1")
+
+
 def _auth_exempt(path: str) -> bool:
     if not path.startswith("/api/"):
         return True
@@ -234,7 +258,16 @@ def _auth_exempt(path: str) -> bool:
         "/api/login",
         "/api/ping",
     }
-    return path in exempt
+    internal_exempt = {
+        "/api/provider-claims",
+        "/api/provider-contracts-summary",
+    }
+    if path in exempt:
+        return True
+    # Allow loopback callers for specific internal endpoints even when auth is enabled
+    if path in internal_exempt and _is_local_request():
+        return True
+    return False
 
 
 @app.before_request
@@ -410,7 +443,7 @@ def get_key():
     )
     code, out = run(cmd)
     if code != 0:
-        return jsonify({"error": "failed to get key address", "detail": out}), 500
+        return jsonify({"address": None, "error": "failed to get key address", "detail": out}), 200
 
     address = out.strip()
     return jsonify({"address": address})
@@ -426,14 +459,14 @@ def get_balance():
     )
     code, addr_out = run(addr_cmd)
     if code != 0:
-        return jsonify({"error": "failed to get key address", "detail": addr_out}), 500
+        return jsonify({"address": None, "error": "failed to get key address", "detail": addr_out}), 200
 
     address = addr_out.strip()
 
     # then query balances in JSON form
     bal_cmd = (
         f"arkeod query bank balances {address} "
-        f"--node {ARKEOD_NODE} "
+        f"{'--node ' + ARKEOD_NODE if ARKEOD_NODE else ''} "
         f"-o json"
     )
     code, bal_out = run(bal_cmd)
@@ -445,7 +478,7 @@ def get_balance():
                 "error": "failed to query balance",
                 "detail": bal_out,
             }
-        ), 500
+        ), 200
 
     try:
         data = json.loads(bal_out)
@@ -567,6 +600,7 @@ def bond_and_mod_provider():
     subscription_rates = payload.get("subscription_rates") or "200uarkeo"
     pay_as_you_go_rates = payload.get("pay_as_you_go_rates") or "200uarkeo"
     settlement_dur = str(payload.get("settlement_dur") or "1000")
+    location = payload.get("location")
 
     if not service:
         return jsonify({"error": "service is required"}), 400
@@ -851,6 +885,12 @@ def bond_and_mod_provider():
     except Exception as e:
         app.logger.warning("bond-mod-provider failed to sync MONIKER/PROVIDER_NAME: %s", e)
 
+    # Persist the provider form/export bundle (includes sentinel_uri) for UI reloads/imports
+    try:
+        _write_export_bundle(provider_form=payload)
+    except Exception:
+        app.logger.warning("bond-mod-provider failed to persist provider form export", exc_info=True)
+
     return jsonify(
         {
             "status": "bond_and_mod_submitted",
@@ -911,7 +951,7 @@ def provider_info():
 def list_services():
     """Return available services (REST first, CLI fallback)."""
     # Try REST first
-    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT") or os.getenv("PROVIDER_HUB_URI"))
+    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT"))
     if rest_base:
         try:
             url = f"{rest_base}/arkeo/services"
@@ -1415,9 +1455,7 @@ def _default_provider_settings() -> dict:
         "CHAIN_ID": _strip_quotes(os.getenv("CHAIN_ID") or os.getenv("ARKEOD_CHAIN_ID") or DEFAULT_CHAIN_ID),
         "ARKEOD_HOME": _expand_tilde(os.getenv("ARKEOD_HOME") or DEFAULT_ARKEOD_HOME),
         "ARKEOD_NODE": _strip_quotes(os.getenv("ARKEOD_NODE") or os.getenv("EXTERNAL_ARKEOD_NODE") or DEFAULT_ARKEOD_NODE),
-        "EXTERNAL_ARKEOD_NODE": _strip_quotes(os.getenv("EXTERNAL_ARKEOD_NODE") or os.getenv("ARKEOD_NODE") or DEFAULT_ARKEOD_NODE),
-        "ARKEO_REST_API_PORT": os.getenv("ARKEO_REST_API_PORT") or os.getenv("PROVIDER_HUB_URI") or DEFAULT_ARKEO_REST,
-        "PROVIDER_HUB_URI": os.getenv("PROVIDER_HUB_URI") or os.getenv("ARKEO_REST_API_PORT") or DEFAULT_ARKEO_REST,
+        "ARKEO_REST_API_PORT": os.getenv("ARKEO_REST_API_PORT") or DEFAULT_ARKEO_REST,
         "SENTINEL_NODE": os.getenv("SENTINEL_NODE") or DEFAULT_SENTINEL_NODE,
         "SENTINEL_PORT": os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT,
         "ADMIN_PORT": os.getenv("ADMIN_PORT") or DEFAULT_ADMIN_PORT,
@@ -1435,11 +1473,17 @@ def _merge_provider_settings(overrides: dict | None = None) -> dict:
         merged.update(saved)
     if overrides and isinstance(overrides, dict):
         merged.update(overrides)
+    # Normalize legacy PROVIDER_HUB_URI into ARKEO_REST_API_PORT and drop it
+    if not merged.get("ARKEO_REST_API_PORT") and merged.get("PROVIDER_HUB_URI"):
+        merged["ARKEO_REST_API_PORT"] = merged.get("PROVIDER_HUB_URI")
+    merged.pop("PROVIDER_HUB_URI", None)
+    # Prefer ARKEOD_NODE; drop EXTERNAL_ARKEOD_NODE
+    if merged.get("EXTERNAL_ARKEOD_NODE") and not merged.get("ARKEOD_NODE"):
+        merged["ARKEOD_NODE"] = merged["EXTERNAL_ARKEOD_NODE"]
+    merged.pop("EXTERNAL_ARKEOD_NODE", None)
     merged["ARKEOD_HOME"] = _expand_tilde(merged.get("ARKEOD_HOME") or ARKEOD_HOME)
     if not merged.get("ARKEOD_NODE"):
-        merged["ARKEOD_NODE"] = merged.get("EXTERNAL_ARKEOD_NODE") or ARKEOD_NODE
-    if not merged.get("EXTERNAL_ARKEOD_NODE"):
-        merged["EXTERNAL_ARKEOD_NODE"] = merged.get("ARKEOD_NODE") or ARKEOD_NODE
+        merged["ARKEOD_NODE"] = ARKEOD_NODE
     return merged
 
 
@@ -1451,8 +1495,8 @@ def _apply_provider_settings(settings: dict) -> None:
     KEY_NAME = settings.get("KEY_NAME", KEY_NAME)
     KEYRING = settings.get("KEY_KEYRING_BACKEND", KEYRING)
     ARKEOD_HOME = _expand_tilde(settings.get("ARKEOD_HOME") or ARKEOD_HOME)
-    node_val = settings.get("ARKEOD_NODE") or settings.get("EXTERNAL_ARKEOD_NODE") or ARKEOD_NODE
-    ARKEOD_NODE = _strip_quotes(node_val)
+    node_val = settings.get("ARKEOD_NODE") or ARKEOD_NODE
+    ARKEOD_NODE = _ensure_tcp_scheme(_strip_quotes(node_val))
     CHAIN_ID = _strip_quotes(settings.get("CHAIN_ID") or CHAIN_ID)
     NODE_ARGS = ["--node", ARKEOD_NODE] if ARKEOD_NODE else []
     CHAIN_ARGS = ["--chain-id", CHAIN_ID] if CHAIN_ID else []
@@ -1463,9 +1507,7 @@ def _apply_provider_settings(settings: dict) -> None:
         "CHAIN_ID": CHAIN_ID,
         "ARKEOD_HOME": ARKEOD_HOME,
         "ARKEOD_NODE": ARKEOD_NODE,
-        "EXTERNAL_ARKEOD_NODE": settings.get("EXTERNAL_ARKEOD_NODE", ""),
         "ARKEO_REST_API_PORT": settings.get("ARKEO_REST_API_PORT", ""),
-        "PROVIDER_HUB_URI": settings.get("PROVIDER_HUB_URI", ""),
         "SENTINEL_NODE": settings.get("SENTINEL_NODE", ""),
         "SENTINEL_PORT": settings.get("SENTINEL_PORT", ""),
         "ADMIN_PORT": settings.get("ADMIN_PORT", ""),
@@ -1676,7 +1718,7 @@ def _write_export_bundle(
 def _fetch_provider_services_internal(bech32_pubkey: str) -> list[dict]:
     """Return provider services for a given pubkey (tries REST first, CLI fallback)."""
     # Try REST (if hub URI provided)
-    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT") or os.getenv("PROVIDER_HUB_URI"))
+    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT"))
     if rest_base:
         try:
             url = f"{rest_base}/arkeo/services"
@@ -2244,23 +2286,25 @@ def endpoint_checks():
     sentinel_external = _normalize_base(sentinel_node, sentinel_port)
     sentinel_internal = _normalize_base("127.0.0.1", sentinel_port)
 
-    arkeod_node = pick("EXTERNAL_ARKEOD_NODE") or pick("ARKEOD_NODE")
+    arkeod_node = pick("ARKEOD_NODE")
     arkeod_base = _normalize_base(arkeod_node)
 
-    rest_api = pick("ARKEO_REST_API_PORT") or pick("PROVIDER_HUB_URI")
+    rest_api = pick("ARKEO_REST_API_PORT")
     rest_base = _normalize_base(rest_api)
 
     admin_api_port = pick("ADMIN_API_PORT") or "9999"
     admin_port = pick("ADMIN_PORT") or "8080"
     admin_api_base = _normalize_base("127.0.0.1", admin_api_port)
     admin_ui_base = _normalize_base("127.0.0.1", admin_port)
+    token = request.cookies.get(ADMIN_SESSION_NAME)
+    admin_api_headers = {"Cookie": f"{ADMIN_SESSION_NAME}={token}"} if token else None
 
     endpoints = {
         "arkeod_status": _probe_url(arkeod_base, "/status"),
         "arkeorpc": _probe_url(rest_base, "/cosmos/base/tendermint/v1beta1/node_info"),
         "sentinel_external": _probe_url(sentinel_external, "/metadata.json"),
         "sentinel_internal": _probe_url(sentinel_internal, "/metadata.json"),
-        "admin_api": _probe_url(admin_api_base, "/api/version"),
+        "admin_api": _probe_url(admin_api_base, "/api/version", headers=admin_api_headers),
         "admin_ui": _probe_url(admin_ui_base, "/"),
     }
     return jsonify({"endpoints": endpoints})
@@ -2431,6 +2475,12 @@ def update_sentinel_config():
     location = payload.get("location")
     free_rate_limit = payload.get("free_rate_limit")
     free_rate_limit_duration = payload.get("free_rate_limit_duration")
+    provider_settings = _merge_provider_settings()
+    settings_node = _ensure_tcp_scheme(provider_settings.get("ARKEOD_NODE") or "")
+    settings_rest = provider_settings.get("ARKEO_REST_API_PORT") or ""
+    settings_sentinel_node = provider_settings.get("SENTINEL_NODE") or ""
+    settings_sentinel_port = provider_settings.get("SENTINEL_PORT") or ""
+    settings_chain_id = provider_settings.get("CHAIN_ID") or ""
 
     if not os.path.isfile(SENTINEL_CONFIG_PATH):
         return jsonify({"error": f"sentinel config not found at {SENTINEL_CONFIG_PATH}"}), 404
@@ -2453,10 +2503,14 @@ def update_sentinel_config():
     _set_env("LOCATION", location)
     _set_env("FREE_RATE_LIMIT", free_rate_limit)
     _set_env("FREE_RATE_LIMIT_DURATION", free_rate_limit_duration)
-    # Keep ARKEO_REST_API_PORT in sync with PROVIDER_HUB_URI if provided
-    if payload.get("provider_hub_uri"):
-        _set_env("PROVIDER_HUB_URI", payload.get("provider_hub_uri"))
-        _set_env("ARKEO_REST_API_PORT", payload.get("provider_hub_uri"))
+    # Keep provider settings in sync for sentinel dependencies
+    _set_env("ARKEOD_NODE", settings_node)
+    _set_env("EXTERNAL_ARKEOD_NODE", provider_settings.get("EXTERNAL_ARKEOD_NODE"))
+    _set_env("SENTINEL_NODE", settings_sentinel_node)
+    _set_env("SENTINEL_PORT", settings_sentinel_port)
+    _set_env("ARKEO_REST_API_PORT", settings_rest)
+    _set_env("PORT", settings_sentinel_port)
+    _set_env("SOURCE_CHAIN", settings_chain_id)
     # Sync from provider env vars if present (EXTERNAL_ARKEOD_NODE, ARKEO_REST_API_PORT, SENTINEL_NODE)
     def _normalize_hostport(url: str, default_port: str | None = None) -> str:
         if not url:
@@ -2473,16 +2527,23 @@ def update_sentinel_config():
         except Exception:
             return url
 
-    provider_node = os.getenv("EXTERNAL_ARKEOD_NODE") or os.getenv("ARKEOD_NODE")
+    provider_node = settings_node or _ensure_tcp_scheme(os.getenv("ARKEOD_NODE"))
     if provider_node:
         hostport = _normalize_hostport(provider_node, "26657")
         if hostport:
-            _set_env("EVENT_STREAM_HOST", hostport)
-    hub_env = os.getenv("PROVIDER_HUB_URI") or os.getenv("ARKEO_REST_API_PORT")
+            # EVENT_STREAM_HOST should be host:port (no scheme)
+            hostport_no_scheme = hostport
+            if hostport_no_scheme.startswith("tcp://"):
+                hostport_no_scheme = hostport_no_scheme[len("tcp://") :]
+            if hostport_no_scheme.startswith("http://"):
+                hostport_no_scheme = hostport_no_scheme[len("http://") :]
+            if hostport_no_scheme.startswith("https://"):
+                hostport_no_scheme = hostport_no_scheme[len("https://") :]
+            _set_env("EVENT_STREAM_HOST", hostport_no_scheme)
+    hub_env = settings_rest or os.getenv("ARKEO_REST_API_PORT")
     if hub_env:
-        _set_env("PROVIDER_HUB_URI", hub_env)
         _set_env("ARKEO_REST_API_PORT", hub_env)
-    sentinel_node_env = os.getenv("SENTINEL_NODE")
+    sentinel_node_env = provider_settings.get("SENTINEL_NODE") or os.getenv("SENTINEL_NODE")
     if sentinel_node_env:
         _set_env("SENTINEL_NODE", sentinel_node_env)
 
@@ -2792,6 +2853,7 @@ def claims_ledger():
                     bech_pub = line.split("Bech32 Acc:")[-1].strip()
                     break
     provider_pubkey = bech_pub or raw_pub
+    provider_pubkey_alts = {provider_pubkey.strip(), raw_pub.strip()}
     if not provider_pubkey:
         return jsonify({"error": "failed to derive provider pubkey", "detail": out}), 500
 
@@ -2899,124 +2961,242 @@ def _parse_int(val, default: int = 0) -> int:
 def provider_contracts_summary():
     """Summarize contracts for this provider (optional service filter)."""
     body = request.get_json(silent=True) or {}
-    service_filter = (body.get("service") or "").strip()
-    from_h = str(body.get("from_height") or body.get("from") or 0)
-    to_h = str(body.get("to_height") or body.get("to") or 999_999_999)
 
-    # Derive provider pubkey (bech32)
-    key_cmd = ["arkeod", "--home", ARKEOD_HOME, "keys", "show", KEY_NAME, "-p", "--keyring-backend", KEYRING]
-    code, out = run_list(key_cmd)
-    if code != 0:
-        return jsonify({"error": "failed to get provider pubkey", "detail": out}), 500
-    raw_pub = ""
-    try:
-        raw_pub = json.loads(out).get("key") or ""
-    except Exception:
-        pass
-    bech_pub = ""
-    if raw_pub:
-        c2, o2 = run_list(["arkeod", "debug", "pubkey-raw", raw_pub])
-        if c2 == 0:
-            for line in o2.splitlines():
-                if "Bech32 Acc:" in line:
-                    bech_pub = line.split("Bech32 Acc:")[-1].strip()
-                    break
-    provider_pubkey = bech_pub or raw_pub
-    if not provider_pubkey:
-        return jsonify({"error": "failed to derive provider pubkey", "detail": out}), 500
-
-    node = ARKEOD_NODE
-    contracts_cmd = [
-        "arkeod",
-        "--home",
-        ARKEOD_HOME,
-        "query",
-        "arkeo",
-        "list-contracts",
-        "--output",
-        "json",
-        "--limit",
-        "5000",
-        "--count-total",
-    ]
-    if node:
-        contracts_cmd.extend(["--node", node])
-    code, out = run_list(contracts_cmd)
-    if code != 0:
-        return jsonify({"error": "failed to list contracts", "detail": out, "cmd": contracts_cmd, "exit_code": code}), 500
-    try:
-        data = json.loads(out)
-    except Exception:
-        data = {}
-    # Cache raw contract list for troubleshooting / reuse
-    try:
-        write_cache_json("provider-contracts", data)
-    except Exception:
-        pass
-    contracts = []
-    if isinstance(data, dict):
-        for key in ("contracts", "contract", "result"):
-            val = data.get(key)
-            if isinstance(val, list):
-                contracts = val
-                break
-    if not isinstance(contracts, list):
-        contracts = []
-
-    heartbeat = read_heartbeat(CLAIMS_HEARTBEAT_PATH) or {}
-
-    service_totals = []
-    filtered = []
-    for c in contracts:
-        if not isinstance(c, dict):
-            continue
-        prov_val = (c.get("provider") or c.get("provider_pubkey") or c.get("provider_pub_key") or "").strip()
-        if prov_val != provider_pubkey:
-            continue
-        service_val = c.get("service") or c.get("service_id") or c.get("serviceID") or c.get("name") or ""
-        service_val = str(service_val).strip()
-        if service_filter and service_val != service_filter:
-            continue
-        contract_id = c.get("contract_id") or c.get("id") or c.get("contractID") or c.get("contractId") or ""
-        contract_type = (c.get("type") or c.get("authorization") or "").upper()
-        settlement_height = _parse_int(
-            c.get("settlement_height")
-            or c.get("settlementHeight")
-            or c.get("settlementheight")
-            or 0,
-            0,
-        )
-        settlement_duration = _parse_int(c.get("settlement_duration") or c.get("settlementDuration") or c.get("settlementduration") or 0, 0)
-        paid = _parse_int(c.get("paid"), 0)
-        deposit = _parse_int(c.get("deposit"), 0)
-        nonce = _parse_int(c.get("nonce"), 0)
-        rate_amount = 0
-        rate_val = c.get("rate") or c.get("rates") or c.get("pay_as_you_go_rate") or c.get("pay_as_you_go_rates")
-        if isinstance(rate_val, list) and rate_val:
-            try:
-                rate_amount = _parse_int((rate_val[0] or {}).get("amount"), 0)
-            except Exception:
-                rate_amount = 0
-        elif isinstance(rate_val, dict):
-            rate_amount = _parse_int(rate_val.get("amount"), 0)
-        tx_count = nonce if "PAY" in contract_type else 0
-        filtered.append(
+    def empty_summary(provider_pubkey: str = "", err: str | None = None, detail=None):
+        # Use the last-known requested range if available
+        fh = str(body.get("from_height") or body.get("from") or 0)
+        th = str(body.get("to_height") or body.get("to") or 999_999_999)
+        service_filter = (body.get("service") or "").strip()
+        heartbeat = read_heartbeat(CLAIMS_HEARTBEAT_PATH) or {}
+        return jsonify(
             {
-                "contract_id": str(contract_id),
-                "service": service_val,
-                "type": contract_type,
-                "paid": paid,
-                "deposit": deposit,
-                "remaining": max(0, deposit - paid),
-                "nonce": nonce,
-                "tx_count": tx_count,
-                "settlement_height": settlement_height,
-                "settlement_duration": settlement_duration,
-                "rate_amount": rate_amount,
+                "provider_pubkey": provider_pubkey or None,
+                "service_filter": service_filter or None,
+                "node": ARKEOD_NODE,
+                "from_height": fh,
+                "to_height": th,
+                "tokens_paid_total_uarkeo": 0,
+                "tokens_paid_finalized_uarkeo": 0,
+                "payg_requests_total": 0,
+                "active_contracts": 0,
+                "settled_contracts": 0,
+                "remaining_uarkeo": 0,
+                "contracts": [],
+                "service_totals": [],
+                "last_claims_run": heartbeat.get("last_claims_run"),
+                "error": err,
+                "detail": detail,
             }
-        )
+        ), 200
 
-    if not filtered:
+    try:
+        service_filter = (body.get("service") or "").strip()
+        from_h = str(body.get("from_height") or body.get("from") or 0)
+        to_h = str(body.get("to_height") or body.get("to") or 999_999_999)
+        from_h_int = _parse_int(from_h, 0)
+        to_h_int = _parse_int(to_h, 999_999_999)
+        heartbeat = read_heartbeat(CLAIMS_HEARTBEAT_PATH) or {}
+
+        provider_pubkey = ""
+        # Derive provider pubkey (bech32)
+        key_cmd = ["arkeod", "--home", ARKEOD_HOME, "keys", "show", KEY_NAME, "-p", "--keyring-backend", KEYRING]
+        code, out = run_list(key_cmd)
+        if code != 0:
+            return empty_summary("", "failed to get provider pubkey", out)
+        raw_pub = ""
+        try:
+            raw_pub = json.loads(out).get("key") or ""
+        except Exception:
+            raw_pub = ""
+        bech_pub = ""
+        if raw_pub:
+            c2, o2 = run_list(["arkeod", "debug", "pubkey-raw", raw_pub])
+            if c2 == 0:
+                for line in o2.splitlines():
+                    if "Bech32 Acc:" in line:
+                        bech_pub = line.split("Bech32 Acc:")[-1].strip()
+                        break
+        provider_pubkey = bech_pub or raw_pub
+        if not provider_pubkey:
+            return empty_summary("", "failed to derive provider pubkey", out)
+        provider_pubkey_alts = {provider_pubkey.strip(), raw_pub.strip()}
+
+        node = ARKEOD_NODE
+        contracts_cmd = [
+            "arkeod",
+            "--home",
+            ARKEOD_HOME,
+            "query",
+            "arkeo",
+            "list-contracts",
+            "--output",
+            "json",
+            "--limit",
+            "5000",
+            "--count-total",
+        ]
+        if node:
+            contracts_cmd.extend(["--node", node])
+        code, out = run_list(contracts_cmd)
+        if code != 0:
+            return empty_summary(
+                provider_pubkey,
+                "failed to list contracts",
+                {"cmd": contracts_cmd, "exit_code": code, "detail": out},
+            )
+        try:
+            data = json.loads(out)
+        except Exception:
+            data = {}
+        # Cache raw contract list for troubleshooting / reuse
+        try:
+            write_cache_json("provider-contracts", data)
+        except Exception:
+            pass
+        contracts = []
+        if isinstance(data, dict):
+            for key in ("contracts", "contract", "result"):
+                val = data.get(key)
+                if isinstance(val, list):
+                    contracts = val
+                    break
+        if not isinstance(contracts, list):
+            contracts = []
+
+        filtered = []
+        for c in contracts:
+            if not isinstance(c, dict):
+                continue
+            prov_val = (c.get("provider") or c.get("provider_pubkey") or c.get("provider_pub_key") or "").strip().strip('"')
+            if prov_val not in provider_pubkey_alts:
+                continue
+            service_val = c.get("service") or c.get("service_id") or c.get("serviceID") or c.get("name") or ""
+            service_val = str(service_val).strip()
+            if service_filter and service_val != service_filter:
+                continue
+            contract_id = c.get("contract_id") or c.get("id") or c.get("contractID") or c.get("contractId") or ""
+            contract_type = (c.get("type") or c.get("authorization") or "").upper()
+            settlement_height = _parse_int(
+                c.get("settlement_height")
+                or c.get("settlementHeight")
+                or c.get("settlementheight")
+                or 0,
+                0,
+            )
+            # Filter by height range if provided (use settlement or any available height field)
+            height_for_filter = None
+            for key in ("settlement_height", "settlementHeight", "settlementheight", "height"):
+                if key in c and c.get(key) is not None:
+                    try:
+                        height_for_filter = int(str(c.get(key)).strip().strip('"'))
+                        break
+                    except Exception:
+                        height_for_filter = None
+            if height_for_filter is None:
+                try:
+                    raw_h = c.get("raw", {}).get("height")
+                    if raw_h is not None:
+                        height_for_filter = int(str(raw_h).strip().strip('"'))
+                except Exception:
+                    height_for_filter = None
+            if from_h_int > 0 or to_h_int < 999_999_999:
+                if height_for_filter is not None:
+                    if height_for_filter < from_h_int or height_for_filter > to_h_int:
+                        continue
+                else:
+                    # No height info; skip when a range was requested
+                    continue
+
+            settlement_duration = _parse_int(c.get("settlement_duration") or c.get("settlementDuration") or c.get("settlementduration") or 0, 0)
+            paid = _parse_int(c.get("paid"), 0)
+            deposit = _parse_int(c.get("deposit"), 0)
+            nonce = _parse_int(c.get("nonce"), 0)
+            # Ignore nonce == 0 contracts
+            if nonce == 0:
+                continue
+            rate_amount = 0
+            rate_val = c.get("rate") or c.get("rates") or c.get("pay_as_you_go_rate") or c.get("pay_as_you_go_rates")
+            if isinstance(rate_val, list) and rate_val:
+                try:
+                    rate_amount = _parse_int((rate_val[0] or {}).get("amount"), 0)
+                except Exception:
+                    rate_amount = 0
+            elif isinstance(rate_val, dict):
+                rate_amount = _parse_int(rate_val.get("amount"), 0)
+            tx_count = nonce if "PAY" in contract_type else 0
+            filtered.append(
+                {
+                    "contract_id": str(contract_id),
+                    "service": service_val,
+                    "type": contract_type,
+                    "paid": paid,
+                    "deposit": deposit,
+                    "remaining": max(0, deposit - paid),
+                    "nonce": nonce,
+                    "tx_count": tx_count,
+                    "settlement_height": settlement_height,
+                    "settlement_duration": settlement_duration,
+                    "rate_amount": rate_amount,
+                }
+            )
+
+        if not filtered:
+            return empty_summary(provider_pubkey)
+
+        tokens_paid_total = sum(c["paid"] for c in filtered)
+        tokens_paid_finalized = sum(c["paid"] for c in filtered if c["settlement_height"] > 0)
+        payg_requests_total = sum(c["nonce"] for c in filtered if "PAY" in c["type"])
+        active_contracts = sum(1 for c in filtered if c["settlement_height"] == 0)
+        settled_contracts = sum(1 for c in filtered if c["settlement_height"] > 0)
+        remaining_total = sum(c["remaining"] for c in filtered)
+
+        service_totals_map: dict[str, dict] = {}
+        for c in filtered:
+            svc = c["service"] or ""
+            st = service_totals_map.setdefault(
+                svc,
+                {
+                    "service": svc,
+                    "tokens_paid_total_uarkeo": 0,
+                    "tokens_paid_finalized_uarkeo": 0,
+                    "payg_requests_total": 0,
+                    "tx_count": 0,
+                    "active_contracts": 0,
+                    "settled_contracts": 0,
+                    "remaining_uarkeo": 0,
+                    "deposit_total_uarkeo": 0,
+                    "contracts": [],
+                },
+            )
+            st["tokens_paid_total_uarkeo"] += c["paid"]
+            if c["settlement_height"] > 0:
+                st["tokens_paid_finalized_uarkeo"] += c["paid"]
+                st["settled_contracts"] += 1
+            else:
+                st["active_contracts"] += 1
+            st["payg_requests_total"] += c["nonce"] if "PAY" in c["type"] else 0
+            st["tx_count"] += c.get("tx_count", 0)
+            st["remaining_uarkeo"] += c["remaining"]
+            st["deposit_total_uarkeo"] += c["deposit"]
+            st["contracts"].append(
+                {
+                    "contract_id": c["contract_id"],
+                    "service": c["service"],
+                    "type": c["type"],
+                    "paid": c["paid"],
+                    "deposit": c["deposit"],
+                    "remaining": c["remaining"],
+                    "nonce": c["nonce"],
+                    "settlement_height": c["settlement_height"],
+                    "settlement_duration": c["settlement_duration"],
+                }
+            )
+
+        for st in service_totals_map.values():
+            st["contracts"].sort(key=lambda x: int(x["contract_id"]) if str(x["contract_id"]).isdigit() else str(x["contract_id"]))
+
+        service_totals = sorted(service_totals_map.values(), key=lambda x: x["service"])
+
         return jsonify(
             {
                 "provider_pubkey": provider_pubkey,
@@ -3024,90 +3204,19 @@ def provider_contracts_summary():
                 "node": node,
                 "from_height": from_h,
                 "to_height": to_h,
-                "contracts": [],
-                "service_totals": [],
-                "tokens_paid_total_uarkeo": 0,
-                "tokens_paid_finalized_uarkeo": 0,
-                "payg_requests_total": 0,
-                "active_contracts": 0,
-                "settled_contracts": 0,
-                "remaining_uarkeo": 0,
+                "tokens_paid_total_uarkeo": tokens_paid_total,
+                "tokens_paid_finalized_uarkeo": tokens_paid_finalized,
+                "payg_requests_total": payg_requests_total,
+                "active_contracts": active_contracts,
+                "settled_contracts": settled_contracts,
+                "remaining_uarkeo": remaining_total,
+                "contracts": filtered,
+                "service_totals": service_totals,
                 "last_claims_run": heartbeat.get("last_claims_run"),
             }
         )
-
-    tokens_paid_total = sum(c["paid"] for c in filtered)
-    tokens_paid_finalized = sum(c["paid"] for c in filtered if c["settlement_height"] > 0)
-    payg_requests_total = sum(c["nonce"] for c in filtered if "PAY" in c["type"])
-    active_contracts = sum(1 for c in filtered if c["settlement_height"] == 0)
-    settled_contracts = sum(1 for c in filtered if c["settlement_height"] > 0)
-    remaining_total = sum(c["remaining"] for c in filtered)
-
-    service_totals_map: dict[str, dict] = {}
-    for c in filtered:
-        svc = c["service"] or ""
-        st = service_totals_map.setdefault(
-            svc,
-            {
-                "service": svc,
-                "tokens_paid_total_uarkeo": 0,
-                "tokens_paid_finalized_uarkeo": 0,
-                "payg_requests_total": 0,
-                "tx_count": 0,
-                "active_contracts": 0,
-                "settled_contracts": 0,
-                "remaining_uarkeo": 0,
-                "deposit_total_uarkeo": 0,
-                "contracts": [],
-            },
-        )
-        st["tokens_paid_total_uarkeo"] += c["paid"]
-        if c["settlement_height"] > 0:
-            st["tokens_paid_finalized_uarkeo"] += c["paid"]
-            st["settled_contracts"] += 1
-        else:
-            st["active_contracts"] += 1
-        st["payg_requests_total"] += c["nonce"] if "PAY" in c["type"] else 0
-        st["tx_count"] += c.get("tx_count", 0)
-        st["remaining_uarkeo"] += c["remaining"]
-        st["deposit_total_uarkeo"] += c["deposit"]
-        st["contracts"].append(
-            {
-                "contract_id": c["contract_id"],
-                "service": c["service"],
-                "type": c["type"],
-                "paid": c["paid"],
-                "deposit": c["deposit"],
-                "remaining": c["remaining"],
-                "nonce": c["nonce"],
-                "settlement_height": c["settlement_height"],
-                "settlement_duration": c["settlement_duration"],
-            }
-        )
-
-    for st in service_totals_map.values():
-        st["contracts"].sort(key=lambda x: int(x["contract_id"]) if str(x["contract_id"]).isdigit() else str(x["contract_id"]))
-
-    service_totals = sorted(service_totals_map.values(), key=lambda x: x["service"])
-
-    return jsonify(
-        {
-            "provider_pubkey": provider_pubkey,
-            "service_filter": service_filter or None,
-            "node": node,
-            "from_height": from_h,
-            "to_height": to_h,
-            "tokens_paid_total_uarkeo": tokens_paid_total,
-            "tokens_paid_finalized_uarkeo": tokens_paid_finalized,
-            "payg_requests_total": payg_requests_total,
-            "active_contracts": active_contracts,
-            "settled_contracts": settled_contracts,
-            "remaining_uarkeo": remaining_total,
-            "contracts": filtered,
-            "service_totals": service_totals,
-            "last_claims_run": heartbeat.get("last_claims_run"),
-        }
-    )
+    except Exception as e:
+        return empty_summary(provider_pubkey, "unexpected error", str(e))
 
 @app.post("/api/provider-totals")
 def provider_totals():
@@ -3117,11 +3226,29 @@ def provider_totals():
     from_h = str(body.get("from_height") or body.get("from") or 0)
     to_h = str(body.get("to_height") or body.get("to") or 999_999_999)
 
+    def empty_totals(provider_pubkey: str = "", err: str | None = None, detail=None):
+        return jsonify(
+            {
+                "provider_pubkey": provider_pubkey,
+                "service_filter": service_filter or None,
+                "node": ARKEOD_NODE,
+                "from_height": from_h,
+                "to_height": to_h,
+                "tx_count": 0,
+                "contracts": [],
+                "total_paid_uarkeo": 0,
+                "total_paid_arkeo": 0,
+                "service_totals": [],
+                "error": err,
+                "detail": detail,
+            }
+        )
+
     # Derive provider pubkey (bech32)
     key_cmd = ["arkeod", "--home", ARKEOD_HOME, "keys", "show", KEY_NAME, "-p", "--keyring-backend", KEYRING]
     code, out = run_list(key_cmd)
     if code != 0:
-        return jsonify({"error": "failed to get provider pubkey", "detail": out}), 500
+        return empty_totals("", "failed to get provider pubkey", out), 200
     raw_pub = ""
     try:
         raw_pub = json.loads(out).get("key") or ""
@@ -3137,7 +3264,8 @@ def provider_totals():
                     break
     provider_pubkey = bech_pub or raw_pub
     if not provider_pubkey:
-        return jsonify({"error": "failed to derive provider pubkey", "detail": out}), 500
+        return empty_totals("", "failed to derive provider pubkey", out), 200
+    provider_pubkey_alts = {provider_pubkey.strip(), raw_pub.strip()}
 
     node = ARKEOD_NODE
     query = f"message.action='/arkeo.arkeo.MsgClaimContractIncome' AND tx.height>={from_h} AND tx.height<={to_h}"
@@ -3163,18 +3291,15 @@ def provider_totals():
             tx_cmd.extend(["--node", node])
         code, out = run_list(tx_cmd)
         if code != 0:
-            return jsonify(
+            return empty_totals(
+                provider_pubkey,
+                "failed to query txs",
                 {
-                    "error": "failed to query txs",
-                    "detail": out,
                     "cmd": tx_cmd,
                     "exit_code": code,
-                    "provider_pubkey": provider_pubkey,
-                    "service_filter": service_filter or None,
-                    "from_height": from_h,
-                    "to_height": to_h,
-                }
-            ), 500
+                    "detail": out,
+                },
+            ), 200
         try:
             data = json.loads(out)
         except Exception:
@@ -3192,14 +3317,16 @@ def provider_totals():
                 attr_map = {a.get("key"): a.get("value") for a in attrs if isinstance(a, dict)}
                 provider_val = (attr_map.get("provider") or "").strip('"')
                 service_val = (attr_map.get("service") or "").strip('"')
-                if provider_val != provider_pubkey:
+                if provider_val not in provider_pubkey_alts:
                     continue
                 if service_filter and service_val != service_filter:
                     continue
                 try:
                     contract_id = attr_map.get("contract_id", "").strip('"')
-                    nonce = int(str(attr_map.get("nonce", "0")).strip('"'))
-                    paid = int(str(attr_map.get("paid", "0")).strip('"'))
+                    nonce = _parse_int(attr_map.get("nonce"), 0)
+                    if nonce <= 0:
+                        continue
+                    paid = _parse_int(attr_map.get("paid"), 0)
                 except Exception:
                     continue
                 all_rows.append(
@@ -3217,6 +3344,8 @@ def provider_totals():
     # Summaries
     totals = {}
     for r in all_rows:
+        if not r or r.get("nonce") is None or r.get("nonce") <= 0:
+            continue
         cid = r["contract_id"]
         t = totals.setdefault(
             cid,
@@ -3243,6 +3372,8 @@ def provider_totals():
     # Per-service summary
     service_totals = {}
     for r in all_rows:
+        if not r or r.get("nonce") is None or r.get("nonce") <= 0:
+            continue
         svc = r.get("service") or ""
         if not svc:
             continue

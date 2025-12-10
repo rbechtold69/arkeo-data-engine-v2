@@ -28,7 +28,7 @@ KEY_KEYRING_BACKEND=${KEY_KEYRING_BACKEND:-test}
 ARKEOD_HOME=${ARKEOD_HOME:-~/.arkeo}
 # Expand leading tilde if provided via env (e.g. "~/.arkeo")
 ARKEOD_HOME=${ARKEOD_HOME/#\~/$HOME}
-ARKEOD_NODE=${ARKEOD_NODE:-${EXTERNAL_ARKEOD_NODE:-tcp://host.docker.internal:26657}}
+ARKEOD_NODE=${ARKEOD_NODE:-${EXTERNAL_ARKEOD_NODE:-tcp://127.0.0.1:26657}}
 RPC_URL_DEFAULT=${SENTINEL_RPC_URL:-$ARKEOD_NODE}
 # If rpc url is tcp:// convert to http:// for sentinel
 RPC_URL_DEFAULT=${RPC_URL_DEFAULT/tcp:\/\//http:\/\/}

@@ -22,8 +22,8 @@
             </div>
             <h1>Provider Service Management</h1>
         </div>
-        <div class="header-right">
-            <a class="btn primary" href="index.html">Back to Admin Home</a>
+        <div class="header-right header-right-with-actions">
+            <a class="btn-ghost" href="index.html">Back to Dashboard</a>
         </div>
     </div>
 </div>
@@ -137,6 +137,45 @@
                 </td>
                 <td class="value">
                     <input type="text" id="sentinelUri" />
+                </td>
+            </tr>
+            <tr>
+                <td class="label">
+                    Location
+                    <div class="hint">Select the region for this service.</div>
+                </td>
+                <td class="value">
+                    <select id="locationSelect" required>
+                        <option value="">Select a region</option>
+                        <option>Africa</option>
+                        <option>Africa – Northern</option>
+                        <option>Africa – Eastern</option>
+                        <option>Africa – Middle</option>
+                        <option>Africa – Western</option>
+                        <option>Africa – Southern</option>
+                        <option>Americas</option>
+                        <option>Americas – Northern</option>
+                        <option>Americas – Caribbean</option>
+                        <option>Americas – Central</option>
+                        <option>Americas – South</option>
+                        <option>Asia</option>
+                        <option>Asia – Central</option>
+                        <option>Asia – Eastern</option>
+                        <option>Asia – Southeastern</option>
+                        <option>Asia – Southern</option>
+                        <option>Asia – Western</option>
+                        <option>Europe</option>
+                        <option>Europe – Northern</option>
+                        <option>Europe – Eastern</option>
+                        <option>Europe – Southern</option>
+                        <option>Europe – Western</option>
+                        <option>Oceania</option>
+                        <option>Oceania – Australia & New Zealand</option>
+                        <option>Oceania – Melanesia</option>
+                        <option>Oceania – Micronesia</option>
+                        <option>Oceania – Polynesia</option>
+                        <option>Antarctica</option>
+                    </select>
                 </td>
             </tr>
             <tr>
@@ -321,9 +360,20 @@ let nonceLockedFromEdit = false;
 let sentinelServices = [];
 let adminPasswordEnabled = false;
 let adminSessionAuthed = false;
+function requirePasswordGate() {
+    sessionStorage.removeItem("adminAuthed");
+    adminSessionAuthed = false;
+    const gate = document.getElementById("adminPasswordGate");
+    if (gate) gate.classList.remove("hidden");
+}
 const realFetch = window.fetch.bind(window);
-window.fetch = (url, options = {}) => realFetch(url, { credentials: "include", ...options });
-let adminPasswordEnabled = false;
+window.fetch = (url, options = {}) =>
+    realFetch(url, { credentials: "include", ...options }).then((resp) => {
+        if (resp && resp.status === 401) {
+            requirePasswordGate();
+        }
+        return resp;
+    });
 
     function setBondAmountForMode() {
         const input = document.getElementById("bondAmountInput");
@@ -457,6 +507,18 @@ let adminPasswordEnabled = false;
         const rpcUrlVal = document.getElementById("rpcUrl").value.trim();
         const rpcUserVal = document.getElementById("rpcUser").value.trim();
         const rpcPassVal = document.getElementById("rpcPass").value.trim();
+        const locationSelect = document.getElementById("locationSelect");
+        const locationVal = (locationSelect && locationSelect.value ? locationSelect.value : "").trim();
+        const allowedLocations = locationSelect ? Array.from(locationSelect.options).map((o) => o.value) : [];
+        const normalizedLoc = locationVal.toLowerCase();
+        const isAllowed = !allowedLocations.length || allowedLocations.includes(locationVal);
+        const finalLocation = locationVal && normalizedLoc !== "default location" && isAllowed ? locationVal : "";
+        if (!locationVal) {
+            alert("Please select a location.");
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Submit Bond + Mod";
+            return;
+        }
         const payload = {
             service: document.getElementById("bondService").value.trim(),
             bond: bondAmount,
@@ -468,6 +530,7 @@ let adminPasswordEnabled = false;
             subscription_rates: document.getElementById("subscriptionRates").value.trim(),
             pay_as_you_go_rates: document.getElementById("payAsYouGoRates").value.trim(),
             settlement_dur: document.getElementById("settlementDur").value.trim(),
+            location: finalLocation,
         };
         resetModal("Provider Service", "");
         appendModalLine("Submitting bond/mod contracts...");
@@ -644,8 +707,13 @@ let adminPasswordEnabled = false;
 
     async function loadProviderInfo() {
         try {
-            const res = await fetch(resolveApi("/api/provider-info"));
+            const [res, settingsRes] = await Promise.all([
+                fetch(resolveApi("/api/provider-info")),
+                fetch(resolveApi("/api/provider-settings"), { cache: "no-store" }),
+            ]);
             const data = await res.json();
+            const settingsJson = settingsRes.ok ? await settingsRes.json() : {};
+            const settings = (settingsJson && settingsJson.settings) || settingsJson || {};
             if (!res.ok) {
                 setPre("bondResult", "Error loading provider info: " + JSON.stringify(data, null, 2));
                 return;
@@ -663,15 +731,43 @@ let adminPasswordEnabled = false;
                 document.getElementById("metadataNonceHidden").value = data.metadata_nonce;
                 document.getElementById("metadataNonceLabel").textContent = data.metadata_nonce;
             }
-            if (data.sentinel_uri) {
+            // Always populate Sentinel URI from provider settings (SENTINEL_NODE:SENTINEL_PORT)
+            const baseNode = (settings.SENTINEL_NODE || "").replace(/\/+$/, "");
+            const port = settings.SENTINEL_PORT || "";
+            let sentinelFromSettings = baseNode;
+            if (sentinelFromSettings && port) {
+                sentinelFromSettings = `${sentinelFromSettings}:${port}`;
+            }
+            if (sentinelFromSettings) {
+                const sInput = document.getElementById("sentinelUri");
+                if (sInput) sInput.value = sentinelFromSettings;
+                setAdminHost(sentinelFromSettings);
+            } else if (data.sentinel_uri) {
                 document.getElementById("sentinelUri").value = data.sentinel_uri;
                 setAdminHost(data.sentinel_uri);
             }
-            applyPendingEdit();
-            applyCachedProviderForm();
-        } catch (e) {
-            setPre("bondResult", "Request failed: " + e);
+        // Prefill location from export/env if available
+        const envMeta = (data.provider_metadata) || {};
+        const formLocation =
+            (cachedProviderForm && cachedProviderForm.location) ||
+            envMeta.LOCATION ||
+            envMeta.location ||
+            "";
+        const locSel = document.getElementById("locationSelect");
+        if (locSel) {
+            const exists = Array.from(locSel.options).some((o) => o.value === formLocation);
+            // If location missing or not in the allowed list, force placeholder.
+            if (!formLocation || !exists) {
+                locSel.selectedIndex = 0;
+            } else {
+                locSel.value = formLocation;
+            }
         }
+        applyPendingEdit();
+        applyCachedProviderForm();
+    } catch (e) {
+        setPre("bondResult", "Request failed: " + e);
+    }
     }
 
     async function loadSentinelConfig() {
@@ -804,6 +900,19 @@ let adminPasswordEnabled = false;
         if (cf.subscription_rates) setVal("subscriptionRates", cf.subscription_rates);
         if (cf.pay_as_you_go_rates) setVal("payAsYouGoRates", cf.pay_as_you_go_rates);
         if (cf.settlement_dur) setVal("settlementDur", cf.settlement_dur);
+        if (cf.location) {
+            const locSel = document.getElementById("locationSelect");
+            if (locSel) {
+                const exists = Array.from(locSel.options).some((o) => o.value === cf.location);
+                if (!exists) {
+                    const opt = document.createElement("option");
+                    opt.value = cf.location;
+                    opt.textContent = cf.location;
+                    locSel.appendChild(opt);
+                }
+                locSel.value = cf.location;
+            }
+        }
         if (cf.rpc_url) setVal("rpcUrl", cf.rpc_url);
         if (cf.rpc_user) setVal("rpcUser", cf.rpc_user);
         if (cf.rpc_pass) setVal("rpcPass", cf.rpc_pass);
@@ -839,6 +948,9 @@ let adminPasswordEnabled = false;
             adminPasswordEnabled = false;
             adminSessionAuthed = false;
         }
+        if (adminPasswordEnabled && !adminSessionAuthed) {
+            sessionStorage.removeItem("adminAuthed");
+        }
         const gateAuthed = sessionStorage.getItem("adminAuthed") === "1" || adminSessionAuthed;
         const gate = document.getElementById("adminPasswordGate");
         if (gate) {
@@ -869,6 +981,7 @@ let adminPasswordEnabled = false;
                 const gate = document.getElementById("adminPasswordGate");
                 if (gate) gate.classList.add("hidden");
                 if (statusEl) statusEl.textContent = "";
+                window.location.href = "index.html";
             } else if (statusEl) {
                 statusEl.textContent = "Incorrect password.";
             }
@@ -886,14 +999,21 @@ let adminPasswordEnabled = false;
     });
 </script>
 
-<div id="adminPasswordGate" class="overlay hidden">
-    <div class="overlay-card modal-card">
-        <h3>Admin Password Required</h3>
-        <p class="muted">Enter the admin password to continue.</p>
+<div id="adminPasswordGate" class="overlay overlay-strong hidden">
+    <div class="overlay-card password-card">
+        <div class="password-title">
+            <span>Arkeo Data Marketplace</span>
+            <span class="sep">|</span>
+            <span class="sub">Provider Manager</span>
+        </div>
         <form onsubmit="submitAdminPasswordGate(event); return false;">
-            <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
-            <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
-            <div class="actions mt-6">
+            <div class="password-body">
+                <h3 class="mt-6 mb-0">Password Required</h3>
+                <p class="muted">Enter the admin password to continue.</p>
+                <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
+                <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
+            </div>
+            <div class="actions center mt-6">
                 <button class="primary" type="submit">Unlock</button>
             </div>
             <div id="adminPasswordGateStatus" class="muted mt-6"></div>

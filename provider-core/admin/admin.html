@@ -161,18 +161,25 @@
     </div>
 </div>
 
-<div id="adminPasswordGate" class="overlay hidden">
-    <div class="overlay-card modal-card">
-        <h3>Admin Password Required</h3>
-        <p class="muted">Enter the admin password to continue.</p>
+<div id="adminPasswordGate" class="overlay overlay-strong hidden">
+    <div class="overlay-card password-card">
+        <div class="password-title">
+            <span>Arkeo Data Marketplace</span>
+            <span class="sep">|</span>
+            <span class="sub">Provider Manager</span>
+        </div>
         <form onsubmit="submitAdminPasswordGate(); return false;">
-            <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
-            <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
-            <div class="actions mt-6">
+            <div class="password-body">
+                <h3 class="mt-6 mb-0">Password Required</h3>
+                <p class="muted">Enter the admin password to continue.</p>
+                <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
+                <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
+            </div>
+            <div class="actions center mt-6">
                 <button class="primary" type="submit">Unlock</button>
             </div>
+            <div id="adminPasswordGateStatus" class="muted mt-6"></div>
         </form>
-        <div id="adminPasswordGateStatus" class="muted mt-6"></div>
     </div>
 </div>
 
@@ -184,8 +191,20 @@
     let providerSettingsCache = {};
     let adminPasswordEnabled = false;
     let adminSessionAuthed = false;
+    function requirePasswordGate() {
+        sessionStorage.removeItem("adminAuthed");
+        adminSessionAuthed = false;
+        const gate = document.getElementById("adminPasswordGate");
+        if (gate) gate.classList.remove("hidden");
+    }
     const realFetch = window.fetch.bind(window);
-    window.fetch = (url, options = {}) => realFetch(url, { credentials: "include", ...options });
+    window.fetch = (url, options = {}) =>
+        realFetch(url, { credentials: "include", ...options }).then((resp) => {
+            if (resp && resp.status === 401) {
+                requirePasswordGate();
+            }
+            return resp;
+        });
 
     function buildBaseUrl(host, port) {
         const proto = (window.location && window.location.protocol === "https:") ? "https:" : "http:";
@@ -249,6 +268,9 @@
             adminPasswordEnabled = false;
             adminSessionAuthed = false;
         }
+        if (adminPasswordEnabled && !adminSessionAuthed) {
+            sessionStorage.removeItem("adminAuthed");
+        }
         const gate = document.getElementById("adminPasswordGate");
         const gateAuthed = sessionStorage.getItem("adminAuthed") === "1" || adminSessionAuthed;
         if (gate) {
@@ -278,6 +300,7 @@
                 const gate = document.getElementById("adminPasswordGate");
                 if (gate) gate.classList.add("hidden");
                 if (statusEl) statusEl.textContent = "";
+                window.location.href = "index.html";
             } else {
                 if (statusEl) statusEl.textContent = "Incorrect password.";
             }
@@ -383,8 +406,8 @@
             const homeText = providerSettingsCache.ARKEOD_HOME || "";
             if (homeLabel) homeLabel.textContent = homeText ? `(${homeText})` : "";
             if (homeVal) homeVal.textContent = homeText || "(read-only)";
-            setProviderInput("arkeodNode", providerSettingsCache.ARKEOD_NODE || providerSettingsCache.EXTERNAL_ARKEOD_NODE);
-            setProviderInput("arkeodRest", providerSettingsCache.ARKEO_REST_API_PORT || providerSettingsCache.PROVIDER_HUB_URI);
+            setProviderInput("arkeodNode", providerSettingsCache.ARKEOD_NODE);
+            setProviderInput("arkeodRest", providerSettingsCache.ARKEO_REST_API_PORT);
             setProviderInput("sentinelNode", providerSettingsCache.SENTINEL_NODE);
             setProviderInput("sentinelPort", providerSettingsCache.SENTINEL_PORT);
             setProviderInput("adminPort", providerSettingsCache.ADMIN_PORT);
@@ -408,16 +431,23 @@
 
     async function saveProviderSettings(event) {
         if (event && event.preventDefault) event.preventDefault();
+        const normalizeRpc = (val) => {
+            if (!val) return "";
+            const trimmed = String(val).trim();
+            const lower = trimmed.toLowerCase();
+            if (lower.startsWith("tcp://")) return trimmed;
+            if (lower.startsWith("http://")) return "tcp://" + trimmed.slice("http://".length);
+            if (lower.startsWith("https://")) return "tcp://" + trimmed.slice("https://".length);
+            return trimmed;
+        };
         const payload = {
             settings: {
                 KEY_NAME: document.getElementById("keyName")?.value || "",
                 KEY_KEYRING_BACKEND: providerSettingsCache.KEY_KEYRING_BACKEND || "",
                 CHAIN_ID: document.getElementById("chainId")?.value || "",
                 ARKEOD_HOME: providerSettingsCache.ARKEOD_HOME || "",
-                ARKEOD_NODE: document.getElementById("arkeodNode")?.value || "",
-                EXTERNAL_ARKEOD_NODE: document.getElementById("arkeodNode")?.value || "",
+                ARKEOD_NODE: normalizeRpc(document.getElementById("arkeodNode")?.value || ""),
                 ARKEO_REST_API_PORT: document.getElementById("arkeodRest")?.value || "",
-                PROVIDER_HUB_URI: document.getElementById("arkeodRest")?.value || "",
                 SENTINEL_NODE: document.getElementById("sentinelNode")?.value || "",
                 SENTINEL_PORT: document.getElementById("sentinelPort")?.value || "",
                 ADMIN_PORT: document.getElementById("adminPort")?.value || "",
@@ -475,6 +505,8 @@
             await loadAdminInfo();
             await loadProviderSettings(false);
             await fetchAdminPasswordStatus(false);
+            // Redirect to dashboard after successful save
+            window.location.href = "index.html";
         } catch (e) {
             finalMessage = `Failed to save provider settings: ${e}`;
             isError = true;

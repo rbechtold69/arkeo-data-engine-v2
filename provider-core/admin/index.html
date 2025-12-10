@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="images/favicon.ico">
     <link rel="shortcut icon" href="images/favicon.ico">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
 <div class="card header-card">
@@ -51,7 +52,18 @@
 <div class="card">
     <div class="row-between align-center">
         <h2 class="mt-0 mb-0">Provider Earnings</h2>
+        <div class="range-toggle">
+            <button class="toggle-btn" data-range="daily" onclick="changeEarningsRange('daily')">Daily</button>
+            <button class="toggle-btn" data-range="weekly" onclick="changeEarningsRange('weekly')">Weekly</button>
+            <button class="toggle-btn" data-range="monthly" onclick="changeEarningsRange('monthly')">Monthly</button>
+            <button class="toggle-btn active" data-range="all_time" onclick="changeEarningsRange('all_time')">All Time</button>
+        </div>
     </div>
+    <div class="chart-wrapper">
+        <canvas id="earningsChart" height="220"></canvas>
+        <div id="earningsChartEmpty" class="muted chart-empty hidden"></div>
+    </div>
+    <div id="earningsChartStatus" class="muted small-text"></div>
     <div id="claimTotals" class="claims-grid muted card-body" data-has-content="0">(loading claim totals...)</div>
 </div>
 
@@ -98,26 +110,6 @@
                     <p>Bond and modify provider services for the marketplace.</p>
                     <p class="muted">* Edits may take 1–2 blocks to appear in the dashboard as the blockchain refreshes. Let the interface refresh to see the latest changes.</p>
                     <a class="btn" href="provider.html">Open Provider Services Form</a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="card">
-    <h2>Admin Area</h2>
-    <div class="row">
-        <div class="col">
-            <div class="panel mb-12">
-                <p class="muted">Open the dedicated admin page to review health, shortcuts, and advanced actions in one place.</p>
-            </div>
-        </div>
-        <div class="col">
-            <div class="steps">
-                <div class="step">
-                    <h3>Admin Home</h3>
-                    <p>Visit the admin hub for quick links and system status.</p>
-                    <a class="btn" href="admin.html">Open Admin Page</a>
                 </div>
             </div>
         </div>
@@ -180,31 +172,28 @@
         <pre id="claimStatusLog">Waiting for updates...</pre>
 
         <h3>Debug</h3>
-        <h4>Sentinel Status</h4>
-        <pre id="sentinelStatus">Loading...</pre>
-        <h4>Sentinel Env (runtime)</h4>
-        <pre id="sentinelEnvStatus">Loading...</pre>
-        <h4>Sentinel YAML</h4>
-        <pre id="sentinelYamlStatus">Loading...</pre>
-
-        <h4>Debug</h4>
         <button class="primary" onclick="refreshInfo()">Refresh Info</button>
         <p id="version">Loading arkeod version...</p>
         <span id="refreshBadge" class="status-badge status-warn hidden mb-8">Refreshing…</span>
         <pre id="debugInfo">Loading...</pre>
-
-
     </div>
 </div>
 
-<div id="adminPasswordGate" class="overlay hidden">
-    <div class="overlay-card modal-card">
-        <h3>Admin Password Required</h3>
-        <p class="muted">Enter the admin password to continue.</p>
+<div id="adminPasswordGate" class="overlay overlay-strong hidden">
+    <div class="overlay-card password-card">
+        <div class="password-title">
+            <span>Arkeo Data Marketplace</span>
+            <span class="sep">|</span>
+            <span class="sub">Provider Manager</span>
+        </div>
         <form onsubmit="submitAdminPasswordGate(event); return false;">
-            <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
-            <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
-            <div class="actions mt-6">
+            <div class="password-body">
+                <h3 class="mt-6 mb-0">Password Required</h3>
+                <p class="muted">Enter the admin password to continue.</p>
+                <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
+                <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
+            </div>
+            <div class="actions center mt-6">
                 <button class="primary" type="submit">Unlock</button>
             </div>
             <div id="adminPasswordGateStatus" class="muted mt-6"></div>
@@ -308,6 +297,14 @@
         // Do not override adminApiBase; keep using the page host for API calls
     }
 
+    const BLOCK_TIME_SECONDS = 5.8;
+    const EARNINGS_TIME_WINDOWS = {
+        daily: 86400,
+        weekly: 604800,
+        monthly: 2592000,
+    };
+    const EARNINGS_CACHE_MS = 60000;
+
 let providerServicesData = [];
 let providerServiceTotals = [];
 let providerServiceLookup = {};
@@ -316,11 +313,26 @@ let lastBalance = null;
 let lastBlockHeight = null;
 let lastClaimsRun = null;
 let lastClaimsHeartbeat = null;
+let earningsRange = "all_time";
+let earningsChartInstance = null;
+let earningsChartCache = {};
     let currentPubkey = "";
     let adminPasswordEnabled = false;
     let adminSessionAuthed = false;
+    function requirePasswordGate() {
+        sessionStorage.removeItem("adminAuthed");
+        adminSessionAuthed = false;
+        const gate = document.getElementById("adminPasswordGate");
+        if (gate) gate.classList.remove("hidden");
+    }
     const realFetch = window.fetch.bind(window);
-    window.fetch = (url, options = {}) => realFetch(url, { credentials: "include", ...options });
+    window.fetch = (url, options = {}) =>
+        realFetch(url, { credentials: "include", ...options }).then((resp) => {
+            if (resp && resp.status === 401) {
+                requirePasswordGate();
+            }
+            return resp;
+        });
 
     async function refreshInfo() {
         const debugEl = document.getElementById("debugInfo");
@@ -574,11 +586,16 @@ let lastClaimsHeartbeat = null;
             el.textContent = "(loading claim totals...)";
             el.classList.add("muted");
         }
+        const body = rangeToHeightBody(earningsRange);
+        if (body === null) {
+            if (el && !hasContent) el.textContent = "Waiting for latest block height...";
+            return;
+        }
         try {
             const res = await fetch(resolveApi("/api/provider-contracts-summary"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-                body: "{}",
+                body: JSON.stringify(body || {}),
             });
             const data = await res.json();
             if (res.ok) {
@@ -609,9 +626,9 @@ let lastClaimsHeartbeat = null;
                 badgeTop.className = `status-badge ${cls}`;
                 badgeTop.textContent = display;
             }
-            statusEl.textContent = display;
+            if (statusEl) statusEl.textContent = display;
         } else {
-            statusEl.textContent = "Sentinel status unavailable";
+            if (statusEl) statusEl.textContent = "Sentinel status unavailable";
             if (badgeTop) {
                 badgeTop.className = "status-badge status-warn";
                 badgeTop.textContent = "Sentinel status unavailable";
@@ -658,6 +675,44 @@ let lastClaimsHeartbeat = null;
     function formatAddressShort(addr) {
         if (!addr || addr.length < 12) return addr || "";
         return `${addr.slice(0, 6)}...${addr.slice(-8)}`;
+    }
+
+    function getNumericHeight(val) {
+        if (val === undefined || val === null) return null;
+        if (typeof val === "number") return Number.isFinite(val) ? val : null;
+        if (typeof val === "string") {
+            const num = Number(val);
+            if (!Number.isNaN(num)) return num;
+        }
+        const raw =
+            (val && val.height) ||
+            (val && val.status && (
+                val.status.latest_block_height ||
+                val.status.latest_block ||
+                (val.status.SyncInfo && val.status.SyncInfo.latest_block_height) ||
+                (val.status.sync_info && val.status.sync_info.latest_block_height)
+            ));
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function estimateHeightsForRange(range) {
+        const latest = getNumericHeight(lastBlockHeight);
+        if (!latest) return { from: null, to: null };
+        const seconds = EARNINGS_TIME_WINDOWS[range];
+        if (!seconds || range === "all_time") {
+            return { from: 0, to: latest };
+        }
+        const blocksBack = Math.ceil(seconds / BLOCK_TIME_SECONDS);
+        const from = Math.max(0, latest - blocksBack);
+        return { from, to: latest };
+    }
+
+    function rangeToHeightBody(range) {
+        if (!range || range === "all_time") return {};
+        const { from, to } = estimateHeightsForRange(range);
+        if (from === null || to === null) return null;
+        return { from_height: from, to_height: to };
     }
 
     function isServiceActive(statusVal) {
@@ -720,6 +775,184 @@ let lastClaimsHeartbeat = null;
         el.dataset.hasContent = "1";
     }
 
+    function updateEarningsRangeButtons(activeRange) {
+        const buttons = document.querySelectorAll(".toggle-btn[data-range]");
+        buttons.forEach((btn) => {
+            const r = btn.dataset.range;
+            if (r === activeRange) btn.classList.add("active");
+            else btn.classList.remove("active");
+        });
+    }
+
+    function resolveServiceLabel(rawService) {
+        const key = rawService !== undefined && rawService !== null ? String(rawService) : "";
+        const lower = key.toLowerCase();
+        const lookup = providerServiceLookup[key] || providerServiceLookup[lower];
+        if (lookup && typeof lookup === "object") {
+            return lookup.description || lookup.name || lookup.service || key || "(unknown service)";
+        }
+        if (typeof lookup === "string") return lookup || key || "(unknown service)";
+        return key || "(unknown service)";
+    }
+
+    function buildServiceChartEntries(list) {
+        return (list || [])
+            .map((st) => {
+                const totalU =
+                    Number(
+                        st.total_paid_uarkeo ??
+                        st.tokens_paid_total_uarkeo ??
+                        st.tokens_paid_finalized_uarkeo ??
+                        st.total ??
+                        st.paid ??
+                        0
+                    );
+                const value = totalU / 1e8;
+                const svc = st.service || st.service_id || st.name || "";
+                return { label: resolveServiceLabel(svc), value };
+            })
+            .filter((d) => d.value > 0);
+    }
+
+    function renderEarningsChart(data) {
+        const canvas = document.getElementById("earningsChart");
+        const emptyEl = document.getElementById("earningsChartEmpty");
+        if (!canvas) return;
+        const hasData = Array.isArray(data) && data.length > 0;
+        if (!hasData) {
+            if (earningsChartInstance) {
+                earningsChartInstance.destroy();
+                earningsChartInstance = null;
+            }
+            canvas.classList.add("hidden");
+            if (emptyEl) {
+                emptyEl.classList.remove("hidden");
+                emptyEl.textContent = "";
+            }
+            return;
+        }
+        canvas.classList.remove("hidden");
+        if (emptyEl) emptyEl.classList.add("hidden");
+        const ctx = canvas.getContext("2d");
+        if (!ctx || typeof Chart === "undefined") return;
+        const labels = data.map((d) => d.label);
+        const values = data.map((d) => d.value);
+        if (earningsChartInstance) {
+            earningsChartInstance.data.labels = labels;
+            earningsChartInstance.data.datasets[0].data = values;
+            earningsChartInstance.update();
+            return;
+        }
+        earningsChartInstance = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "ARKEO Earned",
+                        data: values,
+                        backgroundColor: "rgba(59, 224, 255, 0.35)",
+                        borderColor: "rgba(59, 224, 255, 0.8)",
+                        borderWidth: 1.5,
+                        borderRadius: 6,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.parsed.y.toFixed(6)} ARKEO`,
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: "rgba(255,255,255,0.08)" },
+                        ticks: { color: "#cbd5e1" },
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: "#94a3b8" },
+                    },
+                },
+            },
+        });
+    }
+
+    async function loadEarningsByService(range = earningsRange, force = false) {
+        earningsRange = range;
+        updateEarningsRangeButtons(range);
+        const statusEl = document.getElementById("earningsChartStatus");
+        if (statusEl) statusEl.textContent = "";
+        const gateAuthed = sessionStorage.getItem("adminAuthed") === "1" || adminSessionAuthed || !adminPasswordEnabled;
+        if (adminPasswordEnabled && !gateAuthed) {
+            if (statusEl) statusEl.textContent = "Enter the admin password to view earnings.";
+            return;
+        }
+        const now = Date.now();
+        const cacheEntry = earningsChartCache[range];
+        if (!force && cacheEntry && now - cacheEntry.fetched < EARNINGS_CACHE_MS) {
+            renderEarningsChart(cacheEntry.data);
+            if (statusEl) statusEl.textContent = "";
+            return;
+        }
+        const { from, to } = estimateHeightsForRange(range);
+        const body = {};
+        if (range !== "all_time" && (from === null || to === null)) {
+            if (statusEl) statusEl.textContent = "Waiting for latest block height...";
+            return;
+        }
+        if (range !== "all_time" && from !== null && to !== null) {
+            body.from_height = from;
+            body.to_height = to;
+        }
+        if (statusEl) statusEl.textContent = "Loading earnings...";
+        try {
+            const res = await fetch(resolveApi("/api/provider-totals"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+                body: JSON.stringify(body),
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                if (statusEl) statusEl.textContent = data && data.error ? `Error: ${data.error}` : `Error ${res.status}`;
+                renderEarningsChart([]);
+                return;
+            }
+            let services = Array.isArray(data.service_totals) ? data.service_totals : [];
+            if ((!services || !services.length) && providerServiceTotals && providerServiceTotals.length) {
+                services = providerServiceTotals;
+                if (statusEl && !(data && data.error)) {
+                    statusEl.textContent = "Showing current claim totals (no settled earnings yet).";
+                }
+            } else if (data && data.error && statusEl) {
+                statusEl.textContent = data.error;
+            }
+            const chartData = buildServiceChartEntries(services);
+            chartData.sort((a, b) => b.value - a.value);
+            const top = chartData.slice(0, 10);
+            earningsChartCache[range] = { data: top, fetched: now };
+            renderEarningsChart(top);
+            if (statusEl && !top.length) {
+                statusEl.textContent = "";
+            }
+        } catch (e) {
+            renderEarningsChart([]);
+            if (statusEl) statusEl.textContent = `Failed to load earnings: ${e}`;
+        }
+    }
+
+    function changeEarningsRange(range) {
+        loadEarningsByService(range, true);
+        earningsRange = range;
+        refreshContractTotals();
+    }
+
     async function refreshClaimTotals() {
         const el = document.getElementById("claimTotals");
         const hasContent = el && el.dataset.hasContent === "1";
@@ -741,6 +974,9 @@ let lastClaimsHeartbeat = null;
                     updateClaimsHeartbeat(lastClaimsRun);
                 }
                 renderClaimTotals();
+                if (providerServiceTotals && providerServiceTotals.length) {
+                    loadEarningsByService(earningsRange, true);
+                }
             } else if (!hasContent && el) {
                 el.textContent = "Error: " + JSON.stringify(data);
             }
@@ -839,6 +1075,9 @@ let lastClaimsHeartbeat = null;
             adminPasswordEnabled = false;
             adminSessionAuthed = false;
         }
+        if (adminPasswordEnabled && !adminSessionAuthed) {
+            sessionStorage.removeItem("adminAuthed");
+        }
         const gateAuthed = sessionStorage.getItem("adminAuthed") === "1" || adminSessionAuthed;
         const gate = document.getElementById("adminPasswordGate");
         if (gate) {
@@ -869,6 +1108,8 @@ let lastClaimsHeartbeat = null;
                 const gate = document.getElementById("adminPasswordGate");
                 if (gate) gate.classList.add("hidden");
                 if (statusEl) statusEl.textContent = "";
+                // Full reload to re-init all timers/fetches with the new session
+                window.location.reload();
             } else if (statusEl) {
                 statusEl.textContent = "Incorrect password.";
             }
@@ -1052,8 +1293,8 @@ let lastClaimsHeartbeat = null;
         const meta = (provObj && provObj.provider_metadata) || envMeta || {};
         const pickMeta = (key) => meta[key] || meta[key.toUpperCase()] || meta[key.toLowerCase()] || "";
 
-        const arkeodNode = pickEnv("EXTERNAL_ARKEOD_NODE") || pickEnv("ARKEOD_NODE") || pickMeta("EXTERNAL_ARKEOD_NODE") || pickMeta("ARKEOD_NODE");
-        const restApi = pickEnv("ARKEO_REST_API_PORT") || pickEnv("PROVIDER_HUB_URI") || pickMeta("ARKEO_REST_API_PORT") || pickMeta("PROVIDER_HUB_URI");
+        const arkeodNode = pickEnv("ARKEOD_NODE") || pickMeta("ARKEOD_NODE");
+        const restApi = pickEnv("ARKEO_REST_API_PORT") || pickMeta("ARKEO_REST_API_PORT");
         const sentinelNode = pickEnv("SENTINEL_NODE") || pickMeta("SENTINEL_NODE");
         const sentinelPort = pickEnv("SENTINEL_PORT") || pickMeta("SENTINEL_PORT") || "3636";
         const resolvedHost = extractHostFromValue(sentinelNode) || adminHost;
@@ -1173,11 +1414,17 @@ let lastClaimsHeartbeat = null;
         refreshContractTotals();
         refreshVitals();
         refreshClaimsHeartbeat();
-        setInterval(refreshInfo, 5000);
-        setInterval(refreshServices, 15000);
-        setInterval(refreshContractTotals, 15000);
-        setInterval(refreshVitals, 15000);
+        loadEarningsByService(earningsRange, true);
+        setInterval(refreshInfo, 10000);
+        setInterval(refreshServices, 20000);
+        setInterval(refreshContractTotals, 20000);
+        setInterval(refreshVitals, 20000);
         setInterval(refreshClaimsHeartbeat, 30000);
+        setInterval(() => {
+            loadEarningsByService(earningsRange).catch(() => {
+                /* ignore interval errors to avoid console noise */
+            });
+        }, 10000);
     });
     document.addEventListener('visibilitychange', () => {
         if (!document.hidden) {

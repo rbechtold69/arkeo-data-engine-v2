@@ -118,8 +118,28 @@ a { color: var(--blue-accent); }
 .muted { color: var(--muted); }
 .stack { display: flex; flex-direction: column; gap: 8px; }
 .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.actions.center { justify-content: center; }
 .pill-row { display: flex; gap: 12px; align-items: center; }
 .grid-two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: center; }
+.range-toggle { display: flex; gap: 8px; flex-wrap: wrap; }
+.toggle-btn {
+    background: #0b1220;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    padding: 8px 10px;
+    border-radius: 8px;
+    font-weight: 700;
+}
+.toggle-btn:hover {
+    border-color: var(--blue-accent);
+    color: var(--blue-accent);
+}
+.toggle-btn.active {
+    background: var(--blue-accent);
+    color: #fff;
+    border-color: var(--blue-accent);
+    box-shadow: 0 8px 18px rgba(59, 224, 255, 0.25);
+}
 
 .steps { display: grid; gap: 12px; }
 .step {
@@ -134,6 +154,18 @@ a { color: var(--blue-accent); }
     border: 1px solid var(--border);
     border-radius: 8px;
     padding: 12px;
+}
+.chart-wrapper {
+    background: #0b1220;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px;
+    margin-top: 12px;
+    min-height: 240px;
+}
+.chart-empty {
+    text-align: center;
+    padding: 30px 10px;
 }
 
 .btn {
@@ -423,30 +455,59 @@ pre {
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 0, 0, 0.92);
+    background: rgba(0, 0, 0, 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 999;
 }
+.overlay-strong {
+    background: rgba(0, 0, 0, 0.92);
+}
 .overlay-card {
     background: var(--panel);
     border: 1px solid var(--border-strong);
     border-radius: 10px;
-    padding: 20px 24px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.45);
-    max-width: 420px;
+    padding: 18px 20px;
+    box-shadow: 0 12px 36px rgba(0,0,0,0.5);
+    max-width: 360px;
     text-align: left;
 }
 .overlay-card h3 {
-    margin: 0 0 8px;
+    margin: 0 0 2px;
 }
 .overlay-card p {
-    margin: 0;
+    margin: 0 0 12px;
     color: #cbd5e1;
 }
+.password-card {
+    max-width: 420px;
+    width: 94%;
+    border-radius: 12px;
+    box-shadow: 0 14px 38px rgba(0,0,0,0.55);
+    text-align: center;
+}
+.password-body {
+    background: #040914;
+    border: 1px solid var(--border-strong);
+    border-radius: 10px;
+    padding: 18px;
+    margin-top: 10px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+}
+.password-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 18px;
+    font-weight: 800;
+    color: #e2e8f0;
+    margin-bottom: 4px;
+}
+.password-title .sep { color: #94a3b8; }
+.password-title .sub { color: var(--blue-accent); }
 .modal-card {
-    max-width: 640px;
+    max-width: 520px;
     width: 90%;
 }
 .fixed-modal {
@@ -496,6 +557,7 @@ pre {
     width: 0;
     overflow: hidden;
 }
+.small-text { font-size: 13px; }
 .mt-0 { margin-top: 0 !important; }
 .mt-6 { margin-top: 6px !important; }
 .mt-14 { margin-top: 14px !important; }

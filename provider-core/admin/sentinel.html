@@ -9,10 +9,13 @@
 </head>
 <body>
 
-<div id="savingOverlay" class="overlay hidden">
-    <div class="overlay-card">
-        <h3>Please wait…</h3>
-        <p>Updating sentinel config and restarting the sentinel. This can take up to ~15 seconds.</p>
+<div id="resultModal" class="overlay hidden">
+    <div class="overlay-card modal-card fixed-modal">
+        <h3 id="modalTitle">Result</h3>
+        <div id="modalBody" class="modal-body scroll-body"></div>
+        <div class="modal-actions">
+            <button id="modalCloseBtn" class="primary" type="button" onclick="closeModal()" disabled>OK</button>
+        </div>
     </div>
 </div>
 
@@ -29,8 +32,8 @@
             </div>
             <h1>Sentinel Management</h1>
         </div>
-        <div class="header-right">
-            <a class="btn primary" href="index.html">Back to Admin Home</a>
+        <div class="header-right header-right-with-actions">
+            <a class="btn-ghost" href="index.html">Back to Dashboard</a>
         </div>
     </div>
 </div>
@@ -82,10 +85,40 @@
         <tr>
             <td class="label">
                 Location
-                <div class="hint">Provider location text.</div>
+                <div class="hint">Select the region for this sentinel/provider.</div>
             </td>
             <td class="value">
-                <input type="text" id="location" />
+                <select id="locationSelect" required>
+                    <option value="">Select a region</option>
+                <option>Africa</option>
+                <option>Africa – Northern</option>
+                <option>Africa – Eastern</option>
+                <option>Africa – Middle</option>
+                <option>Africa – Western</option>
+                    <option>Africa – Southern</option>
+                    <option>Americas</option>
+                    <option>Americas – Northern</option>
+                    <option>Americas – Caribbean</option>
+                    <option>Americas – Central</option>
+                    <option>Americas – South</option>
+                    <option>Asia</option>
+                    <option>Asia – Central</option>
+                    <option>Asia – Eastern</option>
+                    <option>Asia – Southeastern</option>
+                    <option>Asia – Southern</option>
+                    <option>Asia – Western</option>
+                    <option>Europe</option>
+                    <option>Europe – Northern</option>
+                    <option>Europe – Eastern</option>
+                    <option>Europe – Southern</option>
+                    <option>Europe – Western</option>
+                    <option>Oceania</option>
+                    <option>Oceania – Australia &amp; New Zealand</option>
+                    <option>Oceania – Melanesia</option>
+                    <option>Oceania – Micronesia</option>
+                    <option>Oceania – Polynesia</option>
+                    <option>Antarctica</option>
+                </select>
             </td>
         </tr>
         <tr>
@@ -181,7 +214,6 @@
     <h3>Debug Info</h3>
 
     <button class="primary" onclick="loadInfo()">Refresh</button>
-    <button class="primary" onclick="exportSentinelBundle()">Export Sentinel Config</button>
     <pre id="sentinelMeta">(loading...)</pre>
     <pre id="exportResult" class="pre-wrap"></pre>
 
@@ -204,8 +236,53 @@
     let adminHost = (window.location && window.location.hostname) || "localhost";
     let adminApiBase = buildBaseUrl(adminHost, DEFAULT_ADMIN_API_PORT);
     let adminPasswordEnabled = false;
+    let adminSessionAuthed = false;
+    function requirePasswordGate() {
+        sessionStorage.removeItem("adminAuthed");
+        adminSessionAuthed = false;
+        const gate = document.getElementById("adminPasswordGate");
+        if (gate) gate.classList.remove("hidden");
+    }
     const realFetch = window.fetch.bind(window);
-    window.fetch = (url, options = {}) => realFetch(url, { credentials: "include", ...options });
+    window.fetch = (url, options = {}) =>
+        realFetch(url, { credentials: "include", ...options }).then((resp) => {
+            if (resp && resp.status === 401) {
+                requirePasswordGate();
+            }
+            return resp;
+        });
+
+    function resetModal(title, body) {
+        const modal = document.getElementById("resultModal");
+        const modalTitle = document.getElementById("modalTitle");
+        const modalBody = document.getElementById("modalBody");
+        if (modalTitle) modalTitle.textContent = title || "Result";
+        if (modalBody) modalBody.textContent = body || "";
+        setModalCloseEnabled(false);
+        if (modal) modal.style.display = "flex";
+    }
+
+    function appendModalLine(text) {
+        const modalBody = document.getElementById("modalBody");
+        if (!modalBody) return;
+        const current = modalBody.textContent || "";
+        modalBody.textContent = current ? `${current}\n${text}` : text;
+        modalBody.scrollTop = modalBody.scrollHeight;
+    }
+
+    function setModalCloseEnabled(enabled) {
+        const btn = document.getElementById("modalCloseBtn");
+        if (!btn) return;
+        btn.disabled = !enabled;
+        if (enabled) btn.removeAttribute("disabled");
+        else btn.setAttribute("disabled", "disabled");
+    }
+
+    function closeModal() {
+        const modal = document.getElementById("resultModal");
+        if (modal) modal.style.display = "none";
+        window.location.href = "index.html";
+    }
 
     function buildBaseUrl(host, port) {
         const proto = (window.location && window.location.protocol === "https:") ? "https:" : "http:";
@@ -240,23 +317,35 @@
         debug.textContent = "Loading...";
         try {
             // Use loopback for metadata fetch in the form to avoid external loopback issues
-            const [provRes, cfgRes, metaRes] = await Promise.all([
+            const [provRes, cfgRes, metaRes, settingsRes] = await Promise.all([
                 fetch(resolveApi("/api/provider-info")),
                 fetch(resolveApi("/api/sentinel-config")),
                 fetch(resolveApi("/api/sentinel-metadata?loopback=1")),
+                fetch(resolveApi("/api/provider-settings"), { cache: "no-store" }),
             ]);
             const prov = await provRes.json();
             const cfg = await cfgRes.json();
             const meta = await metaRes.json();
+            const providerSettings = settingsRes.ok ? await settingsRes.json() : {};
+            const ps = (providerSettings && providerSettings.settings) || providerSettings || {};
             const metaCfg = (meta && meta.metadata && meta.metadata.config) || (meta && meta.config) || {};
+            const settingsNode = (ps && ps.ARKEOD_NODE) || "";
+            const settingsSentinelBase = (ps && ps.SENTINEL_NODE) || "";
+            const settingsSentinelPort = (ps && ps.SENTINEL_PORT) || "";
+            let sentinelFromSettings = settingsSentinelBase ? settingsSentinelBase.replace(/\/+$/, "") : "";
+            if (sentinelFromSettings && settingsSentinelPort) {
+                sentinelFromSettings = `${sentinelFromSettings}:${settingsSentinelPort}`;
+            }
+            const sentinelUriVal = sentinelFromSettings || "(not set)";
+            const nodeVal = settingsNode || "(not set)";
+            document.getElementById("sentinelUri").textContent = sentinelUriVal;
+            document.getElementById("arkeodNode").textContent = nodeVal;
 
             if (provRes.ok) {
-                document.getElementById("sentinelUri").textContent = prov.sentinel_uri || cfg.sentinel_uri_default || "(not set)";
-                document.getElementById("arkeodNode").textContent = prov.arkeod_node || "(not set)";
                 document.getElementById("walletKey").textContent = prov.user || "(not set)";
                 document.getElementById("bech32Pubkey").textContent =
                     (prov.pubkey && prov.pubkey.bech32) || prov.pubkey_error || "(not set)";
-                if (prov.sentinel_uri) setAdminHost(prov.sentinel_uri);
+                if (sentinelUriVal && sentinelUriVal !== "(not set)") setAdminHost(sentinelUriVal);
             }
 
             const yamlEl = document.getElementById("sentinelYaml");
@@ -279,7 +368,23 @@
             document.getElementById("moniker").value = pick(metaCfg.moniker, envFile.MONIKER, "");
             document.getElementById("website").value = pick(metaCfg.website, envFile.WEBSITE, "");
             document.getElementById("description").value = pick(metaCfg.description, envFile.DESCRIPTION, "");
-            document.getElementById("location").value = pick(metaCfg.location, envFile.LOCATION, "");
+            let locVal = pick(metaCfg.location, envFile.LOCATION, "");
+            if (locVal && locVal.trim().toLowerCase() === "default location") {
+                locVal = "";
+            }
+            const locSelect = document.getElementById("locationSelect");
+            if (locSelect) {
+                const exists = Array.from(locSelect.options).some(opt => opt.value === locVal);
+                // If the location is missing or not in the allowed list, reset to placeholder.
+                if (!locVal || !exists) {
+                    locVal = "";
+                }
+                locSelect.value = locVal;
+                // If no location is set, ensure placeholder stays selected
+                if (!locVal || locSelect.selectedIndex === -1) {
+                    locSelect.selectedIndex = 0;
+                }
+            }
             document.getElementById("freeRateLimit").value = pick(metaFreeRate, envFile.FREE_RATE_LIMIT, "");
             document.getElementById("freeRateLimitDuration").value = pick(metaFreeDur, envFile.FREE_RATE_LIMIT_DURATION, "");
 
@@ -293,28 +398,26 @@
         }
     }
 
-    function showSavingOverlay(show) {
-        const el = document.getElementById("savingOverlay");
-        if (!el) return;
-        el.style.display = show ? "flex" : "none";
-    }
-
     async function fetchAdminPasswordStatus(showGate = true) {
         try {
-            const res = await fetch(resolveApi("/api/admin-password"), { cache: "no-store" });
+            const res = await fetch(resolveApi("/api/session"), { cache: "no-store" });
             const data = await res.json();
             adminPasswordEnabled = !!(data && data.enabled);
-            const gateAuthed = sessionStorage.getItem("adminAuthed") === "1";
-            const gate = document.getElementById("adminPasswordGate");
-            if (gate) {
-                if (showGate && adminPasswordEnabled && !gateAuthed) {
-                    gate.classList.remove("hidden");
-                } else {
-                    gate.classList.add("hidden");
-                }
-            }
+            adminSessionAuthed = !!(data && data.authed);
         } catch (e) {
             // ignore
+        }
+        if (adminPasswordEnabled && !adminSessionAuthed) {
+            sessionStorage.removeItem("adminAuthed");
+        }
+        const gateAuthed = sessionStorage.getItem("adminAuthed") === "1" || adminSessionAuthed;
+        const gate = document.getElementById("adminPasswordGate");
+        if (gate) {
+            if (showGate && adminPasswordEnabled && !gateAuthed) {
+                gate.classList.remove("hidden");
+            } else {
+                gate.classList.add("hidden");
+            }
         }
     }
 
@@ -333,9 +436,11 @@
             const data = await res.json();
             if (data && data.ok) {
                 sessionStorage.setItem("adminAuthed", "1");
+                adminSessionAuthed = true;
                 const gate = document.getElementById("adminPasswordGate");
                 if (gate) gate.classList.add("hidden");
                 if (statusEl) statusEl.textContent = "";
+                window.location.href = "index.html";
             } else if (statusEl) {
                 statusEl.textContent = "Incorrect password.";
             }
@@ -344,59 +449,66 @@
         }
     }
 
-    async function exportSentinelBundle() {
-        const resEl = document.getElementById("exportResult");
-        if (resEl) {
-            resEl.style.display = "block";
-            resEl.textContent = "Exporting sentinel config...";
-        }
-        try {
-            const res = await fetch(resolveApi("/api/provider-export"), { method: "POST" });
-            const data = await res.json();
-            if (res.ok) {
-                const pretty = JSON.stringify(data.export, null, 2);
-                resEl.textContent = `Exported to ${data.path || "(unknown)"}${data.bytes ? ` (${data.bytes} bytes)` : ""}\n\n${pretty}`;
-            } else {
-                resEl.textContent = `Export failed: ${JSON.stringify(data, null, 2)}`;
-            }
-        } catch (e) {
-            if (resEl) resEl.textContent = "Export request failed: " + e;
-        }
-    }
-
     async function saveConfig() {
-        const btn = document.getElementById("saveSentinelBtn");
-        if (btn) { btn.disabled = true; btn.textContent = "Saving..."; }
-        showSavingOverlay(true);
         const payload = {
             provider_name: document.getElementById("providerName").value.trim(),
             moniker: document.getElementById("moniker").value.trim(),
             website: document.getElementById("website").value.trim(),
             description: document.getElementById("description").value.trim(),
-            location: document.getElementById("location").value.trim(),
+            location: (() => {
+                const select = document.getElementById("locationSelect");
+                const v = (select && select.value ? select.value : "").trim();
+                // Only allow values from the dropdown; otherwise treat as unset.
+                const allowed = select ? Array.from(select.options).map(o => o.value) : [];
+                if (!v || v.toLowerCase() === "default location" || (allowed.length && !allowed.includes(v))) {
+                    return "";
+                }
+                return v;
+            })(),
             free_rate_limit: document.getElementById("freeRateLimit").value.trim(),
             free_rate_limit_duration: document.getElementById("freeRateLimitDuration").value.trim(),
         };
+        const locSelect = document.getElementById("locationSelect");
+        if (!payload.location || (locSelect && (locSelect.selectedIndex === 0 || !locSelect.value.trim()))) {
+            alert("Please select a location.");
+            return;
+        }
+        const btn = document.getElementById("saveSentinelBtn");
+        if (btn) { btn.disabled = true; btn.textContent = "Saving..."; }
+        resetModal("Save Sentinel Config", "Starting save...");
         const resEl = document.getElementById("saveResult");
-        resEl.style.display = "block";
-        resEl.textContent = "Saving...";
+        if (resEl) {
+            resEl.style.display = "none";
+            resEl.textContent = "";
+        }
+        appendModalLine("Preparing payload...");
+        appendModalLine("Saving sentinel config (this may restart the sentinel)...");
         try {
+            appendModalLine("Sending request to admin API...");
             const res = await fetch(resolveApi("/api/sentinel-config"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload),
             });
             const data = await res.json();
-            resEl.textContent = res.ok ? "Saved:\n" + JSON.stringify(data, null, 2) : "Error:\n" + JSON.stringify(data, null, 2);
             if (res.ok) {
-                window.location.href = "index.html";
+                appendModalLine("Saved sentinel config successfully.");
+                appendModalLine("Response:");
+                appendModalLine(JSON.stringify(data, null, 2));
+                appendModalLine("");
+                appendModalLine("Sentinel update completed. Allow a few seconds for the Sentinel to come back up.");
+                setModalCloseEnabled(true);
+            }
+            else {
+                appendModalLine("Error while saving:");
+                appendModalLine(JSON.stringify(data, null, 2));
+                setModalCloseEnabled(true);
             }
         } catch (e) {
-            resEl.textContent = "Request failed: " + e;
+            appendModalLine("Request failed: " + e);
+            setModalCloseEnabled(true);
         } finally {
             if (btn) { btn.disabled = false; btn.textContent = "Save Sentinel Config"; }
-            // Hide overlay only if we stay on the page (errors)
-            showSavingOverlay(false);
         }
     }
 
@@ -406,14 +518,21 @@
     });
 </script>
 
-<div id="adminPasswordGate" class="overlay hidden">
-    <div class="overlay-card modal-card">
-        <h3>Admin Password Required</h3>
-        <p class="muted">Enter the admin password to continue.</p>
+<div id="adminPasswordGate" class="overlay overlay-strong hidden">
+    <div class="overlay-card password-card">
+        <div class="password-title">
+            <span>Arkeo Data Marketplace</span>
+            <span class="sep">|</span>
+            <span class="sub">Provider Manager</span>
+        </div>
         <form onsubmit="submitAdminPasswordGate(event); return false;">
-            <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
-            <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
-            <div class="actions mt-6">
+            <div class="password-body">
+                <h3 class="mt-6 mb-0">Password Required</h3>
+                <p class="muted">Enter the admin password to continue.</p>
+                <input type="text" name="admin-username-filler" autocomplete="username" value="admin" class="hidden" aria-hidden="true" tabindex="-1" />
+                <input type="password" id="adminPasswordGateInput" autocomplete="current-password" placeholder="Admin password" />
+            </div>
+            <div class="actions center mt-6">
                 <button class="primary" type="submit">Unlock</button>
             </div>
             <div id="adminPasswordGateStatus" class="muted mt-6"></div>
