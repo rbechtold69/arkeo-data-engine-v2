@@ -242,7 +242,6 @@
 
     async function detectAdminApiBase() {
         const tried = new Set();
-        const urlPort = (window.location && window.location.port) || null;
         // Try explicit API host/port if passed in URL (?api_host=..&api_port=..)
         let apiHostOverride = null;
         let apiPortOverride = null;
@@ -256,7 +255,6 @@
             apiPortOverride,
             "9990",
             DEFAULT_ADMIN_API_PORT,
-            urlPort,
             "9999",
         ].filter(Boolean);
         for (const port of candidatePorts) {

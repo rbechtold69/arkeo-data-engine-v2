@@ -402,11 +402,16 @@
             const apiCfg = (cfg.config && cfg.config.api) || {};
             const envFile = cfg.env_file || {};
             const pick = (...vals) => vals.find(v => v !== undefined && v !== null && `${v}`.trim() !== "");
+            const defaultListenPort = settingsSentinelPort || "3636";
             const metaFreeRate = pick(metaCfg.free_tier_rate_limit, metaCfg.free_rate_limit, metaCfg.freeRateLimit);
             const metaFreeDur = pick(metaCfg.free_tier_rate_limit_duration, metaCfg.free_rate_limit_duration, metaCfg.freeRateLimitDuration);
             document.getElementById("providerName").value = pick(metaCfg.provider_name, providerCfg.name, envFile.PROVIDER_NAME, "");
             document.getElementById("providerPubkey").textContent = pick(metaCfg.provider_pubkey, providerCfg.pubkey, prov.pubkey && prov.pubkey.bech32, "(not set)");
-            document.getElementById("listenAddr").textContent = pick(metaCfg.port && `0.0.0.0:${metaCfg.port}`, apiCfg.listen_addr, "0.0.0.0:3636");
+            document.getElementById("listenAddr").textContent = pick(
+                apiCfg.listen_addr,
+                metaCfg.port && `0.0.0.0:${metaCfg.port}`,
+                `0.0.0.0:${defaultListenPort}`
+            );
             document.getElementById("moniker").value = pick(metaCfg.moniker, envFile.MONIKER, "");
             document.getElementById("website").value = pick(metaCfg.website, envFile.WEBSITE, "");
             document.getElementById("description").value = pick(metaCfg.description, envFile.DESCRIPTION, "");

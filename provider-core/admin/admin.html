@@ -415,7 +415,7 @@
             if (apiVersionEl) apiVersionEl.textContent = version && !version.error ? version.arkeod_version || "(unknown)" : "Unavailable";
 
             const apiUrlEl = document.getElementById("adminApiUrl");
-            if (apiUrlEl) apiUrlEl.textContent = buildBaseUrl(adminHost, DEFAULT_ADMIN_API_PORT) + "/api/version";
+            if (apiUrlEl) apiUrlEl.textContent = `${adminApiBase}/api/version`;
 
             const uiUrlEl = document.getElementById("adminUiUrl");
             if (uiUrlEl) uiUrlEl.textContent = buildBaseUrl(adminHost, DEFAULT_ADMIN_UI_PORT);

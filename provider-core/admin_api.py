@@ -120,7 +120,6 @@ ENV_EXPORT_KEYS = [
     "PORT",
     "SOURCE_CHAIN",
     "ARKEO_REST_API_PORT",
-    "EVENT_STREAM_HOST",
     "FREE_RATE_LIMIT",
     "FREE_RATE_LIMIT_DURATION",
     "CLAIM_STORE_LOCATION",
@@ -129,9 +128,10 @@ ENV_EXPORT_KEYS = [
     "LOG_LEVEL",
     "PROVIDER_PUBKEY",
     "ARKEOD_NODE",
-    "EXTERNAL_ARKEOD_NODE",
     "SENTINEL_NODE",
     "SENTINEL_PORT",
+    "ADMIN_PORT",
+    "ADMIN_API_PORT",
 ]
 
 def _normalize_base(url: str | None, default_port: str | None = None, default_scheme: str = "http") -> str:
@@ -1436,11 +1436,7 @@ def _origin_allowed(origin: str | None) -> bool:
 def _cors_headers():
     origin = request.headers.get("Origin")
     headers = {}
-    allow_origin = None
-    if _origin_allowed(origin):
-        allow_origin = origin
-    elif ADMIN_UI_ORIGIN:
-        allow_origin = ADMIN_UI_ORIGIN
+    allow_origin = origin or ADMIN_UI_ORIGIN
     if allow_origin:
         headers["Access-Control-Allow-Origin"] = allow_origin
         headers["Vary"] = "Origin"
@@ -1485,6 +1481,18 @@ def _merge_provider_settings(overrides: dict | None = None) -> dict:
     if merged.get("EXTERNAL_ARKEOD_NODE") and not merged.get("ARKEOD_NODE"):
         merged["ARKEOD_NODE"] = merged["EXTERNAL_ARKEOD_NODE"]
     merged.pop("EXTERNAL_ARKEOD_NODE", None)
+    merged.pop("EVENT_STREAM_HOST", None)
+    try:
+        env_file = _load_env_file(SENTINEL_ENV_PATH)
+        if env_file:
+            if env_file.get("ARKEO_REST_API_PORT"):
+                merged["ARKEO_REST_API_PORT"] = env_file["ARKEO_REST_API_PORT"]
+            if env_file.get("SENTINEL_PORT"):
+                merged["SENTINEL_PORT"] = env_file["SENTINEL_PORT"]
+            if env_file.get("SENTINEL_NODE"):
+                merged["SENTINEL_NODE"] = env_file["SENTINEL_NODE"]
+    except Exception:
+        pass
     merged["ARKEOD_HOME"] = _expand_tilde(merged.get("ARKEOD_HOME") or ARKEOD_HOME)
     if not merged.get("ARKEOD_NODE"):
         merged["ARKEOD_NODE"] = ARKEOD_NODE
@@ -2019,7 +2027,8 @@ def sentinel_rebuild():
         "name": provider_cfg.get("name") or os.getenv("PROVIDER_NAME") or "Arkeo Provider",
     }
     parsed["services"] = normalized_services
-    parsed["api"] = api_cfg or {"listen_addr": "0.0.0.0:3636"}
+    fallback_port = os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT
+    parsed["api"] = api_cfg or {"listen_addr": f"0.0.0.0:{fallback_port}"}
 
     try:
         with open(SENTINEL_CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -2183,7 +2192,25 @@ def provider_settings_save():
             for k, v in env_file.items():
                 f.write(f"{k}={shlex.quote(str(v))}\n")
     except Exception:
-        app.logger.warning("provider-settings-save: failed to sync PROVIDER_HUB_URI to sentinel env", exc_info=True)
+        app.logger.warning("provider-settings-save: failed to sync ARKEO_REST_API_PORT to sentinel env", exc_info=True)
+
+    # Sync sentinel port across env and sentinel.yaml
+    try:
+        sentinel_port = str(merged.get("SENTINEL_PORT") or os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT)
+        env_file = _load_env_file(SENTINEL_ENV_PATH)
+        env_file["SENTINEL_PORT"] = sentinel_port
+        with open(SENTINEL_ENV_PATH, "w", encoding="utf-8") as f:
+            for k, v in env_file.items():
+                f.write(f"{k}={shlex.quote(str(v))}\n")
+        cfg, _ = _load_sentinel_config()
+        if not isinstance(cfg, dict):
+            cfg = {}
+        api_cfg = cfg.setdefault("api", {})
+        api_cfg["listen_addr"] = f"0.0.0.0:{sentinel_port}"
+        with open(SENTINEL_CONFIG_PATH, "w", encoding="utf-8") as f:
+            yaml.safe_dump(cfg, f, sort_keys=False)
+    except Exception:
+        app.logger.warning("provider-settings-save: failed to sync sentinel port", exc_info=True)
 
     raw_pk, bech32_pk, pub_err = derive_pubkeys(
         merged.get("KEY_NAME") or KEY_NAME, merged.get("KEY_KEYRING_BACKEND") or KEYRING
