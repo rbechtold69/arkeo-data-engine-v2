@@ -558,6 +558,7 @@ pre {
     overflow: hidden;
 }
 .small-text { font-size: 13px; }
+.status-inline { color: #ffffff; }
 .mt-0 { margin-top: 0 !important; }
 .mt-6 { margin-top: 6px !important; }
 .mt-14 { margin-top: 14px !important; }

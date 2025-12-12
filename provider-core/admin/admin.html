@@ -75,50 +75,47 @@
             <h2 class="mt-0 mb-0">Provider Settings</h2>
             <div class="hint">Values formerly stored in provider.env. Update and save here.</div>
         </div>
-        <div class="actions">
-            <button class="primary" type="submit" form="providerSettingsForm">Save Settings</button>
-        </div>
     </div>
     <form id="providerSettingsForm" onsubmit="saveProviderSettings(event)">
     <table>
         <tr>
-            <td class="label">Key Name</td>
+            <td class="label">Key Name<div class="hint">Key alias for the hotwallet used by this provider.</div></td>
             <td class="value"><input type="text" id="keyName" readonly /></td>
         </tr>
         <tr>
-            <td class="label">Keyring Backend <span class="muted" id="keyBackendLabel">(default)</span></td>
+            <td class="label">Keyring Backend <span class="muted" id="keyBackendLabel">(default)</span><div class="hint">Keyring storage backend (read-only in this UI).</div></td>
             <td class="value"><div id="keyBackendValue" class="muted">(read-only)</div></td>
         </tr>
         <tr>
-            <td class="label">Chain ID</td>
+            <td class="label">Chain ID<div class="hint">Target Arkeo chain ID for all RPC/REST calls.</div></td>
             <td class="value"><input type="text" id="chainId" /></td>
         </tr>
         <tr>
-            <td class="label">Arkeod Home <span class="muted" id="arkeodHomeLabel"></span></td>
+            <td class="label">Arkeod Home <span class="muted" id="arkeodHomeLabel"></span><div class="hint">Filesystem path where arkeod stores keys and data.</div></td>
             <td class="value"><div id="arkeodHomeValue" class="muted">(read-only)</div></td>
         </tr>
         <tr>
-            <td class="label">Arkeod Node (RPC)</td>
+            <td class="label">Arkeod Node (RPC)<div class="hint">RPC endpoint arkeod uses (tcp://host:port).</div></td>
             <td class="value"><input type="text" id="arkeodNode" placeholder="tcp://127.0.0.1:26657" /></td>
         </tr>
         <tr>
-            <td class="label">Arkeo REST API</td>
+            <td class="label">Arkeo REST API<div class="hint">REST endpoint for Arkeo queries (http://host:port).</div></td>
             <td class="value"><input type="text" id="arkeodRest" placeholder="http://127.0.0.1" /></td>
         </tr>
         <tr>
-            <td class="label">Sentinel Node</td>
+            <td class="label">Sentinel Node<div class="hint">Base URL for the sentinel host (no port).</div></td>
             <td class="value"><input type="text" id="sentinelNode" placeholder="http://127.0.0.1" /></td>
         </tr>
         <tr>
-            <td class="label">Sentinel Port</td>
+            <td class="label">Sentinel Port<div class="hint">Port where the sentinel API serves metadata.</div></td>
             <td class="value"><input type="text" id="sentinelPort" placeholder="3636" /></td>
         </tr>
         <tr>
-            <td class="label">Admin UI Port</td>
+            <td class="label">Admin UI Port<div class="hint">Port for the web dashboard (this page).</div></td>
             <td class="value"><input type="text" id="adminPort" placeholder="8080" autocomplete="on" /></td>
         </tr>
         <tr>
-            <td class="label">Admin API Port</td>
+            <td class="label">Admin API Port<div class="hint">Port for the admin API backing all pages.</div></td>
             <td class="value"><input type="text" id="adminApiPort" placeholder="9999" autocomplete="on" /></td>
         </tr>
         <tr>
@@ -136,11 +133,14 @@
             <td class="value"><input type="password" id="adminPasswordInput" class="full" autocomplete="new-password" placeholder="(optional)" /></td>
         </tr>
         <tr>
-            <td class="label">Derived Pubkey</td>
+            <td class="label">Derived Pubkey<div class="hint">Pubkey derived from the hotwallet key (read-only).</div></td>
             <td class="value"><div id="providerPubkeyDisplay" class="muted">(loading...)</div></td>
         </tr>
     </table>
-    <div id="providerSettingsResult" class="muted" aria-live="polite"></div>
+    <div class="actions mt-12 align-center" style="justify-content: flex-start; gap: 12px; flex-wrap: wrap;">
+        <button class="primary" type="submit">Save Settings</button>
+        <div id="providerSettingsResult" class="status-inline" aria-live="polite"></div>
+    </div>
     </form>
 </div>
 
