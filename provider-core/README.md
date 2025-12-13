@@ -17,7 +17,8 @@ CHAIN_ID="arkeo-main-v1"
 
 ARKEOD_HOME=~/.arkeo
 EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657
-ARKEO_REST_API_PORT=http://provider1.innovationtheory.com:1317
+# use PROVIDER_HUB_URI
+# ARKEO_REST_API_PORT=http://provider1.innovationtheory.com:1317
 
 SENTINEL_NODE=http://provider-core-1.innovationtheory.com
 SENTINEL_PORT=3636

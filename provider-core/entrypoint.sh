@@ -33,8 +33,8 @@ RPC_URL_DEFAULT=${SENTINEL_RPC_URL:-$ARKEOD_NODE}
 # If rpc url is tcp:// convert to http:// for sentinel
 RPC_URL_DEFAULT=${RPC_URL_DEFAULT/tcp:\/\//http:\/\/}
 ADMIN_PORT=${ADMIN_PORT:-8080}
-# If provided, prefer ARKEO_REST_API_PORT as the provider hub URI default
-PROVIDER_HUB_URI=${PROVIDER_HUB_URI:-${ARKEO_REST_API_PORT:-}}
+# PROVIDER_HUB_URI is the provider REST base
+PROVIDER_HUB_URI=${PROVIDER_HUB_URI:-}
 ADMIN_API_PORT=${ADMIN_API_PORT:-9999}
 
 # Default sentinel-related envs (used by sentinel binary)
@@ -106,16 +106,6 @@ else
   # Echo the original output so the user sees the standard arkeod message
   echo "$MNEMONIC_OUTPUT"
 
-  # Try to extract the mnemonic section and save it to a file for convenience
-  echo "$MNEMONIC_OUTPUT" | grep -A 50 "Important" > "$ARKEOD_HOME/${KEY_NAME}_mnemonic.txt" || true
-
-  echo ""
-  echo "---------------------------------------------------------------"
-  echo " The mnemonic (and related output) has been saved to:"
-  echo "   $ARKEOD_HOME/${KEY_NAME}_mnemonic.txt"
-  echo " Please back this up securely and treat it like a private key."
-  echo "---------------------------------------------------------------"
-
 fi
 
 # Derive pubkey for sentinel/config use (robustly)
@@ -183,9 +173,9 @@ DEFAULT_LOG_LEVEL=${LOG_LEVEL:-"debug"}
 SENTINEL_CONFIG_PATH=/app/config/sentinel.yaml
 if [ ! -f "$SENTINEL_CONFIG_PATH" ]; then
   PROVIDER_NAME=${DEFAULT_PROVIDER_NAME}
-  SERVICE_NAME=${SENTINEL_SERVICE_NAME:-arkeo-mainnet-fullnode}
-  SERVICE_ID=${SENTINEL_SERVICE_ID:-2}
-  SERVICE_TYPE=${SENTINEL_SERVICE_TYPE:-arkeo}
+  SERVICE_NAME=${SENTINEL_SERVICE_NAME:-default}
+  SERVICE_ID=${SENTINEL_SERVICE_ID:-0}
+  SERVICE_TYPE=${SENTINEL_SERVICE_TYPE:-empty}
   LISTEN_ADDR=${SENTINEL_LISTEN_ADDR:-0.0.0.0:3636}
   cat > "$SENTINEL_CONFIG_PATH" <<EOF
 provider:
@@ -363,7 +353,7 @@ CLEAN_DESCRIPTION=$(strip_quotes "${DESCRIPTION:-$DEFAULT_DESCRIPTION}")
 CLEAN_LOCATION=$(strip_quotes "${LOCATION:-$DEFAULT_LOCATION}")
 CLEAN_FREE_RATE_LIMIT=$(strip_quotes "${FREE_RATE_LIMIT:-$DEFAULT_FREE_RATE_LIMIT}")
 CLEAN_FREE_RATE_LIMIT_DURATION=$(strip_quotes "${FREE_RATE_LIMIT_DURATION:-$DEFAULT_FREE_RATE_LIMIT_DURATION}")
-CLEAN_PROVIDER_HUB_URI=$(strip_quotes "${PROVIDER_HUB_URI:-$ARKEO_REST_API_PORT}")
+CLEAN_PROVIDER_HUB_URI=$(strip_quotes "${PROVIDER_HUB_URI:-}")
 CLEAN_EVENT_STREAM_HOST=$(strip_quotes "${EVENT_STREAM_HOST:-127.0.0.1:26657}")
 CLEAN_CLAIM_STORE_LOCATION=$(strip_quotes "${CLAIM_STORE_LOCATION:-$DEFAULT_CLAIM_STORE_LOCATION}")
 CLEAN_CONTRACT_CONFIG_STORE_LOCATION=$(strip_quotes "${CONTRACT_CONFIG_STORE_LOCATION:-$DEFAULT_CONTRACT_CONFIG_STORE_LOCATION}")

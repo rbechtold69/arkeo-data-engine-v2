@@ -50,9 +50,19 @@
                     <div class="hint">Select an Arkeo supported service you want to provide on the Arkeo Marketplace.</div>
                 </td>
                 <td class="value">
-                    <select id="bondService" required>
-                        <option value="">Select a service</option>
-                    </select>
+                    <div class="combo-select">
+                        <div id="bondServiceDropdown" class="combo-display" onclick="toggleBondServiceMenu(event)">
+                            <span id="bondServiceSelected">Select a service</span>
+                            <span class="combo-caret">▾</span>
+                        </div>
+                        <div id="bondServiceMenu" class="combo-menu hidden">
+                            <input type="text" id="bondServiceSearchInput" class="full combo-search" placeholder="Search services..." oninput="filterBondServiceOptions()" autocomplete="off" />
+                            <div id="bondServiceOptions" class="combo-options"></div>
+                        </div>
+                        <select id="bondService" class="hidden" required>
+                            <option value="">Select a service</option>
+                        </select>
+                    </div>
                 </td>
             </tr>
             <tr>
@@ -473,6 +483,15 @@ window.fetch = (url, options = {}) =>
         if (label) label.textContent = normalized || "(not set)";
     }
 
+    document.addEventListener("click", (e) => {
+        const menu = document.getElementById("bondServiceMenu");
+        const dd = document.getElementById("bondServiceDropdown");
+        if (!menu || !dd) return;
+        if (!dd.contains(e.target) && !menu.contains(e.target)) {
+            menu.classList.add("hidden");
+        }
+    });
+
     function pullPendingEdit() {
         try {
             const raw = localStorage.getItem("providerServiceEdit");
@@ -492,6 +511,8 @@ window.fetch = (url, options = {}) =>
 
     async function loadServices() {
         const select = document.getElementById("bondService");
+        const search = document.getElementById("bondServiceSearchInput");
+        if (search) search.value = "";
         select.innerHTML = '<option value="">Loading services...</option>';
         try {
             const res = await fetch(resolveApi("/api/services"));
@@ -538,6 +559,7 @@ window.fetch = (url, options = {}) =>
             }
             setPre("servicesDebug", "");
             servicesLoaded = true;
+            renderBondServiceOptions(sorted);
             applyPendingEdit();
             applyCachedProviderForm();
         } catch (e) {
@@ -640,7 +662,18 @@ window.fetch = (url, options = {}) =>
             appendModalLine("Bond contract success.");
             appendModalLine("Mod contract success.");
             appendModalLine("");
-            // Only rebuild sentinel if bond+mod succeeded
+            // Determine service type from catalog for sentinel.yaml
+            let resolvedType = payload.service;
+            const catalogEntry = servicesCatalog.find(
+                (s) =>
+                    String(s.id ?? s.service_id ?? s.service ?? "") === String(serviceId) ||
+                    s.name === payload.service ||
+                    s.service === payload.service
+            );
+            if (catalogEntry && catalogEntry.service_type) {
+                resolvedType = catalogEntry.service_type;
+            }
+            // Only rebuild sentinel if bond+mod succeeded (no restart here)
             try {
                 appendModalLine("Updating Sentinel...");
                 const rebuildRes = await fetch(resolveApi("/api/sentinel-rebuild"), {
@@ -656,6 +689,8 @@ window.fetch = (url, options = {}) =>
                                 rpc_url: rpcUrlVal,
                                 rpc_user: rpcUserVal,
                                 rpc_pass: rpcPassVal,
+                                type: resolvedType,
+                                service_type: resolvedType,
                             },
                         ],
                     }),
@@ -685,7 +720,7 @@ window.fetch = (url, options = {}) =>
                 setModalCloseEnabled(true);
                 return;
             }
-            // Optional: sync sentinel.yaml with on-chain active services after a short delay
+            // Optional: sync sentinel.yaml with on-chain active services after a short delay (restart happens here)
             try {
                 await new Promise((resolve) => setTimeout(resolve, 6500)); // ~1 block
                 const syncRes = await fetch(resolveApi("/api/sentinel-sync"), { method: "POST" });
@@ -888,6 +923,73 @@ window.fetch = (url, options = {}) =>
         return false;
     }
 
+    function renderBondServiceOptions(sorted) {
+        const menu = document.getElementById("bondServiceOptions");
+        const select = document.getElementById("bondService");
+        if (!menu || !select) return;
+        menu.innerHTML = "";
+        for (const svc of sorted) {
+            const id = svc.id ?? "";
+            const name = svc.name ?? "";
+            const desc = svc.description ?? "";
+            if (!id && !name) continue;
+            const opt = document.createElement("div");
+            opt.className = "combo-option";
+            opt.dataset.value = name || id;
+            opt.dataset.id = id;
+            const label = name ? `${name} (${id})` : id;
+            opt.textContent = desc ? `${desc} (${name || id} : ${id})` : label;
+            opt.onclick = () => {
+                select.value = opt.dataset.value;
+                updateBondServiceDisplay(opt.textContent || opt.dataset.value || "Select a service");
+                closeBondServiceMenu();
+            };
+            menu.appendChild(opt);
+        }
+        updateBondServiceDisplay();
+    }
+
+    function filterBondServiceOptions() {
+        const search = document.getElementById("bondServiceSearchInput");
+        const menu = document.getElementById("bondServiceOptions");
+        if (!menu) return;
+        const q = (search && search.value ? search.value : "").trim().toLowerCase();
+        for (const opt of Array.from(menu.children)) {
+            const txt = (opt.textContent || "").toLowerCase();
+            opt.style.display = q && !txt.includes(q) ? "none" : "block";
+        }
+    }
+
+    function updateBondServiceDisplay(forceLabel) {
+        const display = document.getElementById("bondServiceSelected");
+        const select = document.getElementById("bondService");
+        if (!display || !select) return;
+        if (forceLabel) {
+            display.textContent = forceLabel;
+            return;
+        }
+        const opt = select.selectedIndex >= 0 ? select.options[select.selectedIndex] : null;
+        display.textContent = (opt && opt.textContent) || "Select a service";
+    }
+
+    function toggleBondServiceMenu(evt) {
+        evt?.stopPropagation();
+        const menu = document.getElementById("bondServiceMenu");
+        if (!menu) return;
+        const isHidden = menu.classList.contains("hidden");
+        document.querySelectorAll(".combo-menu").forEach((el) => el.classList.add("hidden"));
+        if (isHidden) {
+            menu.classList.remove("hidden");
+            const search = document.getElementById("bondServiceSearchInput");
+            if (search) search.focus();
+        }
+    }
+
+    function closeBondServiceMenu() {
+        const menu = document.getElementById("bondServiceMenu");
+        if (menu) menu.classList.add("hidden");
+    }
+
     function applyPendingEdit() {
         if (!pendingEditService) return;
         if (!servicesLoaded) {
@@ -895,6 +997,8 @@ window.fetch = (url, options = {}) =>
             if (select) select.selectedIndex = 0;
             return;
         }
+        const search = document.getElementById("bondServiceSearchInput");
+        if (search) search.value = "";
         const svc = pendingEditService;
         const select = document.getElementById("bondService");
         const svcId =
@@ -919,6 +1023,7 @@ window.fetch = (url, options = {}) =>
             svcId,
         ].filter(Boolean).map(String);
         setSelectFromCandidates(select, candidates);
+        updateBondServiceDisplay();
 
         if (svc.status !== undefined && svc.status !== null) {
             const rawStatus = String(svc.status).toLowerCase();
@@ -966,7 +1071,10 @@ window.fetch = (url, options = {}) =>
         if (editingExisting) return;
         if (!cachedProviderForm) {
             const select = document.getElementById("bondService");
+            const search = document.getElementById("bondServiceSearchInput");
+            if (search) search.value = "";
             if (select) select.selectedIndex = 0;
+            updateBondServiceDisplay();
             return;
         }
         const cf = cachedProviderForm;

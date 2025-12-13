@@ -279,6 +279,52 @@ a { color: var(--blue-accent); }
     fill: currentColor;
 }
 
+/* Combo select (searchable dropdown) */
+.combo-select { position: relative; width: 100%; }
+.combo-display {
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: #0b1220;
+    color: #dce2ef;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+}
+.combo-caret { margin-left: 8px; color: var(--muted); }
+.combo-menu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #0b1220;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    padding: 6px 8px 8px 8px;
+    max-height: 240px;
+    overflow: auto;
+}
+.combo-search {
+    margin: 0 0 8px 0;
+    padding: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: #0f1729;
+    color: #dce2ef;
+}
+.combo-options { display: flex; flex-direction: column; gap: 4px; }
+.combo-option {
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #dce2ef;
+}
+.combo-option:hover { background: #111b30; }
+
 button {
     background: #1f2937;
     color: var(--text);
@@ -535,6 +581,9 @@ pre {
 .table-wrap {
     overflow-x: auto;
 }
+.table-wrap, .table-wrap * {
+    caret-color: transparent;
+}
 .table {
     width: 100%;
     border-collapse: collapse;
@@ -565,6 +614,18 @@ pre {
     border-radius: 8px;
     overflow: hidden;
 }
+.listener-block.closed .listener-main td:first-child { border-bottom-left-radius: 8px; }
+.listener-block.closed .listener-main td:last-child { border-bottom-right-radius: 8px; }
+.listener-main {
+    background: var(--header);
+    cursor: pointer;
+    caret-color: transparent;
+}
+.listener-main * { caret-color: transparent; }
+.listener-main td {
+    border: 0px solid var(--border-strong);
+    background: var(--header);
+}
 .col-status { width: 40px; white-space: nowrap; text-align: center; }
 .col-actions { width: 1%; white-space: nowrap; text-align: right; color: var(--muted-2);}
 .status-dot {
@@ -590,11 +651,6 @@ pre {
 .listener-block {
     display: table-row-group;
 }
-.listener-main td {
-    background: #0b1220;
-    border: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
-}
 .listener-main select {
     min-width: 140px;
 }
@@ -602,15 +658,16 @@ pre {
 .listener-sub input[id^="editWhitelist-"] {
     min-width: 300px;
 }
+.listener-spacer td {
+    padding: 2px 0;
+    border: none !important;
+    background: transparent;
+}
 .listener-sub td {
     background: #0b1220;
     border-left: 1px solid var(--border);
     border-right: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
-}
-.listener-spacer td {
-    padding: 8px 0;
-    border: none;
 }
 .small {
     font-size: 12px;
@@ -775,14 +832,6 @@ pre {
     text-align: right;
     white-space: nowrap;
     width: 1%;
-}
-.listener-main {
-    background: var(--header);
-}
-.listener-main td {
-    background: var(--header);
-    border: 1px solid var(--border);
-    border-bottom: 1px solid var(--border);
 }
 .btn-ghost {
     background: #1f2937;

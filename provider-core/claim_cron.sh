@@ -4,9 +4,32 @@
 set -u
 
 INTERVAL="${CLAIM_CRON_INTERVAL:-60}"  # seconds; default 1 minute
+API_HOST="${ADMIN_API_HOST:-127.0.0.1}"
 API_PORT="${ADMIN_API_PORT:-9999}"
-CLAIMS_URL="http://127.0.0.1:${API_PORT}/api/provider-claims"
-CONTRACTS_URL="http://127.0.0.1:${API_PORT}/api/provider-contracts-summary"
+
+# Prefer runtime-ports.json (written by entrypoint) if available
+if [ -f /app/admin/runtime-ports.json ]; then
+  runtime_port="$(python3 - <<'PY'
+import json,sys
+try:
+    with open("/app/admin/runtime-ports.json","r",encoding="utf-8") as f:
+        data=json.load(f)
+    val = data.get("ADMIN_API_PORT")
+    if val:
+        print(val)
+        sys.exit(0)
+except Exception:
+    pass
+sys.exit(1)
+PY
+)"
+  if [ $? -eq 0 ] && [ -n "$runtime_port" ]; then
+    API_PORT="$runtime_port"
+  fi
+fi
+
+CLAIMS_URL="http://${API_HOST}:${API_PORT}/api/provider-claims"
+CONTRACTS_URL="http://${API_HOST}:${API_PORT}/api/provider-contracts-summary"
 
 echo "Starting provider-claims cron loop: interval=${INTERVAL}s claims=${CLAIMS_URL} contracts=${CONTRACTS_URL}"
 

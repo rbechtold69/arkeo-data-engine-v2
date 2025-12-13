@@ -224,7 +224,7 @@ button:hover { transform: translateY(-1px); box-shadow: 0 8px 16px rgba(0,0,0,0.
 }
 
 input[type="text"], input[type="number"], select, textarea {
-    width: 100%;
+    width: 95%;
     background: #0b1220;
     color: #e2e8f0;
     border: 1px solid #1f2937;
@@ -585,4 +585,52 @@ pre {
     color: var(--muted-2);
     font-size: 12px;
     line-height: 1.35;
+}
+.combo-select {
+    position: relative;
+}
+.combo-display {
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    padding: 10px 12px;
+    background: #0b1220;
+    color: #dce2ef;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+}
+.combo-caret { margin-left: 8px; color: var(--muted); }
+.combo-menu {
+    position: absolute;
+    z-index: 20;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #0b1220;
+    border: 1px solid var(--border-strong);
+    border-radius: 6px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+    padding: 6px 8px 8px 8px;
+    max-height: 240px;
+    overflow: auto;
+}
+.combo-search {
+    margin: 0 0 8px 0;
+    padding: 8px;
+    border: 1px solid var(--border-strong);
+    border-radius: 4px;
+    background: #0f1729;
+    color: #dce2ef;
+}
+.combo-options { display: flex; flex-direction: column; gap: 4px; }
+.combo-option {
+    padding: 8px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+    color: #dce2ef;
+}
+.combo-option:hover {
+    background: #111b30;
 }

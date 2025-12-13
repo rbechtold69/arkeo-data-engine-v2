@@ -101,7 +101,17 @@
             <label style="width:100%;">
                 <div class="muted">Service Type</div>
                 <div class="muted small">Choose a provider service to bind to a listener.</div>
-                <select id="listenerService" class="select" style="width:100%;"></select>
+                <div class="combo-select">
+                    <div id="svcComboDisplay" class="combo-display" onclick="toggleServiceMenu(event)">
+                        <span id="svcComboSelected">Select a service</span>
+                        <span class="combo-caret">▾</span>
+                    </div>
+                    <div id="svcComboMenu" class="combo-menu hidden">
+                        <input type="text" id="svcComboSearch" class="full combo-search" placeholder="Search services..." oninput="filterServiceOptions()" autocomplete="off" autocorrect="off" spellcheck="false" />
+                        <div id="svcComboOptions" class="combo-options"></div>
+                    </div>
+                    <select id="listenerService" class="hidden" aria-hidden="true" tabindex="-1"></select>
+                </div>
             </label>
             <div class="listener-actions" style="align-self:flex-end; white-space: nowrap;">
                 <button type="submit" class="primary">Add Listener</button>
@@ -209,6 +219,46 @@
     let adminSessionAuthed = false;
     let portRangeGlobal = [62001, 62100];
     let portFloorGlobal = 62001;
+    let serviceMenuOpen = false;
+
+    function serviceNameById(serviceId) {
+        const sid = String(serviceId || "");
+        if (!sid) return "";
+        const hit = (serviceTypesCache || []).find((st) => String(st.service_id) === sid);
+        if (!hit) return "";
+        const st = hit.service_type || {};
+        return st.name || st.service || hit.service_name || "";
+    }
+
+    function defaultHealthForService(serviceId) {
+        const name = (serviceNameById(serviceId) || "").toLowerCase();
+        const res = { method: "POST", header: "application/json", payload: "" };
+        const set = (method, payload) => {
+            res.method = method;
+            res.payload = payload;
+        };
+        if (name.includes("rest")) {
+            res.method = "GET";
+            res.header = "application/json";
+            res.payload = "/cosmos/base/tendermint/v1beta1/node_info";
+        } else if (name.includes("cosmos") || name.includes("arkeo") || name.includes("gaia") || name.includes("osmosis")) {
+            set("POST", '{"jsonrpc":"2.0","id":1,"method":"status","params":[]}');
+        } else if (name.includes("btc") || name.includes("bitcoin")) {
+            set("POST", '{"jsonrpc":"1.0","id":"curltext","method":"getblockcount","params":[]}');
+        } else if (name.includes("polkadot") || name.startsWith("dot")) {
+            set("POST", '{"jsonrpc":"2.0","id":1,"method":"chain_getBlockHash","params":[]}');
+        } else if (name.includes("sol")) {
+            set("POST", '{"jsonrpc":"2.0","id":1,"method":"getSlot","params":[]}');
+        } else if (name.includes("sui")) {
+            set("POST", '{"jsonrpc":"2.0","id":1,"method":"sui_getLatestCheckpointSequenceNumber","params":[]}');
+        } else if (name.includes("near")) {
+            set("POST", '{"jsonrpc":"2.0","id":"dontcare","method":"status","params":[]}');
+        } else {
+            // default EVM-ish
+            set("POST", '{"jsonrpc":"2.0","id":1,"method":"eth_blockNumber","params":[]}');
+        }
+        return res;
+    }
 
     function requirePasswordGate() {
         sessionStorage.removeItem("adminAuthed");
@@ -902,6 +952,8 @@
         }
     }
 
+    let openListenerId = null;
+
     function renderListenersTable(errorText) {
         const container = document.getElementById("listenersTable");
         if (!container) return;
@@ -915,6 +967,7 @@
         }
         const rows = listenersCache.map((l) => {
             const isEditing = listenersEditingId === String(l.id);
+            const isOpen = isEditing || openListenerId === String(l.id);
             const targetSafe = escapeHtml(l.target || "");
             const portSafe = escapeHtml(l.port ?? "");
             const statusSafe = escapeHtml(l.status || "");
@@ -1104,19 +1157,21 @@
                 </tbody>`;
             }
             const statusDot = `<span class="status-dot ${String(l.status).toLowerCase() === "active" ? "dot-ok" : "dot-err"}"></span>`;
+            const caret = isOpen ? "▾" : "▸";
             return `
-            <tbody class="listener-block" id="listener-${l.id}">
-            <tr class="listener-main">
-                <td class="col-status">${statusDot}</td>
+            <tbody class="listener-block ${isOpen ? "open" : "closed"}" id="listener-${l.id}">
+            <tr class="listener-main" onclick="toggleListenerOpen('${l.id}')">
+                <td class="col-status"><span class="muted small" style="font-size:18px; display:inline-block; width:16px; color: var(--blue);">${caret}</span> ${statusDot}</td>
                 <td>${escapeHtml(svcLabel || "—")}</td>
                 <td class="mono">${portSafe || "–"}</td>
                 <td class="listener-actions-cell col-actions">
-                    <button class="btn-ghost" onclick="testListener('${l.id}')">Test</button>
-                    <button class="btn-ghost" onclick="pollListener('${l.id}')">Poll</button>
-                    <button class="primary" onclick="editListener('${l.id}')">Edit</button>
-                    <button class="primary danger-btn" onclick="deleteListener('${l.id}')">Delete</button>
+                    <button class="btn-ghost" onclick="event.stopPropagation(); testListener('${l.id}')">Test</button>
+                    <button class="btn-ghost" onclick="event.stopPropagation(); pollListener('${l.id}')">Poll</button>
+                    <button class="primary" onclick="event.stopPropagation(); editListener('${l.id}')">Edit</button>
+                    <button class="primary danger-btn" onclick="event.stopPropagation(); deleteListener('${l.id}')">Delete</button>
                 </td>
             </tr>
+            ${isOpen ? `
             <tr class="listener-sub">
                 <td colspan="4">
                     <div class="muted small" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:start;">
@@ -1147,7 +1202,8 @@
                     <div class="muted">${topServicesDisplay}</div>
                 </td>
             </tr>
-            <tr class="listener-spacer"><td colspan="4"></td></tr>
+            <tr class="listener-spacer"><td colspan="4"></td></tr>` : ""}
+            ${!isOpen ? `<tr class="listener-spacer"><td colspan="4"></td></tr>` : ""}
             </tbody>`;
         }).join("");
         container.innerHTML = `<div class="table-wrap">
@@ -1172,6 +1228,7 @@
             alert("Please select a service type before adding a listener.");
             return;
         }
+        const svcName = (serviceNameById(svcId) || "").toLowerCase();
         const body = {
             status: "active",
             whitelist_ips: "",
@@ -1179,6 +1236,11 @@
             health_payload: "",
             health_header: "application/json",
         };
+        if (svcName.includes("cosmos") || svcName.includes("arkeo") || svcName.includes("gaia") || svcName.includes("osmosis")) {
+            body.health_method = "POST";
+            body.health_header = "application/json";
+            body.health_payload = '{"jsonrpc":"2.0","id":1,"method":"status","params":[]}';
+        }
         if (svcId) body.service_id = svcId;
         try {
             const res = await fetch(apiUrl("/api/listeners"), {
@@ -1197,6 +1259,9 @@
             const newId = data && data.listener && data.listener.id ? String(data.listener.id) : null;
             resetListenerForm();
             listenersEditingId = null;
+            if (newId) {
+                openListenerId = newId; // ensure the new listener drawer opens
+            }
             await loadListeners();
             if (newId) {
                 const elId = `listener-${newId}`;
@@ -1223,6 +1288,16 @@
 
     function cancelEditListener() {
         listenersEditingId = null;
+        renderListenersTable();
+    }
+
+    function toggleListenerOpen(id) {
+        if (listenersEditingId && listenersEditingId === String(id)) return; // keep edit open
+        if (openListenerId === String(id)) {
+            openListenerId = null;
+        } else {
+            openListenerId = String(id);
+        }
         renderListenersTable();
     }
 
@@ -1668,10 +1743,12 @@
     }
 
     async function testListener(id) {
+        openListenerId = String(id);
         await runListenerTests(id, 1, "Testing", true);
     }
 
     async function pollListener(id) {
+        openListenerId = String(id);
         const listener = listenersCache.find((l) => String(l.id) === String(id));
         const top = listener && Array.isArray(listener.top_services) ? dedupTopServices(listener.top_services) : [];
         // modal shell
@@ -1705,13 +1782,14 @@
         }
             const primary = top[0] || {};
             const inferredSvc = listener?.service_id || listener?.service || primary.service_id || primary.service || "";
+            const defaults = defaultHealthForService(inferredSvc);
             const basePayload = {
                 status: "active",
                 service_id: inferredSvc,
                 whitelist_ips: listener?.whitelist_ips || "",
-                health_method: (listener?.health_method || "POST"),
-                health_payload: listener?.health_payload || "",
-                health_header: listener?.health_header || "",
+                health_method: defaults.method,
+                health_payload: defaults.payload,
+                health_header: defaults.header,
             };
             let workingTop = dedupTopServices(JSON.parse(JSON.stringify(top)));
             for (const ts of workingTop) {
@@ -1833,17 +1911,96 @@
         return name || sid;
     }
 
-    function buildServiceSelect(selectedId, elementId) {
-        const opts = serviceOptionsHtml(selectedId);
-        const selId = elementId || "";
-        return `<select id="${selId}" class="select service-select" data-select-id="${selId}">${opts}</select>`;
+    function serviceOptionLabel(stItem) {
+        if (!stItem) return "";
+        const st = stItem.service_type || {};
+        return st.description || st.name || stItem.service_name || stItem.service_id || "";
+    }
+
+    function renderServiceOptions(filterText = "") {
+        const optionsEl = document.getElementById("svcComboOptions");
+        const hiddenSelect = document.getElementById("listenerService");
+        if (!optionsEl || !hiddenSelect) return;
+        const filter = filterText.toLowerCase();
+        let html = "";
+        hiddenSelect.innerHTML = `<option value="">Select a service</option>`;
+        (serviceTypesCache || []).forEach((item) => {
+            const label = serviceOptionLabel(item);
+            const sid = item.service_id;
+            if (filter && !label.toLowerCase().includes(filter) && !String(sid).includes(filter)) return;
+            html += `<div class="combo-option" data-id="${sid}" onclick="selectServiceOption('${sid}')">${escapeHtml(label)}</div>`;
+            const opt = document.createElement("option");
+            opt.value = sid;
+            opt.textContent = label;
+            hiddenSelect.appendChild(opt);
+        });
+        optionsEl.innerHTML = html || `<div class="combo-option muted">No matches</div>`;
+    }
+
+    function selectServiceOption(serviceId) {
+        const hiddenSelect = document.getElementById("listenerService");
+        const display = document.getElementById("svcComboSelected");
+        if (hiddenSelect) {
+            hiddenSelect.value = serviceId || "";
+        }
+        const label = formatServiceLabel(serviceId) || serviceId || "Select a service";
+        if (display) display.textContent = label;
+        closeServiceMenu();
+    }
+
+    function toggleServiceMenu(e) {
+        e?.stopPropagation();
+        const menu = document.getElementById("svcComboMenu");
+        if (!menu) return;
+        if (menu.classList.contains("hidden")) {
+            openServiceMenu();
+        } else {
+            closeServiceMenu();
+        }
+    }
+
+    function openServiceMenu() {
+        const menu = document.getElementById("svcComboMenu");
+        const search = document.getElementById("svcComboSearch");
+        if (menu) menu.classList.remove("hidden");
+        serviceMenuOpen = true;
+        renderServiceOptions(search ? search.value : "");
+        if (search) {
+            search.value = "";
+            search.focus();
+        }
+        document.addEventListener("click", handleOutsideServiceMenu, { once: true });
+    }
+
+    function closeServiceMenu() {
+        const menu = document.getElementById("svcComboMenu");
+        if (menu) menu.classList.add("hidden");
+        serviceMenuOpen = false;
+    }
+
+    function handleOutsideServiceMenu(evt) {
+        if (!serviceMenuOpen) return;
+        const menu = document.getElementById("svcComboMenu");
+        const display = document.getElementById("svcComboDisplay");
+        if (!menu || !display) return;
+        if (menu.contains(evt.target) || display.contains(evt.target)) {
+            document.addEventListener("click", handleOutsideServiceMenu, { once: true });
+            return;
+        }
+        closeServiceMenu();
+    }
+
+    function filterServiceOptions() {
+        const search = document.getElementById("svcComboSearch");
+        renderServiceOptions(search ? search.value : "");
     }
 
     function populateServiceSelect() {
-        const select = document.getElementById("listenerService");
-        if (!select) return;
-        updateSelectOptionsFromCache(select);
-        if (select.options.length) select.selectedIndex = 0;
+        renderServiceOptions("");
+        const first = serviceTypesCache && serviceTypesCache[0] ? serviceTypesCache[0].service_id : "";
+        if (first) {
+            selectServiceOption(first);
+        }
     }
 
     function buildStatusSelect(selectedVal, elementId) {

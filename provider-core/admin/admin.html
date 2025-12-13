@@ -82,7 +82,7 @@
             <td class="label">Key Name<div class="hint">Key alias for the hotwallet used by this provider.</div></td>
             <td class="value"><input type="text" id="keyName" readonly /></td>
         </tr>
-        <tr>
+        <tr class="hidden">
             <td class="label">Keyring Backend <span class="muted" id="keyBackendLabel">(default)</span><div class="hint">Keyring storage backend (read-only in this UI).</div></td>
             <td class="value"><div id="keyBackendValue" class="muted">(read-only)</div></td>
         </tr>
@@ -90,7 +90,7 @@
             <td class="label">Chain ID<div class="hint">Target Arkeo chain ID for all RPC/REST calls.</div></td>
             <td class="value"><input type="text" id="chainId" /></td>
         </tr>
-        <tr>
+        <tr class="hidden">
             <td class="label">Arkeod Home <span class="muted" id="arkeodHomeLabel"></span><div class="hint">Filesystem path where arkeod stores keys and data.</div></td>
             <td class="value"><div id="arkeodHomeValue" class="muted">(read-only)</div></td>
         </tr>
@@ -121,7 +121,7 @@
         <tr>
             <td class="label">
                 Hotwallet Mnemonic
-                <div class="hint">Current mnemonic is auto-saved (settings + ~/.arkeo/*_mnemonic.txt). Paste a new one to delete and recreate the hotwallet.</div>
+                <div class="hint">Current mnemonic is saved with your settings. Paste a new one to delete and recreate the hotwallet.</div>
             </td>
             <td class="value"><textarea id="hotwalletMnemonic" rows="3"></textarea></td>
         </tr>
@@ -506,7 +506,7 @@
             if (homeLabel) homeLabel.textContent = homeText ? `(${homeText})` : "";
             if (homeVal) homeVal.textContent = homeText || "(read-only)";
             setProviderInput("arkeodNode", providerSettingsCache.ARKEOD_NODE);
-            setProviderInput("arkeodRest", providerSettingsCache.ARKEO_REST_API_PORT);
+            setProviderInput("arkeodRest", providerSettingsCache.PROVIDER_HUB_URI);
             setProviderInput("sentinelNode", providerSettingsCache.SENTINEL_NODE);
             setProviderInput("sentinelPort", providerSettingsCache.SENTINEL_PORT);
             setProviderInput("adminPort", providerSettingsCache.ADMIN_PORT);
@@ -546,7 +546,7 @@
                 CHAIN_ID: document.getElementById("chainId")?.value || "",
                 ARKEOD_HOME: providerSettingsCache.ARKEOD_HOME || "",
                 ARKEOD_NODE: normalizeRpc(document.getElementById("arkeodNode")?.value || ""),
-                ARKEO_REST_API_PORT: document.getElementById("arkeodRest")?.value || "",
+                PROVIDER_HUB_URI: document.getElementById("arkeodRest")?.value || "",
                 SENTINEL_NODE: document.getElementById("sentinelNode")?.value || "",
                 SENTINEL_PORT: document.getElementById("sentinelPort")?.value || "",
                 ADMIN_PORT: document.getElementById("adminPort")?.value || "",

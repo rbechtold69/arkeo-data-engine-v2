@@ -1411,18 +1411,31 @@ let earningsChartCache = {};
         const arkeodNode = pickEnv("ARKEOD_NODE") || pickMeta("ARKEOD_NODE");
         const ps = (providerSettings && providerSettings.settings) || providerSettings || {};
         const restApi =
-            envFile.ARKEO_REST_API_PORT ||
-            envLower["arkeo_rest_api_port"] ||
-            ps.ARKEO_REST_API_PORT ||
-            pickMeta("ARKEO_REST_API_PORT");
-        const sentinelNode = pickEnv("SENTINEL_NODE") || pickMeta("SENTINEL_NODE");
-        const sentinelPort = pickEnv("SENTINEL_PORT") || pickMeta("SENTINEL_PORT") || "3636";
-        const resolvedHost = extractHostFromValue(sentinelNode) || adminHost;
-        const sentinelFull = sentinelNode ? `${sentinelNode}:${sentinelPort}` : `(not set):${sentinelPort}`;
+            envFile.PROVIDER_HUB_URI ||
+            envLower["provider_hub_uri"] ||
+            ps.PROVIDER_HUB_URI ||
+            pickMeta("PROVIDER_HUB_URI");
+        // Prefer provider-settings values, then fallback to env/meta for legacy/run-time defaults
+        const sentinelNode = ps.SENTINEL_NODE || pickEnv("SENTINEL_NODE") || pickMeta("SENTINEL_NODE");
+        const sentinelPort = ps.SENTINEL_PORT || pickEnv("SENTINEL_PORT") || pickMeta("SENTINEL_PORT") || "3636";
+
+        const buildSentinelExternal = () => {
+            if (!sentinelNode) return `(not set):${sentinelPort}`;
+            try {
+                const hasScheme = /^https?:\/\//i.test(sentinelNode);
+                const url = new URL(hasScheme ? sentinelNode : `http://${sentinelNode}`);
+                const hostPort = url.port ? `${url.hostname}:${url.port}` : `${url.hostname}:${sentinelPort}`;
+                const scheme = url.protocol && url.protocol !== ":" ? url.protocol : "http:";
+                return `${scheme}//${hostPort}`;
+            } catch (e) {
+                const trimmed = sentinelNode.replace(/\/+$/, "");
+                return trimmed.includes(":") ? trimmed : `${trimmed}:${sentinelPort}`;
+            }
+        };
+
         // Always use loopback for the internal check
         const sentinelInternalUrl = buildBaseUrl("127.0.0.1", sentinelPort);
-        const sentinelExternalHost = extractHostFromValue(sentinelNode) || adminHost;
-        const sentinelExternalUrl = buildBaseUrl(sentinelExternalHost, sentinelPort);
+        const sentinelExternalUrl = buildSentinelExternal();
         const adminApiPort = pickEnv("ADMIN_API_PORT") || pickMeta("ADMIN_API_PORT") || "9999";
         const adminPort = pickEnv("ADMIN_PORT") || pickMeta("ADMIN_PORT") || "8080";
         const pageHost = (window.location && window.location.hostname) || adminHost;

@@ -98,8 +98,9 @@ SENTINEL_CONFIG_PATH = os.getenv("SENTINEL_CONFIG_PATH", "/app/config/sentinel.y
 SENTINEL_ENV_PATH = os.getenv("SENTINEL_ENV_PATH", "/app/config/sentinel.env")
 PROVIDER_ENV_PATH = os.getenv("PROVIDER_ENV_PATH", "/app/provider.env")
 CACHE_DIR = os.getenv("CACHE_DIR", "/app/cache")
+CONFIG_DIR = os.getenv("CONFIG_DIR", "/app/config")
 PROVIDER_SETTINGS_PATH = os.getenv("PROVIDER_SETTINGS_PATH") or (
-    os.path.join(CACHE_DIR or "/app/cache", "provider-settings.json")
+    os.path.join(CONFIG_DIR or "/app/config", "provider-settings.json")
 )
 ADMIN_PASSWORD_PATH = os.getenv("ADMIN_PASSWORD_PATH") or (
     os.path.join(CACHE_DIR or "/app/cache", "admin_password.txt")
@@ -107,7 +108,7 @@ ADMIN_PASSWORD_PATH = os.getenv("ADMIN_PASSWORD_PATH") or (
 ADMIN_SESSION_SECRET = os.getenv("ADMIN_SESSION_SECRET") or secrets.token_hex(16)
 ADMIN_SESSION_NAME = os.getenv("ADMIN_SESSION_NAME") or "admin_session"
 # UI origin used for CORS (allow credentials)
-ADMIN_UI_ORIGIN = os.getenv("ADMIN_UI_ORIGIN") or "http://localhost:8080"
+ADMIN_UI_ORIGIN = os.getenv("ADMIN_UI_ORIGIN") or f"http://localhost:{os.getenv('ADMIN_PORT', DEFAULT_ADMIN_PORT)}"
 # token -> expiry_ts
 ADMIN_SESSIONS: dict[str, float] = {}
 CLAIMS_HEARTBEAT_PATH = os.path.join(CACHE_DIR, "claims-heartbeat.json") if CACHE_DIR else "claims-heartbeat.json"
@@ -119,7 +120,7 @@ ENV_EXPORT_KEYS = [
     "LOCATION",
     "PORT",
     "SOURCE_CHAIN",
-    "ARKEO_REST_API_PORT",
+    "PROVIDER_HUB_URI",
     "FREE_RATE_LIMIT",
     "FREE_RATE_LIMIT_DURATION",
     "CLAIM_STORE_LOCATION",
@@ -928,15 +929,29 @@ def provider_info():
     fees = FEES_DEFAULT
     bond = BOND_DEFAULT
 
+    settings = _merge_provider_settings()
+    sentinel_port = str(settings.get("SENTINEL_PORT") or os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT)
+    sentinel_node_val = settings.get("SENTINEL_NODE") or os.getenv("SENTINEL_NODE") or DEFAULT_SENTINEL_NODE
+    sentinel_node_clean = (sentinel_node_val or "").rstrip("/")
+    sentinel_uri = f"{sentinel_node_clean}:{sentinel_port}/metadata.json"
+
     export_bundle = _load_export_bundle()
     provider_metadata = (export_bundle and export_bundle.get("env_file")) or _load_env_file(SENTINEL_ENV_PATH)
 
     base = provider_pubkeys_response(user, keyring_backend)
+    # Ensure provider metadata reflects the current hotwallet pubkey and sentinel URI
+    try:
+        if isinstance(provider_metadata, dict):
+            provider_metadata["PROVIDER_PUBKEY"] = base.get("pubkey", {}).get("bech32") or provider_metadata.get("PROVIDER_PUBKEY")
+            provider_metadata["PORT"] = sentinel_port
+    except Exception:
+        pass
+
     base.update(
         {
             "fees": fees,
             "bond": bond,
-            "sentinel_uri": SENTINEL_URI_DEFAULT,
+            "sentinel_uri": sentinel_uri,
             "metadata_nonce": METADATA_NONCE_DEFAULT,
             "arkeod_node": ARKEOD_NODE,
             "provider_metadata": provider_metadata,
@@ -951,7 +966,7 @@ def provider_info():
 def list_services():
     """Return available services (REST first, CLI fallback)."""
     # Try REST first
-    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT"))
+    rest_base = _normalize_base(os.getenv("PROVIDER_HUB_URI"))
     if rest_base:
         try:
             url = f"{rest_base}/arkeo/services"
@@ -966,9 +981,10 @@ def list_services():
                 sid = item.get("id") or item.get("service_id") or item.get("serviceID")
                 name = item.get("service") or item.get("name") or item.get("label")
                 desc = item.get("description") or item.get("desc") or ""
+                stype = item.get("service_type") or item.get("type") or ""
                 if sid is None and name is None:
                     continue
-                services.append({"id": sid, "name": name, "description": desc})
+                services.append({"id": sid, "name": name, "description": desc, "service_type": stype})
             if services:
                 return jsonify({"services": services, "raw": parsed, "source": url})
         except Exception:
@@ -982,7 +998,8 @@ def list_services():
 
     code, out = run_list(cmd)
     if code != 0:
-        return jsonify({"error": "failed to list services", "detail": out, "cmd": cmd}), 500
+        # Gracefully return empty set so UI does not break; include detail for debugging.
+        return jsonify({"services": [], "error": "failed to list services", "detail": out, "cmd": cmd}), 200
 
     raw_out = out
 
@@ -1003,7 +1020,7 @@ def list_services():
 
     parsed = parse_json(raw_out)
     if parsed is None:
-        parsed = raw_out
+        return jsonify({"services": [], "error": "failed to parse services", "detail": raw_out, "cmd": cmd}), 200
 
     services = []
     # Try common shapes; fall back to raw data if not recognized
@@ -1025,7 +1042,14 @@ def list_services():
         desc = item.get("description") or item.get("desc") or ""
         if sid is None and name is None:
             continue
-        services.append({"id": sid, "name": name, "description": desc})
+        stype = (
+            item.get("service_type")
+            or item.get("type")
+            or item.get("service_type_name")
+            or item.get("serviceType")
+            or ""
+        )
+        services.append({"id": sid, "name": name, "description": desc, "service_type": stype})
 
     # If parsing failed, try to extract minimal info from text lines
     if not services and isinstance(parsed, str):
@@ -1039,7 +1063,7 @@ def list_services():
             sid = m.group("id").strip()
             svc = m.group("service").strip()
             desc = m.group("desc").strip()
-            services.append({"id": sid, "name": svc, "description": desc})
+            services.append({"id": sid, "name": svc, "description": desc, "service_type": ""})
 
     return jsonify({"services": services, "raw": parsed, "cmd": cmd})
 
@@ -1327,13 +1351,21 @@ def _expand_tilde(val: str) -> str:
 
 def _load_provider_settings_file() -> dict:
     """Load persisted provider settings JSON (replacement for provider.env)."""
-    if not PROVIDER_SETTINGS_PATH or not os.path.isfile(PROVIDER_SETTINGS_PATH):
-        return {}
-    try:
-        with open(PROVIDER_SETTINGS_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    paths = []
+    if PROVIDER_SETTINGS_PATH:
+        paths.append(PROVIDER_SETTINGS_PATH)
+    legacy = os.path.join(CACHE_DIR or "/app/cache", "provider-settings.json")
+    if legacy not in paths:
+        paths.append(legacy)
+    for p in paths:
+        if not p or not os.path.isfile(p):
+            continue
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            continue
+    return {}
 
 
 def _write_provider_settings_file(data: dict) -> None:
@@ -1462,7 +1494,7 @@ def _default_provider_settings() -> dict:
         "CHAIN_ID": _strip_quotes(os.getenv("CHAIN_ID") or os.getenv("ARKEOD_CHAIN_ID") or DEFAULT_CHAIN_ID),
         "ARKEOD_HOME": _expand_tilde(os.getenv("ARKEOD_HOME") or DEFAULT_ARKEOD_HOME),
         "ARKEOD_NODE": _strip_quotes(os.getenv("ARKEOD_NODE") or os.getenv("EXTERNAL_ARKEOD_NODE") or DEFAULT_ARKEOD_NODE),
-        "ARKEO_REST_API_PORT": os.getenv("ARKEO_REST_API_PORT") or DEFAULT_ARKEO_REST,
+        "PROVIDER_HUB_URI": os.getenv("PROVIDER_HUB_URI") or DEFAULT_ARKEO_REST,
         "SENTINEL_NODE": os.getenv("SENTINEL_NODE") or DEFAULT_SENTINEL_NODE,
         "SENTINEL_PORT": os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT,
         "ADMIN_PORT": os.getenv("ADMIN_PORT") or DEFAULT_ADMIN_PORT,
@@ -1479,10 +1511,6 @@ def _merge_provider_settings(overrides: dict | None = None) -> dict:
         merged.update(saved)
     if overrides and isinstance(overrides, dict):
         merged.update(overrides)
-    # Normalize legacy PROVIDER_HUB_URI into ARKEO_REST_API_PORT and drop it
-    if not merged.get("ARKEO_REST_API_PORT") and merged.get("PROVIDER_HUB_URI"):
-        merged["ARKEO_REST_API_PORT"] = merged.get("PROVIDER_HUB_URI")
-    merged.pop("PROVIDER_HUB_URI", None)
     # Prefer ARKEOD_NODE; drop EXTERNAL_ARKEOD_NODE
     if merged.get("EXTERNAL_ARKEOD_NODE") and not merged.get("ARKEOD_NODE"):
         merged["ARKEOD_NODE"] = merged["EXTERNAL_ARKEOD_NODE"]
@@ -1491,11 +1519,11 @@ def _merge_provider_settings(overrides: dict | None = None) -> dict:
     try:
         env_file = _load_env_file(SENTINEL_ENV_PATH)
         if env_file:
-            if env_file.get("ARKEO_REST_API_PORT"):
-                merged["ARKEO_REST_API_PORT"] = env_file["ARKEO_REST_API_PORT"]
-            if env_file.get("SENTINEL_PORT"):
+            if env_file.get("PROVIDER_HUB_URI") and not merged.get("PROVIDER_HUB_URI"):
+                merged["PROVIDER_HUB_URI"] = env_file["PROVIDER_HUB_URI"]
+            if env_file.get("SENTINEL_PORT") and not merged.get("SENTINEL_PORT"):
                 merged["SENTINEL_PORT"] = env_file["SENTINEL_PORT"]
-            if env_file.get("SENTINEL_NODE"):
+            if env_file.get("SENTINEL_NODE") and not merged.get("SENTINEL_NODE"):
                 merged["SENTINEL_NODE"] = env_file["SENTINEL_NODE"]
     except Exception:
         pass
@@ -1525,7 +1553,7 @@ def _apply_provider_settings(settings: dict) -> None:
         "CHAIN_ID": CHAIN_ID,
         "ARKEOD_HOME": ARKEOD_HOME,
         "ARKEOD_NODE": ARKEOD_NODE,
-        "ARKEO_REST_API_PORT": settings.get("ARKEO_REST_API_PORT", ""),
+        "PROVIDER_HUB_URI": settings.get("PROVIDER_HUB_URI", ""),
         "SENTINEL_NODE": settings.get("SENTINEL_NODE", ""),
         "SENTINEL_PORT": settings.get("SENTINEL_PORT", ""),
         "ADMIN_PORT": settings.get("ADMIN_PORT", ""),
@@ -1543,10 +1571,7 @@ _apply_provider_settings(_merge_provider_settings())
 
 
 def _mnemonic_file_path(settings: dict | None = None) -> str:
-    cfg = settings or _merge_provider_settings()
-    home = _expand_tilde(cfg.get("ARKEOD_HOME") or ARKEOD_HOME)
-    key_name = cfg.get("KEY_NAME") or KEY_NAME
-    return os.path.join(home, f"{key_name}_mnemonic.txt")
+    return ""
 
 
 def _extract_mnemonic(text: str) -> str:
@@ -1576,30 +1601,12 @@ def _read_hotwallet_mnemonic(settings: dict | None = None) -> tuple[str, str]:
     mnemonic = (cfg.get("KEY_MNEMONIC") or os.getenv("KEY_MNEMONIC") or "").strip()
     if mnemonic:
         return mnemonic, "settings"
-    path = _mnemonic_file_path(cfg)
-    if path and os.path.isfile(path):
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                text = f.read()
-            mnemonic = _extract_mnemonic(text)
-            if mnemonic:
-                return mnemonic, "file"
-        except OSError:
-            pass
     return "", "none"
 
 
 def _write_hotwallet_mnemonic(settings: dict, mnemonic: str) -> None:
-    """Write mnemonic to the default file for later retrieval."""
-    path = _mnemonic_file_path(settings)
-    if not path:
-        return
-    try:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(mnemonic.strip() + "\n")
-    except OSError:
-        pass
+    """Deprecated: do not write mnemonic to disk."""
+    return
 
 
 def _delete_hotwallet(key_name: str, keyring_backend: str, home: str) -> tuple[int, str]:
@@ -1659,12 +1666,14 @@ def _create_hotwallet(
 
 
 def _sync_sentinel_pubkey(bech32_pubkey: str) -> bool:
-    """Update sentinel config provider pubkey to match hotwallet."""
+    """Update sentinel config/env provider pubkey to match hotwallet."""
     if not bech32_pubkey:
         return False
+    updated_any = False
+    # sentinel.yaml
     parsed, raw = _load_sentinel_config()
     if parsed is None or not isinstance(parsed, dict):
-        return False
+        parsed = {}
     provider = parsed.get("provider")
     if provider is None or not isinstance(provider, dict):
         provider = {}
@@ -1673,9 +1682,22 @@ def _sync_sentinel_pubkey(bech32_pubkey: str) -> bool:
     try:
         with open(SENTINEL_CONFIG_PATH, "w", encoding="utf-8") as f:
             yaml.safe_dump(parsed, f, sort_keys=False)
-        return True
+        updated_any = True
     except OSError:
-        return False
+        pass
+
+    # sentinel.env
+    try:
+        env_file = _load_env_file(SENTINEL_ENV_PATH)
+        env_file["PROVIDER_PUBKEY"] = bech32_pubkey
+        with open(SENTINEL_ENV_PATH, "w", encoding="utf-8") as f:
+            for k, v in env_file.items():
+                f.write(f"{k}={shlex.quote(str(v))}\n")
+        updated_any = True
+    except Exception:
+        pass
+
+    return updated_any
 
 
 def _load_export_bundle() -> dict | None:
@@ -1735,7 +1757,7 @@ def _write_export_bundle(
 def _fetch_provider_services_internal(bech32_pubkey: str) -> list[dict]:
     """Return provider services for a given pubkey (tries REST first, CLI fallback)."""
     # Try REST (if hub URI provided)
-    rest_base = _normalize_base(os.getenv("ARKEO_REST_API_PORT"))
+    rest_base = _normalize_base(os.getenv("PROVIDER_HUB_URI"))
     if rest_base:
         try:
             url = f"{rest_base}/arkeo/services"
@@ -1752,11 +1774,13 @@ def _fetch_provider_services_internal(bech32_pubkey: str) -> list[dict]:
                     continue
                 sid = s.get("service_id") or s.get("id") or s.get("service")
                 sname = s.get("service") or s.get("name")
+                stype = s.get("service_type") or s.get("type") or s.get("service_type_name") or ""
                 services.append(
                     {
                         "id": sid,
                         "name": sname,
                         "status": s.get("status"),
+                        "service_type": stype,
                     }
                 )
             if services:
@@ -1846,9 +1870,9 @@ def _filter_sentinel_services_with_onchain(parsed_cfg: dict, bech32_pubkey: str)
     return filtered, skipped, annotated
 
 
-def _all_services_lookup() -> dict[str, str]:
-    """Return a mapping of service id -> service name from arkeod all-services."""
-    lookup: dict[str, str] = {}
+def _all_services_lookup() -> dict[str, dict]:
+    """Return a mapping of service id -> {name, service_type} from arkeod all-services."""
+    lookup: dict[str, dict] = {}
     cmd = ["arkeod", "--home", ARKEOD_HOME]
     if ARKEOD_NODE:
         cmd.extend(["--node", ARKEOD_NODE])
@@ -1868,9 +1892,16 @@ def _all_services_lookup() -> dict[str, str]:
             continue
         sid = item.get("id") or item.get("service_id") or item.get("serviceID")
         name = item.get("name") or item.get("service") or item.get("label")
+        stype = (
+            item.get("service_type")
+            or item.get("type")
+            or item.get("service_type_name")
+            or item.get("serviceType")
+            or ""
+        )
         if sid is None:
             continue
-        lookup[str(sid)] = name
+        lookup[str(sid)] = {"name": name, "service_type": stype}
     return lookup
 
 
@@ -1886,13 +1917,21 @@ def sentinel_rebuild():
         return jsonify({"error": "no service override provided"}), 400
     target_name = str(target.get("name") or target.get("service") or target.get("type") or "").strip()
     target_id = str(target.get("id") or target.get("service_id") or target.get("service") or "").strip()
+    target_type = str(target.get("service_type") or target.get("type") or target_name).strip()
     target_name_lower = target_name.lower()
     if not target_name and not target_id:
         return jsonify({"error": "service name or id required"}), 400
     if not target_name and target_id:
         lookup = _all_services_lookup()
-        target_name = lookup.get(target_id, "")
+        entry = lookup.get(target_id) or {}
+        target_name = entry.get("name", "") if isinstance(entry, dict) else entry or ""
+        target_type = target_type or (entry.get("service_type", "") if isinstance(entry, dict) else "")
         target_name_lower = target_name.lower()
+    if target_id and not target_type:
+        lookup = _all_services_lookup()
+        entry = lookup.get(target_id) or {}
+        if isinstance(entry, dict):
+            target_type = entry.get("service_type") or target_type
     status_raw = str(target.get("status") or "").lower()
     should_remove = status_raw in ("0", "inactive", "offline")
     app.logger.info(
@@ -1972,7 +2011,9 @@ def sentinel_rebuild():
             if target_name:
                 entry["name"] = target_name
             if target_name:
-                entry["type"] = target_name
+                entry["type"] = target_type or target_name
+            if target_type:
+                entry["type"] = target_type
             entry.setdefault("rpc_url", "")
             entry.setdefault("rpc_user", "")
             entry.setdefault("rpc_pass", "")
@@ -2042,12 +2083,9 @@ def sentinel_rebuild():
     except OSError as e:
         return jsonify({"error": "failed to write sentinel config", "detail": str(e)}), 500
 
-    try:
-        code, out = run_list([*SUPERVISORCTL, "restart", "sentinel"])
-    except Exception as e:
-        return jsonify({"error": "failed to restart sentinel", "detail": str(e)}), 500
-
-    app.logger.info("sentinel-rebuild wrote config and restarted sentinel code=%s", code)
+    # Skip automatic restart here; caller can restart if needed.
+    code, out = None, "restart skipped"
+    app.logger.info("sentinel-rebuild wrote config (restart skipped)")
 
     return jsonify(
         {
@@ -2102,7 +2140,6 @@ def provider_settings_get():
         if code != 0 or not gen_mnemonic:
             return jsonify({"error": "failed to create hotwallet", "detail": out}), 500
         settings["KEY_MNEMONIC"] = gen_mnemonic
-        _write_hotwallet_mnemonic(settings, gen_mnemonic)
         _apply_provider_settings(settings)
         _write_provider_settings_file(settings)
         mnemonic = gen_mnemonic
@@ -2135,14 +2172,16 @@ def provider_settings_save():
         return jsonify({"error": "invalid payload"}), 400
 
     merged = _merge_provider_settings(data)
-    new_mnemonic = (data.get("KEY_MNEMONIC") or data.get("mnemonic") or "").strip()
+    target_mnemonic = (data.get("KEY_MNEMONIC") or data.get("mnemonic") or merged.get("KEY_MNEMONIC") or "").strip()
     current_mnemonic, mnemonic_source = _read_hotwallet_mnemonic(merged)
-    rotate = bool(new_mnemonic)
+    if not target_mnemonic and current_mnemonic:
+        target_mnemonic = current_mnemonic
+    rotate = bool(target_mnemonic)
     delete_result: tuple[int, str] | None = None
     import_result: tuple[int, str] | None = None
     generated_result: tuple[int, str, str] | None = None
 
-    if rotate:
+    if rotate and target_mnemonic:
         delete_result = _delete_hotwallet(
             merged.get("KEY_NAME") or KEY_NAME,
             merged.get("KEY_KEYRING_BACKEND") or KEYRING,
@@ -2153,7 +2192,7 @@ def provider_settings_save():
             return jsonify({"error": "failed to delete existing hotwallet", "detail": delete_out}), 500
 
         import_result = _import_hotwallet_from_mnemonic(
-            new_mnemonic,
+            target_mnemonic,
             merged.get("KEY_NAME") or KEY_NAME,
             merged.get("KEY_KEYRING_BACKEND") or KEYRING,
             merged.get("ARKEOD_HOME") or ARKEOD_HOME,
@@ -2161,11 +2200,8 @@ def provider_settings_save():
         import_code, import_out = import_result
         if import_code != 0:
             return jsonify({"error": "failed to import mnemonic", "detail": import_out}), 500
-        merged["KEY_MNEMONIC"] = new_mnemonic
+        merged["KEY_MNEMONIC"] = target_mnemonic
         mnemonic_source = "uploaded"
-        _write_hotwallet_mnemonic(merged, new_mnemonic)
-    elif current_mnemonic:
-        merged["KEY_MNEMONIC"] = current_mnemonic
     else:
         # No mnemonic available; generate a new hotwallet
         delete_result = _delete_hotwallet(
@@ -2184,27 +2220,30 @@ def provider_settings_save():
         merged["KEY_MNEMONIC"] = gen_mnemonic
         mnemonic_source = "generated"
         rotate = True
-        _write_hotwallet_mnemonic(merged, gen_mnemonic)
 
     _apply_provider_settings(merged)
     _write_provider_settings_file(merged)
-    # Keep sentinel env in sync for REST API URI
+    # Keep sentinel env in sync for PROVIDER_HUB_URI
     try:
-        rest_val = merged.get("ARKEO_REST_API_PORT") or ""
+        rest_val = merged.get("PROVIDER_HUB_URI") or ""
         env_file = _load_env_file(SENTINEL_ENV_PATH)
         if rest_val:
-            env_file["ARKEO_REST_API_PORT"] = rest_val
+            env_file["PROVIDER_HUB_URI"] = rest_val
         with open(SENTINEL_ENV_PATH, "w", encoding="utf-8") as f:
             for k, v in env_file.items():
                 f.write(f"{k}={shlex.quote(str(v))}\n")
     except Exception:
-        app.logger.warning("provider-settings-save: failed to sync ARKEO_REST_API_PORT to sentinel env", exc_info=True)
+        app.logger.warning("provider-settings-save: failed to sync PROVIDER_HUB_URI to sentinel env", exc_info=True)
 
-    # Sync sentinel port across env and sentinel.yaml
+    # Sync sentinel node/port across env and sentinel.yaml
     try:
         sentinel_port = str(merged.get("SENTINEL_PORT") or os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT)
+        sentinel_node = merged.get("SENTINEL_NODE") or os.getenv("SENTINEL_NODE") or ""
         env_file = _load_env_file(SENTINEL_ENV_PATH)
         env_file["SENTINEL_PORT"] = sentinel_port
+        env_file["PORT"] = sentinel_port
+        if sentinel_node:
+            env_file["SENTINEL_NODE"] = sentinel_node
         with open(SENTINEL_ENV_PATH, "w", encoding="utf-8") as f:
             for k, v in env_file.items():
                 f.write(f"{k}={shlex.quote(str(v))}\n")
@@ -2340,7 +2379,7 @@ def endpoint_checks():
     arkeod_node = pick("ARKEOD_NODE")
     arkeod_base = _normalize_base(arkeod_node)
 
-    rest_api = pick("ARKEO_REST_API_PORT")
+    rest_api = pick("PROVIDER_HUB_URI")
     rest_base = _normalize_base(rest_api)
 
     admin_api_port = pick("ADMIN_API_PORT") or "9999"
@@ -2528,7 +2567,7 @@ def update_sentinel_config():
     free_rate_limit_duration = payload.get("free_rate_limit_duration")
     provider_settings = _merge_provider_settings()
     settings_node = _ensure_tcp_scheme(provider_settings.get("ARKEOD_NODE") or "")
-    settings_rest = provider_settings.get("ARKEO_REST_API_PORT") or ""
+    settings_rest = provider_settings.get("PROVIDER_HUB_URI") or ""
     settings_sentinel_node = provider_settings.get("SENTINEL_NODE") or ""
     settings_sentinel_port = provider_settings.get("SENTINEL_PORT") or ""
     settings_chain_id = provider_settings.get("CHAIN_ID") or ""
@@ -2559,10 +2598,10 @@ def update_sentinel_config():
     _set_env("EXTERNAL_ARKEOD_NODE", provider_settings.get("EXTERNAL_ARKEOD_NODE"))
     _set_env("SENTINEL_NODE", settings_sentinel_node)
     _set_env("SENTINEL_PORT", settings_sentinel_port)
-    _set_env("ARKEO_REST_API_PORT", settings_rest)
+    _set_env("PROVIDER_HUB_URI", settings_rest)
     _set_env("PORT", settings_sentinel_port)
     _set_env("SOURCE_CHAIN", settings_chain_id)
-    # Sync from provider env vars if present (EXTERNAL_ARKEOD_NODE, ARKEO_REST_API_PORT, SENTINEL_NODE)
+    # Sync from provider env vars if present (EXTERNAL_ARKEOD_NODE, PROVIDER_HUB_URI, SENTINEL_NODE)
     def _normalize_hostport(url: str, default_port: str | None = None) -> str:
         if not url:
             return ""
@@ -2591,9 +2630,9 @@ def update_sentinel_config():
             if hostport_no_scheme.startswith("https://"):
                 hostport_no_scheme = hostport_no_scheme[len("https://") :]
             _set_env("EVENT_STREAM_HOST", hostport_no_scheme)
-    hub_env = settings_rest or os.getenv("ARKEO_REST_API_PORT")
+    hub_env = settings_rest or os.getenv("PROVIDER_HUB_URI")
     if hub_env:
-        _set_env("ARKEO_REST_API_PORT", hub_env)
+        _set_env("PROVIDER_HUB_URI", hub_env)
     sentinel_node_env = provider_settings.get("SENTINEL_NODE") or os.getenv("SENTINEL_NODE")
     if sentinel_node_env:
         _set_env("SENTINEL_NODE", sentinel_node_env)
@@ -2665,7 +2704,7 @@ def provider_claims():
     provider_account = out.strip()
 
     # Sentinel API (open-claims / mark-claimed)
-    sentinel_port = os.getenv("SENTINEL_PORT") or "3636"
+    sentinel_port = os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT
     sentinel_host = os.getenv("SENTINEL_BIND_HOST") or "127.0.0.1"
     sentinel_api = f"http://{sentinel_host}:{sentinel_port}"
 
@@ -2697,6 +2736,7 @@ def provider_claims():
                 claims = json.loads(claims_raw)
             return [c for c in claims if isinstance(c, dict) and (not c.get("claimed"))], None
         except Exception as e:
+            app.logger.error("provider-claims: failed to fetch open-claims: %s", e)
             return None, str(e)
 
     results = []
@@ -2765,8 +2805,12 @@ def provider_claims():
                 claim.get("spender") or "",
             )
 
+            # Pass through r||s hex exactly as provided by /open-claims
+            sig_for_cli = sig_str.strip()
+
             seq, seq_raw = current_sequence()
             if seq is None:
+                app.logger.error("provider-claims: failed to fetch sequence: %s", seq_raw)
                 results.append({"claim": claim, "error": "failed to fetch sequence", "detail": seq_raw})
                 continue
 
@@ -2780,7 +2824,7 @@ def provider_claims():
                     "claim-contract-income",
                     str(contract_id),
                     str(nonce),
-                    str(signature),
+                    sig_for_cli,
                     "nil",
                     "--from",
                     KEY_NAME,
@@ -2802,7 +2846,9 @@ def provider_claims():
                 ]
                 return run_list(cmd)
 
+            start_submit = time.time()
             exit_code, tx_out = submit(seq)
+            submit_ms = int((time.time() - start_submit) * 1000)
             tx_json = {}
             try:
                 tx_json = json.loads(tx_out)
@@ -2822,6 +2868,7 @@ def provider_claims():
                 if m:
                     expected = m.group(1)
                 if expected is not None:
+                    app.logger.warning("provider-claims: sequence mismatch (got %s), retrying with %s", seq, expected)
                     exit_code, tx_out = submit(expected)
                     try:
                         tx_json = json.loads(tx_out)
@@ -2840,6 +2887,15 @@ def provider_claims():
                         "raw_log": deliver_raw,
                         "height": deliver_height,
                     }
+            app.logger.info(
+                "provider-claims: submit cid=%s nonce=%s exit=%s deliver=%s txhash=%s took=%sms",
+                contract_id,
+                nonce,
+                exit_code,
+                deliver_code,
+                txhash,
+                submit_ms,
+            )
 
             # Mark claimed on sentinel if success code=0
             code_val = tx_json.get("code") if isinstance(tx_json, dict) else None

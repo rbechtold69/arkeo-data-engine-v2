@@ -158,7 +158,7 @@
         <tr>
             <td class="label">
                 Sentinel URI
-                <div class="hint">Endpoint exposed by the sentinel (metadata.json).</div>
+                <div class="hint">Endpoint for the sentinel (External).</div>
             </td>
             <td class="value"><span id="sentinelUri">(loading...)</span></td>
         </tr>
@@ -384,11 +384,17 @@
             const settingsNode = (ps && ps.ARKEOD_NODE) || "";
             const settingsSentinelBase = (ps && ps.SENTINEL_NODE) || "";
             const settingsSentinelPort = (ps && ps.SENTINEL_PORT) || "";
+            const ensureMetadataSuffix = (val) => {
+                if (!val) return val;
+                const trimmed = val.replace(/\/+$/, "");
+                if (trimmed.toLowerCase().endsWith("/metadata.json")) return trimmed;
+                return `${trimmed}/metadata.json`;
+            };
             let sentinelFromSettings = settingsSentinelBase ? settingsSentinelBase.replace(/\/+$/, "") : "";
             if (sentinelFromSettings && settingsSentinelPort) {
                 sentinelFromSettings = `${sentinelFromSettings}:${settingsSentinelPort}`;
             }
-            const sentinelUriVal = sentinelFromSettings || "(not set)";
+            const sentinelUriVal = sentinelFromSettings ? ensureMetadataSuffix(sentinelFromSettings) : "(not set)";
             const nodeVal = settingsNode || "(not set)";
             document.getElementById("sentinelUri").textContent = sentinelUriVal;
             document.getElementById("arkeodNode").textContent = nodeVal;
