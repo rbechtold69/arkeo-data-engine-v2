@@ -7288,11 +7288,7 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 return
 
-            # non-success upstream: mark down and try next candidate
-            try:
-                _set_top_service_status(cfg.get("listener_id"), provider_filter, "Down")
-            except Exception:
-                pass
+            # non-success upstream: return the upstream response (no failover)
             last_err = f"upstream_status_{code}"
             last_meta = _build_arkeo_meta_clean(active, nonce, svc_id, service, provider_filter, contract_client, sentinel, 0)
             try:
@@ -7308,11 +7304,41 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                 self.server.last_upstream = merged_last
             except Exception:
                 pass
-            self._log("warning", f"upstream non-2xx code={code} provider={provider_filter} sentinel={sentinel}; trying next candidate")
-            # optionally set short cooldown to avoid hammering a bad upstream
-            if PROXY_OPEN_COOLDOWN > 0:
-                cooldowns[provider_filter] = time.time() + PROXY_OPEN_COOLDOWN
-            continue
+            self._log("warning", f"upstream non-2xx code={code} provider={provider_filter} sentinel={sentinel}; returning error (no failover)")
+            # return the upstream payload/code directly
+            if decorate:
+                try:
+                    upstream = json.loads(resp_body.decode(errors="ignore") if isinstance(resp_body, (bytes, bytearray)) else str(resp_body))
+                except Exception:
+                    upstream = resp_body.decode(errors="ignore") if isinstance(resp_body, (bytes, bytearray)) else str(resp_body)
+                meta_full = _build_arkeo_meta_clean(active, nonce, svc_id, service, provider_filter, contract_client, sentinel, 0)
+                if isinstance(upstream, dict):
+                    merged = dict(upstream)
+                    merged["arkeo"] = meta_full
+                    return self._send_json(code, merged)
+                return self._send_json(code, {"arkeo": meta_full, "response": upstream})
+            # raw pass-through
+            if isinstance(resp_body, (bytes, bytearray)):
+                out_bytes = resp_body
+            else:
+                out_bytes = str(resp_body).encode()
+            self.send_response(code)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(out_bytes)))
+            self.send_header("Connection", "close")
+            self.send_header("Access-Control-Allow-Origin", "*")
+            self.send_header("X-Arkeo-Contract-Id", _safe_str(cid))
+            self.send_header("X-Arkeo-Nonce", _safe_str(nonce))
+            if meta_full.get("cost_request"):
+                self.send_header("X-Arkeo-Cost", meta_full.get("cost_request"))
+            self.end_headers()
+            try:
+                self.wfile.write(out_bytes)
+                self.wfile.flush()
+            except Exception:
+                pass
+            self.close_connection = True
+            return
 
         # all candidates failed
         meta = last_meta or _build_arkeo_meta_clean(None, None, svc_id, service, "", client_pub, sentinel, 0)
