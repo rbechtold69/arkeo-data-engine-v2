@@ -870,7 +870,7 @@ pre {
 #convertUsdcModal .estimate-box {
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: 2px 2px;
     background: rgba(255, 255, 255, 0.03);
     min-height: 38px;
     display: flex;
@@ -939,7 +939,7 @@ pre {
 #convertArkeoModal .estimate-box {
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: 2px 2px;
     background: rgba(255, 255, 255, 0.03);
     min-height: 38px;
     display: flex;
@@ -994,7 +994,7 @@ pre {
 #convertUsdcOsmoModal .estimate-box {
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: 2px 2px;
     background: rgba(255, 255, 255, 0.03);
     min-height: 38px;
     display: flex;
@@ -1046,10 +1046,28 @@ pre {
     flex: 1 1 0;
     min-width: 0;
 }
+#convertArkeoToOsmosisModal .convert-row .field-block {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1 1 0;
+    min-width: 0;
+}
 #convertArkeoNativeModal .estimate-box {
     border: 1px solid var(--border);
     border-radius: 6px;
-    padding: 8px 10px;
+    padding: 2px 2px;
+    background: rgba(255, 255, 255, 0.03);
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    color: var(--text);
+    font-size: 12px;
+}
+#convertArkeoToOsmosisModal .estimate-box {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 2px 2px;
     background: rgba(255, 255, 255, 0.03);
     min-height: 38px;
     display: flex;
@@ -1058,6 +1076,10 @@ pre {
     font-size: 12px;
 }
 #convertArkeoNativeModal .estimate-note {
+    font-size: 12px;
+    color: var(--blue-accent);
+}
+#convertArkeoToOsmosisModal .estimate-note {
     font-size: 12px;
     color: var(--blue-accent);
 }
@@ -1251,6 +1273,27 @@ pre {
     background: #e8f9ff;
     color: #0181a6;
     transform: translateY(-1px);
+}
+.chain-icon {
+    height: 14px;
+    width: 14px;
+    vertical-align: middle;
+    margin-left: 2px;
+    object-fit: contain;
+}
+.chain-icon-lg {
+    height: 18px;
+    width: 18px;
+    vertical-align: middle;
+    margin-left: 4px;
+    object-fit: contain;
+}
+.chain-icon-xl {
+    height: 20px;
+    width: 20px;
+    vertical-align: middle;
+    margin-left: 6px;
+    object-fit: contain;
 }
 .wallet-action-btn:active {
     transform: translateY(0);
