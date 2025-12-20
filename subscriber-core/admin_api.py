@@ -4526,7 +4526,18 @@ def _merge_top_services_persisted_fields(existing: list, incoming: list) -> list
         pk = out.get("provider_pubkey") or out.get("pubkey")
         src = existing_by_pk.get(str(pk)) if pk is not None else None
         if isinstance(src, dict):
-            for key in ("last_contract_id", "last_cors_origins", "cors_configured", "rt_ignore_next"):
+            for key in (
+                "status",
+                "status_updated_at",
+                "rt_avg_ms",
+                "rt_count",
+                "rt_last_ms",
+                "rt_updated_at",
+                "rt_ignore_next",
+                "last_contract_id",
+                "last_cors_origins",
+                "cors_configured",
+            ):
                 if key not in out and key in src:
                     out[key] = src.get(key)
         merged.append(out)
@@ -5810,6 +5821,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
 
     last_err = None
     for idx, cand in enumerate(candidates, start=1):
+        cand_start = time.time()
         provider_filter = cand.get("provider_pubkey")
         sentinel = _normalize_sentinel_url(cand.get("sentinel_url") or cfg.get("provider_sentinel_api") or SENTINEL_URI_DEFAULT)
         if not provider_filter or not sentinel:
@@ -5939,6 +5951,11 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             except Exception:
                 pass
             try:
+                # Record how long we spent attempting this provider (even though it failed), so the UI can show a timing.
+                _update_top_service_metrics(listener_id, provider_filter, (time.time() - cand_start), include_in_avg=False)
+            except Exception:
+                pass
+            try:
                 if server_ref is not None and PROXY_OPEN_COOLDOWN:
                     server_ref.cooldowns[provider_filter] = time.time() + PROXY_OPEN_COOLDOWN
             except Exception:
@@ -6050,6 +6067,10 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
         sign_ms = int((time.time() - sign_start) * 1000)
         if not sig_hex:
             last_err = sig_err or "sign_error"
+            try:
+                _update_top_service_metrics(listener_id, provider_filter, (time.time() - cand_start), include_in_avg=False)
+            except Exception:
+                pass
             continue
 
         timeout_secs = _safe_int(cfg.get("timeout_secs", PROXY_TIMEOUT_SECS), PROXY_TIMEOUT_SECS)
@@ -6115,6 +6136,10 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             sign_ms += int((time.time() - sign_start) * 1000)
             if not sig_hex:
                 last_err = sig_err or "sign_error"
+                try:
+                    _update_top_service_metrics(listener_id, provider_filter, (time.time() - cand_start), include_in_avg=False)
+                except Exception:
+                    pass
                 continue
             arkauth_retry = f"{cid}:{contract_client}:{nonce}:{sig_hex}"
             fwd_start = time.time()
@@ -6206,12 +6231,12 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             # Record response-time fields for successful requests.
             # Always record last timing; update avg/count only when config succeeded.
             # Poll warm-up skipping is handled per provider via rt_ignore_next (set by /reset-metrics).
-            if int(code or 0) < 400 and not auto_created:
+            if not auto_created:
                 _update_top_service_metrics(
                     listener_id,
                     provider_filter,
                     (total_ms / 1000.0),
-                    include_in_avg=(cors_ok is not False),
+                    include_in_avg=(int(code or 0) < 400 and cors_ok is not False),
                 )
         except Exception:
             pass
