@@ -4761,6 +4761,25 @@ def _parse_whitelist(csv: str | None) -> list[str]:
     return [ip.strip() for ip in csv.split(",") if ip.strip()]
 
 
+def _parse_cors_origins(raw) -> list[str]:
+    if raw is None:
+        return []
+    if isinstance(raw, list):
+        return [str(o).strip() for o in raw if str(o).strip()]
+    return [o.strip() for o in str(raw).split(",") if o.strip()]
+
+
+def _resolve_proxy_cors_origin(origin: str | None, cfg: dict | None) -> str | None:
+    origins = _parse_cors_origins(cfg.get("cors_allowed_origins") if isinstance(cfg, dict) else None)
+    if not origins:
+        return None
+    if "*" in origins:
+        return "*"
+    if not origin:
+        return None
+    return origin if origin in origins else None
+
+
 def _is_external(uri: str | None) -> bool:
     if not uri:
         return False
@@ -4818,6 +4837,7 @@ def _start_listener_server(listener: dict) -> tuple[bool, str | None]:
     service_name = service_meta.get("service_name") or listener.get("service_name") or listener.get("service_id")
     service_desc = service_meta.get("service_description") or listener.get("service_description") or ""
 
+    cors_override = listener.get("cors_allowed_origins") if "cors_allowed_origins" in listener else None
     cfg = {
         "node_rpc": ARKEOD_NODE,
         "chain_id": CHAIN_ID,
@@ -4853,7 +4873,7 @@ def _start_listener_server(listener: dict) -> tuple[bool, str | None]:
         "arkauth_format": listener.get("arkauth_format", PROXY_ARKAUTH_FORMAT),
         "timeout_secs": listener.get("timeout_secs", PROXY_TIMEOUT_SECS),
         "top_services": listener.get("top_services") or [],
-        "cors_allowed_origins": listener.get("cors_allowed_origins") or CORS_ALLOWED_ORIGINS,
+        "cors_allowed_origins": cors_override if cors_override is not None else CORS_ALLOWED_ORIGINS,
         "last_contracts": {
             str(entry.get("provider_pubkey")): {
                 "contract_id": entry.get("last_contract_id"),
@@ -6063,50 +6083,28 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
         except Exception:
             pass
 
-        # ---- Configure CORS on the contract (best-effort, only when needed)
+        # ---- Configure proxy CORS (listener-local)
         cors_ok: bool | None = None
         cors_ms = 0
         desired_origins = cfg.get("cors_allowed_origins")
         if desired_origins is not None:
             cors_start = time.time()
-            cors_ok = False
             try:
-                state = getattr(server_ref, "cors_configured", {}) if server_ref is not None else cfg.get("last_contracts") or {}
-                entry = state.get(provider_filter) if isinstance(state, dict) else None
-                already = (
-                    isinstance(entry, dict)
-                    and str(entry.get("contract_id")) == cid
-                    and bool(entry.get("cors_configured"))
-                    and entry.get("cors_origins") == desired_origins
+                has_origins = bool(_parse_cors_origins(desired_origins))
+                cors_ok = True if has_origins else False
+                if server_ref is not None and isinstance(server_ref.cors_configured, dict):
+                    server_ref.cors_configured[provider_filter] = {
+                        "contract_id": cid,
+                        "cors_origins": desired_origins,
+                        "cors_configured": bool(cors_ok),
+                    }
+                _update_top_service_contract(
+                    listener_id,
+                    provider_filter,
+                    cid,
+                    desired_origins,
+                    cors_configured=bool(cors_ok),
                 )
-                if already:
-                    cors_ok = True
-                    # Best-effort: ensure listeners.json reflects configured state.
-                    _update_top_service_contract(listener_id, provider_filter, cid, desired_origins, cors_configured=True)
-                else:
-                    ok_cors, cors_err = _configure_contract_cors(
-                        cid, sentinel, client_key, desired_origins, sign_template=sign_template
-                    )
-                    if ok_cors:
-                        cors_ok = True
-                        _log("info", f"cors_configured provider={provider_filter} contract_id={cid} origins={desired_origins}")
-                        if server_ref is not None and isinstance(server_ref.cors_configured, dict):
-                            server_ref.cors_configured[provider_filter] = {
-                                "contract_id": cid,
-                                "cors_origins": desired_origins,
-                                "cors_configured": True,
-                            }
-                        _update_top_service_contract(listener_id, provider_filter, cid, desired_origins, cors_configured=True)
-                    else:
-                        cors_ok = False
-                        _log("warning", f"cors_config_failed provider={provider_filter} contract_id={cid} err={cors_err}")
-                        if server_ref is not None and isinstance(server_ref.cors_configured, dict):
-                            server_ref.cors_configured[provider_filter] = {
-                                "contract_id": cid,
-                                "cors_origins": desired_origins,
-                                "cors_configured": False,
-                            }
-                        _update_top_service_contract(listener_id, provider_filter, cid, desired_origins, cors_configured=False)
             except Exception:
                 pass
             finally:
@@ -6802,13 +6800,17 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
             origin = self.headers.get("Origin")
         except Exception:
             origin = None
+        allowed_origin = _resolve_proxy_cors_origin(origin, self.server.cfg)
         allow_headers = self.headers.get("Access-Control-Request-Headers", "*")
         self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", origin or "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", allow_headers)
-        self.send_header("Access-Control-Max-Age", "86400")
-        self.send_header("Access-Control-Allow-Credentials", "true")
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            if allowed_origin != "*":
+                self.send_header("Access-Control-Allow-Credentials", "true")
+                self.send_header("Vary", "Origin")
+            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+            self.send_header("Access-Control-Allow-Headers", allow_headers)
+            self.send_header("Access-Control-Max-Age", "86400")
         self.end_headers()
         self.close_connection = True
 
@@ -6822,11 +6824,12 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
             origin = self.headers.get("Origin")
         except Exception:
             origin = None
-        if origin:
-            self.send_header("Access-Control-Allow-Origin", origin)
-            self.send_header("Access-Control-Allow-Credentials", "true")
-        else:
-            self.send_header("Access-Control-Allow-Origin", "*")
+        allowed_origin = _resolve_proxy_cors_origin(origin, self.server.cfg)
+        if allowed_origin:
+            self.send_header("Access-Control-Allow-Origin", allowed_origin)
+            if allowed_origin != "*":
+                self.send_header("Access-Control-Allow-Credentials", "true")
+                self.send_header("Vary", "Origin")
         if extra_headers:
             for k, v in extra_headers.items():
                 self.send_header(k, v)
@@ -6947,46 +6950,11 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                             self.server.active_contracts[provider_filter] = active
                     except Exception:
                         pass
-                    # push CORS config during normal proxy path so it doesn't depend on manual polls/status
+                    # reflect listener CORS origins for status/debug
                     try:
-                        cid = active.get("id")
-                        origins = cfg.get("cors_allowed_origins") or CORS_ALLOWED_ORIGINS
-                        payload["cors_allowed_origins"] = origins
-                        if cid and origins and sentinel:
-                            if not hasattr(self.server, "cors_configured") or not isinstance(self.server.cors_configured, dict):
-                                self.server.cors_configured = {}
-                            last_entry = self.server.cors_configured.get(provider_filter or cid) or {}
-                            last_orig = last_entry.get("cors_origins")
-                            last_cid = last_entry.get("contract_id")
-                            last_flag = last_entry.get("cors_configured", False)
-                            if last_cid != str(cid) or last_orig != origins or not last_flag:
-                                ok, detail = _configure_contract_cors(
-                                    cid,
-                                    sentinel,
-                                    client_key,
-                                    origins,
-                                    cfg.get("sign_template", PROXY_SIGN_TEMPLATE),
-                                )
-                                payload["cors_push_ok"] = ok
-                                if ok:
-                                    self.server.cors_configured[provider_filter or cid] = {
-                                        "contract_id": str(cid),
-                                        "cors_origins": origins,
-                                        "cors_configured": True,
-                                    }
-                                    _update_top_service_contract(
-                                        cfg.get("listener_id"),
-                                        provider_filter or active.get("provider") or cfg.get("provider_pubkey"),
-                                        cid,
-                                        origins,
-                                        True,
-                                    )
-                                    self._log("info", f"cors configured for contract {cid} origins={origins}")
-                                else:
-                                    self._log("warning", f"cors config failed for contract {cid}: {detail}")
-                                    payload["cors_push_error"] = detail
-                            else:
-                                self._log("info", f"cors skip (unchanged) contract={cid} origins={origins}")
+                        origins = cfg.get("cors_allowed_origins")
+                        if origins is not None:
+                            payload["cors_allowed_origins"] = origins
                     except Exception:
                         pass
                     # try to pick last nonce if cached
@@ -6997,75 +6965,8 @@ class PaygProxyHandler(BaseHTTPRequestHandler):
                                 payload["last_nonce"] = last_nc.get(str(active.get("id")))
                     except Exception:
                         pass
-                        # push CORS config during normal status path so UI/Keplr don't depend on manual poll
-                        try:
-                            cid = active.get("id")
-                            origins = cfg.get("cors_allowed_origins") or CORS_ALLOWED_ORIGINS
-                            if cid and origins and sentinel:
-                                if not hasattr(self.server, "cors_configured"):
-                                    self.server.cors_configured = {}
-                                last_orig = self.server.cors_configured.get(cid)
-                                if last_orig != origins:
-                                    ok, detail = _configure_contract_cors(
-                                        cid,
-                                        sentinel,
-                                        client_key,
-                                        origins,
-                                        cfg.get("sign_template", PROXY_SIGN_TEMPLATE),
-                                    )
-                                if ok:
-                                    self.server.cors_configured[cid] = origins
-                                    _update_listener_cors_configured(cfg.get("listener_id"), cid, origins)
-                                    self._log("info", f"cors configured for contract {cid} origins={origins}")
-                                else:
-                                    self._log("warning", f"cors config failed for contract {cid}: {detail}")
-                        except Exception:
-                            pass
-                        # best-effort: push CORS config to sentinel manage API for this contract
-                        try:
-                            cid = active.get("id")
-                            origins = cfg.get("cors_allowed_origins") or CORS_ALLOWED_ORIGINS
-                            if cid and origins:
-                                if not hasattr(self.server, "cors_configured"):
-                                    self.server.cors_configured = set()
-                                if cid not in self.server.cors_configured:
-                                    ok, detail = _configure_contract_cors(
-                                        cid,
-                                        sentinel,
-                                        client_key,
-                                        origins,
-                                        cfg.get("sign_template", PROXY_SIGN_TEMPLATE),
-                                    )
-                                    if ok:
-                                        self.server.cors_configured.add(cid)
-                                        self._log("info", f"cors configured for contract {cid} origins={origins}")
-                                    else:
-                                        self._log("warning", f"cors config failed for contract {cid}: {detail}")
-                                payload["cors_allowed_origins"] = origins
-                                # also fetch current config to surface CORS state in status
-                                ok_cfg, cfg_data, cfg_err = _fetch_contract_config(
-                                    cid,
-                                    sentinel,
-                                    client_key,
-                                    cfg.get("sign_template", PROXY_SIGN_TEMPLATE),
-                                )
-                                if ok_cfg and cfg_data is not None:
-                                    payload["contract_config"] = cfg_data
-                                    try:
-                                        cors_cfg = cfg_data.get("cors") if isinstance(cfg_data, dict) else None
-                                        if cors_cfg is not None:
-                                            payload["contract_cors"] = cors_cfg
-                                    except Exception:
-                                        pass
-                                elif cfg_err:
-                                    payload["contract_config_error"] = cfg_err
-                        except Exception as e:
-                            try:
-                                self._log("warning", f"cors config exception: {e}")
-                            except Exception:
-                                pass
-                    else:
-                        payload["active_contract_detail"] = "No active contract found for the selected provider service."
+                else:
+                    payload["active_contract_detail"] = "No active contract found for the selected provider service."
             # If we already had an active_contract cached, still try to enrich with moniker
             if payload.get("active_contract") and not payload.get("active_contract_provider_moniker"):
                 try:
@@ -7240,11 +7141,18 @@ def _do_post_inner_core(self, method: str = "POST"):
     try:
         self.send_response(status)
         origin = self.headers.get("Origin")
-        if origin:
-            hdrs.setdefault("Access-Control-Allow-Origin", origin)
-            hdrs.setdefault("Access-Control-Allow-Credentials", "true")
+        allowed_origin = _resolve_proxy_cors_origin(origin, self.server.cfg)
+        if allowed_origin:
+            hdrs["Access-Control-Allow-Origin"] = allowed_origin
+            if allowed_origin != "*":
+                hdrs.setdefault("Access-Control-Allow-Credentials", "true")
+                hdrs.setdefault("Vary", "Origin")
+            else:
+                hdrs.pop("Access-Control-Allow-Credentials", None)
+                hdrs.pop("Vary", None)
         else:
-            hdrs.setdefault("Access-Control-Allow-Origin", "*")
+            hdrs.pop("Access-Control-Allow-Origin", None)
+            hdrs.pop("Access-Control-Allow-Credentials", None)
         for hk, hv in hdrs.items():
             self.send_header(hk, hv)
         self.send_header("Content-Length", str(len(body_bytes)))
@@ -7866,6 +7774,11 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
     provider_pubkey = (payload.get("provider_pubkey") or "").strip()
     sentinel_url = (payload.get("sentinel_url") or "").strip()
     whitelist_ips = (payload.get("whitelist_ips") or "").strip()
+    cors_allowed_origins = None
+    if "cors_allowed_origins" in payload or "corsAllowedOrigins" in payload:
+        cors_allowed_origins = (
+            payload.get("cors_allowed_origins") or payload.get("corsAllowedOrigins") or ""
+        ).strip()
     health_method_raw = (payload.get("health_method") or payload.get("healthMethod") or "POST").strip().upper()
     health_method = "GET" if health_method_raw == "GET" else "POST"
     health_payload = (payload.get("health_payload") or payload.get("healthPayload") or "").strip()
@@ -7890,6 +7803,7 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
         "provider_pubkey": provider_pubkey,
         "sentinel_url": sentinel_url,
         "whitelist_ips": whitelist_ips,
+        "cors_allowed_origins": cors_allowed_origins,
         "health_method": health_method,
         "health_payload": health_payload,
         "health_header": health_header,
@@ -7946,6 +7860,7 @@ def create_listener():
         "service_id": clean.get("service_id") or "",
         "top_services": best,
         "whitelist_ips": clean.get("whitelist_ips") or "",
+        "cors_allowed_origins": clean.get("cors_allowed_origins") if clean.get("cors_allowed_origins") is not None else CORS_ALLOWED_ORIGINS,
         "health_method": clean.get("health_method") or "POST",
         "health_payload": clean.get("health_payload") or "",
         "health_header": clean.get("health_header") or "",
@@ -8018,6 +7933,8 @@ def update_listener(listener_id: str):
         if "provider_pubkey" in l:
             l.pop("provider_pubkey", None)
         l["whitelist_ips"] = clean.get("whitelist_ips") if clean.get("whitelist_ips") is not None else l.get("whitelist_ips", "")
+        if clean.get("cors_allowed_origins") is not None:
+            l["cors_allowed_origins"] = clean.get("cors_allowed_origins")
         l["health_method"] = clean.get("health_method") or l.get("health_method") or "POST"
         l["health_payload"] = clean.get("health_payload") if clean.get("health_payload") is not None else l.get("health_payload", "")
         l["health_header"] = clean.get("health_header") if clean.get("health_header") is not None else l.get("health_header", "")
@@ -8069,6 +7986,8 @@ def update_listener(listener_id: str):
                     new_top = best
             l["top_services"] = _normalize_top_services(new_top)
             l["whitelist_ips"] = clean.get("whitelist_ips") if clean.get("whitelist_ips") is not None else l.get("whitelist_ips", "")
+            if clean.get("cors_allowed_origins") is not None:
+                l["cors_allowed_origins"] = clean.get("cors_allowed_origins")
             l["health_method"] = clean.get("health_method") or l.get("health_method") or "POST"
             l["health_payload"] = clean.get("health_payload") if clean.get("health_payload") is not None else l.get("health_payload", "")
             l["health_header"] = clean.get("health_header") if clean.get("health_header") is not None else l.get("health_header", "")

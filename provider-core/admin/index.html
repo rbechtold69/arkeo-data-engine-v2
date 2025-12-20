@@ -7,6 +7,7 @@
     <link rel="icon" href="images/favicon.ico">
     <link rel="shortcut icon" href="images/favicon.ico">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="vendor/cosmos.bundle.js"></script>
 </head>
 <body>
 <div class="card header-card">
@@ -24,31 +25,203 @@
                 <div id="headerDescription" class="muted header-desc"></div>
             </div>
         <div class="header-right header-right-with-actions">
-            <div class="header-actions">
-                <a class="icon-btn" href="admin.html" title="Open Admin Area" aria-label="Open Admin Area">
+            <div class="header-icons">
+                <button id="walletToggleBtn" class="header-icon-btn" onclick="toggleHotWalletsFromButton()" title="Open Hot Wallets" aria-label="Open Hot Wallets">
+                    <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 15C20.5523 15 21 14.5523 21 14C21 13.4477 20.5523 13 20 13C19.4477 13 19 13.4477 19 14C19 14.5523 19.4477 15 20 15Z" fill="currentColor"/>
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M16.775 0.985398C18.4919 0.460783 20.2821 1.55148 20.6033 3.3178L20.9362 5.14896C22.1346 5.54225 23 6.67006 23 8V10.7639C23.6137 11.3132 24 12.1115 24 13V15C24 15.8885 23.6137 16.6868 23 17.2361V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V8C1 6.51309 2.08174 5.27884 3.50118 5.04128L16.775 0.985398ZM21 16C21.5523 16 22 15.5523 22 15V13C22 12.4477 21.5523 12 21 12H18C17.4477 12 17 12.4477 17 13V15C17 15.5523 17.4477 16 18 16H21ZM21 18V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V8C3 7.44772 3.44772 7 4 7H20C20.55 7 20.9962 7.44396 21 7.99303L21 10H18C16.3431 10 15 11.3431 15 13V15C15 16.6569 16.3431 18 18 18H21ZM18.6954 3.60705L18.9412 5H10L17.4232 2.82301C17.9965 2.65104 18.5914 3.01769 18.6954 3.60705Z" fill="currentColor"/>
+                    </svg>
+                </button>
+                <a class="header-icon-btn" href="admin.html" title="Open Admin Area" aria-label="Open Admin Area">
                     <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                         <path fill-rule="evenodd" clip-rule="evenodd" d="M12.0002 8C9.79111 8 8.00024 9.79086 8.00024 12C8.00024 14.2091 9.79111 16 12.0002 16C14.2094 16 16.0002 14.2091 16.0002 12C16.0002 9.79086 14.2094 8 12.0002 8ZM10.0002 12C10.0002 10.8954 10.8957 10 12.0002 10C13.1048 10 14.0002 10.8954 14.0002 12C14.0002 13.1046 13.1048 14 12.0002 14C10.8957 14 10.0002 13.1046 10.0002 12Z" />
                         <path fill-rule="evenodd" clip-rule="evenodd" d="M11.2867 0.5C9.88583 0.5 8.6461 1.46745 8.37171 2.85605L8.29264 3.25622C8.10489 4.20638 7.06195 4.83059 6.04511 4.48813L5.64825 4.35447C4.32246 3.90796 2.83873 4.42968 2.11836 5.63933L1.40492 6.83735C0.67773 8.05846 0.954349 9.60487 2.03927 10.5142L2.35714 10.7806C3.12939 11.4279 3.12939 12.5721 2.35714 13.2194L2.03927 13.4858C0.954349 14.3951 0.67773 15.9415 1.40492 17.1626L2.11833 18.3606C2.83872 19.5703 4.3225 20.092 5.64831 19.6455L6.04506 19.5118C7.06191 19.1693 8.1049 19.7935 8.29264 20.7437L8.37172 21.1439C8.6461 22.5325 9.88584 23.5 11.2867 23.5H12.7136C14.1146 23.5 15.3543 22.5325 15.6287 21.1438L15.7077 20.7438C15.8954 19.7936 16.9384 19.1693 17.9553 19.5118L18.3521 19.6455C19.6779 20.092 21.1617 19.5703 21.8821 18.3606L22.5955 17.1627C23.3227 15.9416 23.046 14.3951 21.9611 13.4858L21.6432 13.2194C20.8709 12.5722 20.8709 11.4278 21.6432 10.7806L21.9611 10.5142C23.046 9.60489 23.3227 8.05845 22.5955 6.83732L21.8821 5.63932C21.1617 4.42968 19.678 3.90795 18.3522 4.35444L17.9552 4.48814C16.9384 4.83059 15.8954 4.20634 15.7077 3.25617L15.6287 2.85616C15.3543 1.46751 14.1146 0.5 12.7136 0.5H11.2867ZM10.3338 3.24375C10.4149 2.83334 10.7983 2.5 11.2867 2.5H12.7136C13.2021 2.5 13.5855 2.83336 13.6666 3.24378L13.7456 3.64379C14.1791 5.83811 16.4909 7.09167 18.5935 6.38353L18.9905 6.24984C19.4495 6.09527 19.9394 6.28595 20.1637 6.66264L20.8771 7.86064C21.0946 8.22587 21.0208 8.69271 20.6764 8.98135L20.3586 9.24773C18.6325 10.6943 18.6325 13.3057 20.3586 14.7523L20.6764 15.0186C21.0208 15.3073 21.0946 15.7741 20.8771 16.1394L20.1637 17.3373C19.9394 17.714 19.4495 17.9047 18.9905 17.7501L18.5936 17.6164C16.4909 16.9082 14.1791 18.1618 13.7456 20.3562L13.6666 20.7562C13.5855 21.1666 13.2021 21.5 12.7136 21.5H11.2867C10.7983 21.5 10.4149 21.1667 10.3338 20.7562L10.2547 20.356C9.82113 18.1617 7.50931 16.9082 5.40665 17.6165L5.0099 17.7501C4.55092 17.9047 4.06104 17.714 3.83671 17.3373L3.1233 16.1393C2.9058 15.7741 2.97959 15.3073 3.32398 15.0186L3.64185 14.7522C5.36782 13.3056 5.36781 10.6944 3.64185 9.24779L3.32398 8.98137C2.97959 8.69273 2.9058 8.2259 3.1233 7.86067L3.83674 6.66266C4.06106 6.28596 4.55093 6.09528 5.0099 6.24986L5.40676 6.38352C7.50938 7.09166 9.82112 5.83819 10.2547 3.64392L10.3338 3.24375Z" />
                     </svg>
                 </a>
             </div>
-            <div class="header-line" id="headerPubkey">
-                <strong>Provider Pubkey:</strong>
-                <span class="inline"><span id="headerPubkeyValue"></span> <button class="copy-btn" onclick="copyPubkeyFromHeader()">Copy</button></span>
-            </div>
-            <div class="header-line" id="headerAddress">
-                <strong>Provider Address:</strong>
-                <span class="inline">
-                    <span id="headerAddressValue"></span>
-                    <button class="copy-btn" onclick="copyAddressFromHeader()">Copy</button>
+        </div>
+    </div>
+</div>
+
+<div class="card hotwallet-card" style="background: linear-gradient(135deg, #0181a6 0%, #3be0ff 100%); color:#0b1220;">
+    <div class="collapsible hotwallet-header" onclick="toggleHotWalletsFromButton()" role="button" aria-expanded="false">
+        <div class="collapsible-left">
+            <h2 class="mt-0" style="margin:0; color:#fff; font-size:18px; display:inline-flex; align-items:center; gap:4px;">
+                <span id="hotWalletCaret" class="hotwallet-caret" aria-hidden="true">▸</span>
+                Hot Wallets
+                <span class="hotwallet-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M20 15C20.5523 15 21 14.5523 21 14C21 13.4477 20.5523 13 20 13C19.4477 13 19 13.4477 19 14C19 14.5523 19.4477 15 20 15Z" fill="currentColor"></path>
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M16.775 0.985398C18.4919 0.460783 20.2821 1.55148 20.6033 3.3178L20.9362 5.14896C22.1346 5.54225 23 6.67006 23 8V10.7639C23.6137 11.3132 24 12.1115 24 13V15C24 15.8885 23.6137 16.6868 23 17.2361V20C23 21.6569 21.6569 23 20 23H4C2.34315 23 1 21.6569 1 20V8C1 6.51309 2.08174 5.27884 3.50118 5.04128L16.775 0.985398ZM21 16C21.5523 16 22 15.5523 22 15V13C22 12.4477 21.5523 12 21 12H18C17.4477 12 17 12.4477 17 13V15C17 15.5523 17.4477 16 18 16H21ZM21 18V20C21 20.5523 20.5523 21 20 21H4C3.44772 21 3 20.5523 3 20V8C3 7.44772 3.44772 7 4 7H20C20.55 7 20.9962 7.44396 21 7.99303L21 10H18C16.3431 10 15 11.3431 15 13V15C15 16.6569 16.3431 18 18 18H21ZM18.6954 3.60705L18.9412 5H10L17.4232 2.82301C17.9965 2.65104 18.5914 3.01769 18.6954 3.60705Z" fill="currentColor"></path>
+                    </svg>
                 </span>
+            </h2>
+        </div>
+        <div class="collapsible-right">
+            <span id="syncPill" class="status-badge status-warn hidden">Syncing</span>
+            <div class="hotwallet-summary" id="hotWalletSummary">
+                <svg viewBox="0 0 40 40" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <path d="M20 0C8.95469 0 0 8.95469 0 20C0 31.0453 8.95469 40 20 40C31.0453 40 40 31.0453 40 20C40 8.95469 31.0453 0 20 0ZM29.527 27.4046H25.4452C24.4316 27.4046 23.4976 26.868 22.9849 25.9976L20.461 21.3076C20.461 21.3076 20.4452 21.2838 20.4372 21.2679L22.2496 20.2186V17.6192L20 16.3196L17.7504 17.6192V20.2186L19.5628 21.2679C19.5628 21.2679 19.5469 21.2917 19.539 21.3076L17.0151 25.9976C16.5024 26.872 15.5644 27.4046 14.5548 27.4046H10.473C9.56677 27.4046 9.00238 26.4189 9.46343 25.6399L18.9905 9.43959C19.4436 8.66852 20.5564 8.66852 21.0095 9.43959L30.5366 25.6359C30.9976 26.4149 30.4332 27.4006 29.527 27.4006V27.4046Z" fill="#ffffff"></path>
+                </svg>
+                <span id="walletArkeoBalanceSummary">—</span>
             </div>
-            <div class="header-line" id="headerBalance"><strong>Provider Balance:</strong></div>
-            <div class="header-line muted" id="headerBlock">
-                <strong>Current Block:</strong>
-                <div class="header-line fixed-pill" style="justify-content: flex-end;">
-                    <span id="syncPill" class="status-badge status-warn hidden">Syncing...</span>
+        </div>
+    </div>
+    <div id="hotWalletContent" class="collapsible-content" style="display:none;">
+        <div class="hotwallet-body">
+            <div class="hotwallet-toggle-col" style="display:flex; flex-direction:column; gap:8px;">
+                <button type="button" id="hotWalletUpBtn" class="header-icon-btn hotwallet-toggle-btn" aria-label="Select Up Direction" title="Select Up Direction" onclick="setHotWalletDirection('up')">
+                    <svg viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M384.535,1105.54 C384.145,1105.93 383.512,1105.93 383.121,1105.54 L379,1101.41 L379,1112 C379,1112.55 378.553,1113 378,1113 C377.447,1113 377,1112.55 377,1112 L377,1101.41 L372.879,1105.54 C372.488,1105.93 371.854,1105.93 371.465,1105.54 C371.074,1105.14 371.074,1104.51 371.465,1104.12 L377.121,1098.46 C377.361,1098.22 377.689,1098.15 378,1098.21 C378.311,1098.15 378.639,1098.22 378.879,1098.46 L384.535,1104.12 C384.926,1104.51 384.926,1105.14 384.535,1105.54 Z M378,1089 C369.163,1089 362,1096.16 362,1105 C362,1113.84 369.163,1121 378,1121 C386.837,1121 394,1113.84 394,1105 C394,1096.16 386.837,1089 378,1089 Z" transform="translate(-362 -1089)"></path>
+                    </svg>
+                </button>
+                <button type="button" id="hotWalletDownBtn" class="header-icon-btn hotwallet-toggle-btn active" aria-label="Select Down Direction" title="Select Down Direction" onclick="setHotWalletDirection('down')">
+                    <svg viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                        <path d="M436.535,1105.88 L430.879,1111.54 C430.639,1111.78 430.311,1111.85 430,1111.79 C429.689,1111.85 429.361,1111.78 429.121,1111.54 L423.465,1105.88 C423.074,1105.49 423.074,1104.86 423.465,1104.46 C423.855,1104.07 424.488,1104.07 424.879,1104.46 L429,1108.59 L429,1098 C429,1097.45 429.448,1097 430,1097 C430.553,1097 431,1097.45 431,1098 L431,1108.59 L435.121,1104.46 C435.512,1104.07 436.146,1104.07 436.535,1104.46 C436.926,1104.86 436.926,1105.49 436.535,1105.88 Z M430,1089 C421.163,1089 414,1096.16 414,1105 C414,1113.84 421.163,1121 430,1121 C438.837,1121 446,1113.84 446,1105 C446,1096.16 438.837,1089 430,1089 Z" transform="translate(-414 -1089)"></path>
+                    </svg>
+                </button>
+                <div id="flowDiagramDown" class="flow-diagram">
+                    <img src="images/usdc_world_1.png" alt="USDC world">
+                    <img src="images/arrow-down.svg" alt="" class="arrow">
+                    <img src="images/osmosis_1.png" alt="Osmosis">
+                    <img src="images/arrow-down.svg" alt="" class="arrow">
+                    <img src="images/usdc_osmosis_1.png" alt="USDC on Osmosis">
+                    <img src="images/arrow-down.svg" alt="" class="arrow">
+                    <img src="images/arkeo_osmosis_1.png" alt="ARKEO Osmosis">
+                    <img src="images/arrow-down.svg" alt="" class="arrow">
+                    <img src="images/arkeo_1.png" alt="ARKEO">
                 </div>
+                <div id="flowDiagramUp" class="flow-diagram">
+                    <img src="images/usdc_world_1.png" alt="USDC world">
+                    <img src="images/arrow-up.svg" alt="" class="arrow">
+                    <img src="images/osmosis_1.png" alt="Osmosis">
+                    <img src="images/arrow-up.svg" alt="" class="arrow">
+                    <img src="images/usdc_osmosis_1.png" alt="USDC on Osmosis">
+                    <img src="images/arrow-up.svg" alt="" class="arrow">
+                    <img src="images/arkeo_osmosis_1.png" alt="ARKEO Osmosis">
+                    <img src="images/arrow-up.svg" alt="" class="arrow">
+                    <img src="images/arkeo_1.png" alt="ARKEO">
+                </div>
+            </div>
+            <div class="hotwallet-main">
+                <div style="display:flex; justify-content:space-between; align-items:center; gap:8px;">
+                    <div>
+                        <button class="wallet-action-btn keplr-connect-btn" id="connectKeplrBtn" onclick="connectKeplrOsmo(event)" title="Connect Keplr for signing" aria-label="Connect Keplr">Connect Keplr</button>
+                        <button class="wallet-action-btn" onclick="viewHotwalletLogs(event)" title="View hot wallet status/logs" aria-label="View hot wallet status">Status</button>
+                    </div>
+                    <div class="muted small" style="color:#fff; text-align:right; line-height:1.3;">
+                        <div><strong>1 ARKEO = <span id="arkeoPriceHeaderText" style="color:#fff;">$0.00000</span> USDC</strong></div>
+                        <div>Osmosis Pool Price</div>
+                    </div>
+                </div>
+                <div class="wallet-grid hotwallet-grid">
+                    <div class="wallet-card" id="cardOsmosisDeposit">
+                        <div class="wallet-title">Osmosis Deposit <span style="font-size:12px; font-weight:500;">(Option #1)</span></div>
+                        <div class="muted small" style="color:#fff;">Use Osmosis to deposit USDC from other networks into your Osmosis hot wallet. Use the Keplr wallet to enable Osmosis for depositing Arkeo then connect it here. The USDC will become "wrapped" USDC on the Osmosis network which can be moved into Arkeo.</div>
+                        <div class="wallet-actions-inline" style="margin-top:8px; display:flex; justify-content:flex-start; gap:8px;">
+                            <a class="wallet-action-btn" style="display:inline-flex; align-items:center; justify-content:center; text-decoration:none; font-size:13px;" href="https://app.osmosis.zone/portfolio?transferDirection=deposit&transferAsset=ibc%2F498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4" target="_blank" rel="noopener">Deposit USDC into Osmosis</a>
+                        </div>
+                    </div>
+                    <div class="wallet-card" id="cardSquidRouterDeposit">
+                        <div class="wallet-title">Squid Router Deposit <span style="font-size:12px; font-weight:500;">(Option #2)</span></div>
+                        <div class="muted small" style="color:#fff;">Use Squid Router to deposit USDC from other networks into your Osmosis hot wallet. Use the Keplr wallet to enable Osmosis for depositing Arkeo then connect it here. The USDC will become "wrapped" USDC on the Osmosis network which can be moved into Arkeo.</div>
+                        <div class="wallet-actions-inline" style="margin-top:8px; display:flex; justify-content:flex-start; gap:8px;">
+                            <a class="wallet-action-btn" style="display:inline-flex; align-items:center; justify-content:center; text-decoration:none; font-size:13px;" href="https://app.squidrouter.com/?chains=1%2Cosmosis-1&tokens=0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48%2Cibc%2F498a0751c798a0d9a389aa3691123dada57daa4fe165d5c75894505b876ba6e4" target="_blank" rel="noopener">Deposit USDC into Osmosis</a>
+                        </div>
+                    </div>
+                    <div class="wallet-card" id="cardOsmosisWithdraw">
+                        <div class="wallet-title">Osmosis Withdraw <span style="font-size:12px; font-weight:500;">(Option #1)</span></div>
+                        <div class="muted small" style="color:#fff;">Use Osmosis to withdraw USDC from your Osmosis hot wallet into other networks. Use the Keplr wallet to enable Osmosis for withdrawing Arkeo by connecting it here. The "wrapped" USDC will become USDC on the other networks.</div>
+                        <div class="wallet-actions-inline" style="margin-top:8px; display:flex; justify-content:flex-start; gap:8px;">
+                            <a class="wallet-action-btn" style="display:inline-flex; align-items:center; justify-content:center; text-decoration:none; font-size:13px;" href="https://app.osmosis.zone/portfolio?transferDirection=withdraw&transferAsset=ibc%2F498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4" target="_blank" rel="noopener">Withdraw USDC from Osmosis</a>
+                        </div>
+                    </div>
+                    <div class="wallet-card" id="cardSquidRouterWithdraw">
+                        <div class="wallet-title">Squid Router Withdraw <span style="font-size:12px; font-weight:500;">(Option #2)</span></div>
+                        <div class="muted small" style="color:#fff;">Use Squid Router to withdraw USDC from your Osmosis hot wallet to other networks. Use the Keplr wallet to enable Osmosis for withdrawing USDC then connect it here. The "wrapped" USDC will become USDC on other networks.</div>
+                        <div class="wallet-actions-inline" style="margin-top:8px; display:flex; justify-content:flex-start; gap:8px;">
+                            <a class="wallet-action-btn" style="display:inline-flex; align-items:center; justify-content:center; text-decoration:none; font-size:13px;" href="https://app.squidrouter.com/?chains=osmosis-1%2C1&tokens=ibc%2F498a0751c798a0d9a389aa3691123dada57daa4fe165d5c75894505b876ba6e4%2C0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48" target="_blank" rel="noopener">Withdraw USDC from Osmosis</a>
+                        </div>
+                    </div>
+                </div>
+                <div class="wallet-card">
+                        <img src="images/osmosis/info/logo.png" alt="Osmosis" class="wallet-icon">
+                        <div class="wallet-block-badge">Block: <span id="walletOsmoBlockBadge">—</span></div>
+                        <div class="wallet-title">Osmosis</div>
+                        <div class="muted small" style="color:#fff; margin-bottom:6px;">
+                            <strong>1 ARKEO = <span id="arkeoPriceText" style="color:#fff;">$0.00000</span> USDC</strong> • Osmosis Pool Price
+                        </div>
+                        <div class="wallet-meta">
+                            <span id="walletOsmoBalance">—</span>
+                            <img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true">
+                            <span class="info-icon" title="Sending tokens on Osmosis requires a small amount of OSMO for gas." onclick="showOsmoGasInfo()" aria-label="Gas info">
+                                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+                                    <path d="M12 7.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" fill="currentColor"/>
+                                    <path d="M11.25 10.5h1.5v6h-1.5z" fill="currentColor"/>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="wallet-meta">
+                            <span id="walletOsmoUsdcBalance">—</span>
+                            <img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true">
+                        </div>
+                        <div class="wallet-actions-inline" id="convertUsdcRow" style="gap:8px; margin:6px 0;">
+                            <button class="wallet-action-btn ghost" id="convertUsdcBtn" onclick="openConvertUsdcModal(event)" title="Convert USDC (IBC) to ARKEO (wrapped) on Osmosis" aria-label="Convert USDC to ARKEO">
+                                USDC<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"> to ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true">
+                            </button>
+                        </div>
+                        <div class="wallet-meta">
+                            <span id="walletOsmoArkeoBalance">—</span>
+                            <img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true">
+                        </div>
+                        <div class="wallet-meta wallet-copy">
+                            <span>Address: <span id="walletOsmoAddress">—</span></span>
+                            <span onclick="copyOsmoAddress()" title="Copy address" aria-label="Copy Osmosis address">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M8 5.00005C7.01165 5.00082 6.49359 5.01338 6.09202 5.21799C5.71569 5.40973 5.40973 5.71569 5.21799 6.09202C5 6.51984 5 7.07989 5 8.2V17.8C5 18.9201 5 19.4802 5.21799 19.908C5.40973 20.2843 5.71569 20.5903 6.09202 20.782C6.51984 21 7.07989 21 8.2 21H15.8C16.9201 21 17.4802 21 17.908 20.782C18.2843 20.5903 18.5903 20.2843 18.782 19.908C19 19.4802 19 18.9201 19 17.8V8.2C19 7.07989 19 6.51984 18.782 6.09202C18.5903 5.71569 18.2843 5.40973 17.908 5.21799C17.5064 5.01338 16.9884 5.00082 16 5.00005M8 5.00005V7H16V5.00005M8 5.00005V4.70711C8 4.25435 8.17986 3.82014 8.5 3.5C8.82014 3.17986 9.25435 3 9.70711 3H14.2929C14.7456 3 15.1799 3.17986 15.5 3.5C15.8201 3.82014 16 4.25435 16 4.70711V5.00005M12 11V17M12 11L14 13M12 11L10 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="wallet-actions-inline" style="gap:8px;">
+                            <button class="wallet-action-btn ghost" id="convertArkeoBtn" onclick="openConvertArkeoModal(event)" title="Convert ARKEO (wrapped) to USDC (IBC) on Osmosis" aria-label="Convert ARKEO to USDC">
+                                ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"> to USDC<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true">
+                            </button>
+                            <button class="wallet-action-btn ghost" id="convertArkeoNativeBtn" onclick="openConvertArkeoNativeModal(event)" title="Send ARKEO (IBC) to Arkeo chain" aria-label="Send ARKEO to Arkeo chain">
+                                ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"> to ARKEO<img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="chain-icon" aria-hidden="true">
+                            </button>
+                        </div>
+                    </div>
+                <div class="wallet-card">
+                        <img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="wallet-icon" id="walletArkeoIcon">
+                        <div class="wallet-block-badge">Block: <span id="walletArkeoBlockBadge">—</span></div>
+                        <div class="wallet-title">Arkeo</div>
+                        <div class="wallet-meta">
+                            <span id="walletArkeoBalance">—</span>
+                            <img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="chain-icon" aria-hidden="true">
+                        </div>
+                        <div class="wallet-meta wallet-copy">
+                            <span>Address: <span id="walletArkeoAddress">—</span></span>
+                            <span onclick="copyArkeoAddress()" title="Copy address" aria-label="Copy address">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M8 5.00005C7.01165 5.00082 6.49359 5.01338 6.09202 5.21799C5.71569 5.40973 5.40973 5.71569 5.21799 6.09202C5 6.51984 5 7.07989 5 8.2V17.8C5 18.9201 5 19.4802 5.21799 19.908C5.40973 20.2843 5.71569 20.5903 6.09202 20.782C6.51984 21 7.07989 21 8.2 21H15.8C16.9201 21 17.4802 21 17.908 20.782C18.2843 20.5903 18.5903 20.2843 18.782 19.908C19 19.4802 19 18.9201 19 17.8V8.2C19 7.07989 19 6.51984 18.782 6.09202C18.5903 5.71569 18.2843 5.40973 17.908 5.21799C17.5064 5.01338 16.9884 5.00082 16 5.00005M8 5.00005V7H16V5.00005M8 5.00005V4.70711C8 4.25435 8.17986 3.82014 8.5 3.5C8.82014 3.17986 9.25435 3 9.70711 3H14.2929C14.7456 3 15.1799 3.17986 15.5 3.5C15.8201 3.82014 16 4.25435 16 4.70711V5.00005M12 11V17M12 11L14 13M12 11L10 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="wallet-submeta wallet-copy">
+                            <span>Pubkey: <span id="walletArkeoPubkey">—</span></span>
+                            <span onclick="copyArkeoPubkey()" title="Copy pubkey" aria-label="Copy pubkey">
+                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M8 5.00005C7.01165 5.00082 6.49359 5.01338 6.09202 5.21799C5.71569 5.40973 5.40973 5.71569 5.21799 6.09202C5 6.51984 5 7.07989 5 8.2V17.8C5 18.9201 5 19.4802 5.21799 19.908C5.40973 20.2843 5.71569 20.5903 6.09202 20.782C6.51984 21 7.07989 21 8.2 21H15.8C16.9201 21 17.4802 21 17.908 20.782C18.2843 20.5903 18.5903 20.2843 18.782 19.908C19 19.4802 19 18.9201 19 17.8V8.2C19 7.07989 19 6.51984 18.782 6.09202C18.5903 5.71569 18.2843 5.40973 17.908 5.21799C17.5064 5.01338 16.9884 5.00082 16 5.00005M8 5.00005V7H16V5.00005M8 5.00005V4.70711C8 4.25435 8.17986 3.82014 8.5 3.5C8.82014 3.17986 9.25435 3 9.70711 3H14.2929C14.7456 3 15.1799 3.17986 15.5 3.5C15.8201 3.82014 16 4.25435 16 4.70711V5.00005M12 11V17M12 11L14 13M12 11L10 13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="wallet-actions-inline" style="margin-top:8px; display:flex; justify-content:flex-start; gap:8px;">
+                            <button class="wallet-action-btn ghost" id="convertArkeoToOsmosisBtn" onclick="openConvertArkeoToOsmosisModal(event)" title="Send ARKEO from Arkeo chain to Osmosis" aria-label="Send ARKEO to Osmosis">
+                                ARKEO<img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="chain-icon" aria-hidden="true"> to ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true">
+                            </button>
+                        </div>
+                    </div>
             </div>
         </div>
     </div>
@@ -184,6 +357,139 @@
     </div>
 </div>
 
+<!-- Hot wallet conversion modals -->
+<div id="convertUsdcModal" class="overlay hidden">
+    <div class="overlay-card modal-card">
+        <h3>Convert USDC<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon-xl" aria-hidden="true"> to ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon-xl" aria-hidden="true"></h3>
+        <div class="muted small" style="margin-bottom:8px;">Swap happens on Osmosis (Pool 2977). Watch the status log below.</div>
+        <form onsubmit="submitConvertUsdc(event)">
+            <div class="form-body">
+                <div class="form-row convert-row">
+                    <div class="field-block">
+                        <div class="field-inline">
+                            <label for="convertUsdcAmount">USDC<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"> Amount</label>
+                            <button type="button" class="mini-btn" onclick="setConvertUsdcMax()">Max</button>
+                        </div>
+                        <input type="number" id="convertUsdcAmount" min="0" step="0.000001" placeholder="Available: 0.000000" oninput="debouncedConvertQuote()" />
+                        <div class="estimate-note" id="convertUsdcPriceNote">—</div>
+                    </div>
+                    <div class="field-block">
+                        <label for="convertUsdcEst">ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"> Amount</label>
+                        <div class="estimate-box" id="convertUsdcEst">—</div>
+                    </div>
+                </div>
+                <div class="form-row" id="convertUsdcLogRow">
+                    <label for="convertUsdcLog">Log</label>
+                    <textarea id="convertUsdcLog" class="send-log" rows="10" readonly></textarea>
+                </div>
+            </div>
+            <div class="actions modal-actions">
+                <button type="button" class="btn-ghost" onclick="closeConvertUsdcModal()">Close</button>
+                <button type="submit" class="primary" id="convertUsdcSubmitBtn">Convert</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="convertArkeoModal" class="overlay hidden">
+    <div class="overlay-card modal-card">
+        <h3>Convert ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon-xl" aria-hidden="true"> to USDC<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon-xl" aria-hidden="true"></h3>
+        <div class="muted small" style="margin-bottom:8px;">Swap happens on Osmosis (Pool 2977). Watch the status log below.</div>
+        <form onsubmit="submitConvertArkeo(event)">
+            <div class="form-body">
+                <div class="form-row convert-row">
+                        <div class="field-block">
+                            <div class="field-inline">
+                                <label for="convertArkeoAmount">ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"> Amount</label>
+                                <button type="button" class="mini-btn" onclick="setConvertArkeoMax()">Max</button>
+                            </div>
+                            <input type="number" id="convertArkeoAmount" min="0" step="0.00000001" placeholder="Available: 0.00000000" oninput="checkConvertArkeoAmount()" />
+                            <div class="estimate-note" id="convertArkeoPriceNote">No live quote; swap uses pool 2977.</div>
+                        </div>
+                    <div class="field-block">
+                        <label for="convertArkeoEst">USDC<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"> Amount</label>
+                        <div class="estimate-box" id="convertArkeoEst">—</div>
+                    </div>
+                </div>
+                <div class="form-row" id="convertArkeoLogRow">
+                    <label for="convertArkeoLog">Log</label>
+                    <textarea id="convertArkeoLog" class="send-log" rows="10" readonly></textarea>
+                </div>
+            </div>
+            <div class="actions modal-actions">
+                <button type="button" class="btn-ghost" onclick="closeConvertArkeoModal()">Close</button>
+                <button type="submit" class="primary" id="convertArkeoSubmitBtn">Convert</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="convertArkeoNativeModal" class="overlay hidden">
+    <div class="overlay-card modal-card">
+        <h3>Send ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon-lg" aria-hidden="true"> to ARKEO<img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="chain-icon-lg" aria-hidden="true"></h3>
+        <div class="muted small" style="margin-bottom:8px;">IBC transfer: Osmosis Chain wrapped ARKEO to Arkeo Chain. Watch the status log below.</div>
+        <form onsubmit="submitConvertArkeoNative(event)">
+                <div class="form-body">
+                    <div class="form-row convert-row">
+                        <div class="field-block">
+                        <div class="field-inline">
+                            <label for="convertArkeoNativeAmount">ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"></label>
+                            <button type="button" class="mini-btn" onclick="setConvertArkeoNativeMax()">Max</button>
+                        </div>
+                        <input type="number" id="convertArkeoNativeAmount" min="0" step="0.00000001" placeholder="Available: 0.00000000" oninput="checkConvertArkeoNativeAmount()" />
+                        <div class="estimate-note" id="convertArkeoNativeNote">IBC transfer to Arkeo chain.</div>
+                    </div>
+                    <div class="field-block">
+                        <label for="convertArkeoNativeEst">ARKEO<img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="chain-icon" aria-hidden="true"></label>
+                        <div class="estimate-box" id="convertArkeoNativeEst">—</div>
+                    </div>
+                </div>
+                <div class="form-row" id="convertArkeoNativeLogRow" style="display:none;">
+                    <label for="convertArkeoNativeLog">Log</label>
+                    <textarea id="convertArkeoNativeLog" class="send-log" rows="10" readonly></textarea>
+                </div>
+            </div>
+            <div class="actions modal-actions">
+                <button type="button" class="btn-ghost" onclick="closeConvertArkeoNativeModal()">Close</button>
+                <button type="submit" class="primary" id="convertArkeoNativeSubmitBtn">Send</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="convertArkeoToOsmosisModal" class="overlay hidden">
+    <div class="overlay-card modal-card">
+        <h3>Send ARKEO<img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="chain-icon-lg" aria-hidden="true"> to ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon-lg" aria-hidden="true"></h3>
+        <div class="muted small" style="margin-bottom:8px;">IBC transfer: Arkeo Chain to Osmosis Chain wrapped ARKEO. Watch the status log below.</div>
+        <form onsubmit="submitConvertArkeoToOsmosis(event)">
+            <div class="form-body">
+                <div class="form-row convert-row">
+                    <div class="field-block">
+                        <div class="field-inline">
+                            <label for="convertArkeoToOsmosisAmount">ARKEO<img src="images/arkeo-logo-200px_1.png" alt="Arkeo" class="chain-icon" aria-hidden="true"></label>
+                            <button type="button" class="mini-btn" onclick="setConvertArkeoToOsmosisMax()">Max</button>
+                        </div>
+                        <input type="number" id="convertArkeoToOsmosisAmount" min="0" step="0.000001" placeholder="Available: 0.000000" oninput="checkConvertArkeoToOsmosisAmount()" />
+                        <div class="estimate-note" id="convertArkeoToOsmosisNote" style="color: var(--primary); font-size:12px;">IBC transfer to Osmosis.</div>
+                    </div>
+                    <div class="field-block">
+                        <label for="convertArkeoToOsmosisEst">ARKEO<img src="images/osmosis/info/logo.png" alt="Osmosis" class="chain-icon" aria-hidden="true"></label>
+                        <div class="estimate-box" id="convertArkeoToOsmosisEst"></div>
+                    </div>
+                </div>
+                <div class="form-row" id="convertArkeoToOsmosisLogRow" style="display:none;">
+                    <label for="convertArkeoToOsmosisLog">Log</label>
+                    <textarea id="convertArkeoToOsmosisLog" class="send-log" rows="10" readonly></textarea>
+                </div>
+            </div>
+            <div class="actions modal-actions">
+                <button type="button" class="btn-ghost" onclick="closeConvertArkeoToOsmosisModal()">Close</button>
+                <button type="submit" class="primary" id="convertArkeoToOsmosisSubmitBtn">Send</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <div id="adminPasswordGate" class="overlay overlay-strong hidden">
     <div class="overlay-card password-card">
         <div class="password-title">
@@ -209,7 +515,7 @@
 <div id="resultModal" class="overlay hidden">
     <div class="overlay-card modal-card">
         <h3 id="modalTitle">Result</h3>
-        <pre id="modalBody"></pre>
+        <div id="modalBody" class="modal-body"></div>
         <button class="primary" onclick="closeModal()">OK</button>
     </div>
 </div>
@@ -340,6 +646,8 @@
         return `${adminApiBase}${path}`;
     }
 
+    const apiUrl = (path) => resolveApi(path);
+
     function isLocalHost(host) {
         const h = (host || "").toLowerCase();
         return h === "localhost" || h === "127.0.0.1" || h === "";
@@ -384,6 +692,28 @@ let earningsRange = "all_time";
 let earningsChartInstance = null;
 let earningsChartCache = {};
     let currentPubkey = "";
+    let currentAddress = "";
+    const OSMOSIS_CHAIN_ID = "osmosis-1";
+    let keplrOsmoAddress = "";
+    let osmosisRpcHttp = "";
+    let keplrKeystoreAttached = false;
+    let hotWalletsOpen = false;
+    let convertUsdcPrice = null;
+    let convertArkeoPrice = null;
+    let convertQuoteTimer = null;
+    let convertWaitTimer = null;
+    let convertArkeoWaitTimer = null;
+    let convertArkeoQuoteTimer = null;
+    let convertAutoClose = null;
+    let convertLogPoll = null;
+    let convertArkeoLogPoll = null;
+    let convertArkeoNativeWaitTimer = null;
+    let convertArkeoNativeLogPoll = null;
+    let convertArkeoToOsmosisWaitTimer = null;
+    let convertArkeoToOsmosisLogPoll = null;
+    let lastArkeoPriceFetch = 0;
+    const DEFAULT_WALLET_SYNC_MS = 15000;
+    let walletRefreshTimer = null;
     let adminPasswordEnabled = false;
     let adminSessionAuthed = false;
     function requirePasswordGate() {
@@ -393,13 +723,1272 @@ let earningsChartCache = {};
         if (gate) gate.classList.remove("hidden");
     }
     const realFetch = window.fetch.bind(window);
-    window.fetch = (url, options = {}) =>
-        realFetch(url, { credentials: "include", ...options }).then((resp) => {
-            if (resp && resp.status === 401) {
+    function shouldIncludeCredentials(requestUrl) {
+        const rawUrl = typeof requestUrl === "string" ? requestUrl : requestUrl?.url || "";
+        try {
+            const urlObj = new URL(rawUrl, window.location.origin);
+            const apiOrigin = new URL(adminApiBase, window.location.origin).origin;
+            return urlObj.origin === window.location.origin || urlObj.origin === apiOrigin;
+        } catch (e) {
+            return false;
+        }
+    }
+    window.fetch = (url, options = {}) => {
+        const includeCreds = shouldIncludeCredentials(url);
+        const merged = includeCreds ? { credentials: "include", ...options } : options;
+        return realFetch(url, merged).then((resp) => {
+            if (includeCreds && resp && resp.status === 401) {
                 requirePasswordGate();
             }
             return resp;
         });
+    };
+
+    function getCosmosBundle() {
+        if (!window.Cosmos) {
+            throw new Error("Cosmos bundle not loaded.");
+        }
+        return window.Cosmos;
+    }
+
+    function setKeplrStatus(label, isConnected = false) {
+        const btn = document.getElementById("connectKeplrBtn");
+        if (!btn) return;
+        btn.textContent = label;
+        btn.classList.toggle("connected", !!isConnected);
+    }
+
+    function ensureOsmoAccountConnected() {
+        if (keplrOsmoAddress) return true;
+        showResultModal(
+            "Connect Keplr",
+            "Connect Keplr (chain osmosis-1) to choose the active Osmosis address. Balances are read via backend RPC; Keplr is used only for account selection/signing."
+        );
+        return false;
+    }
+
+    function osmoBalanceUrl() {
+        const addr = keplrOsmoAddress ? encodeURIComponent(keplrOsmoAddress) : "";
+        return addr ? apiUrl(`/api/osmosis/balances?address=${addr}`) : apiUrl("/api/osmosis-balance");
+    }
+
+    async function ensureOsmosisRpc() {
+        if (osmosisRpcHttp) return osmosisRpcHttp;
+        try {
+            const resp = await fetch(apiUrl("/api/osmosis-rpc"), { cache: "no-store" });
+            const data = await resp.json();
+            osmosisRpcHttp = data?.rpc || "";
+        } catch (err) {
+            console.error("Failed to fetch Osmosis RPC", err);
+            osmosisRpcHttp = "";
+        }
+        return osmosisRpcHttp;
+    }
+
+    async function fetchOsmoBalance() {
+        const resp = await fetch(osmoBalanceUrl(), { cache: "no-store" });
+        return resp.json();
+    }
+
+    async function connectKeplrOsmo(evt) {
+        if (evt && evt.stopPropagation) evt.stopPropagation();
+        const btn = document.getElementById("connectKeplrBtn");
+        if (keplrOsmoAddress) {
+            keplrOsmoAddress = "";
+            const addrEl = document.getElementById("walletOsmoAddress");
+            if (addrEl) addrEl.textContent = "(connect Keplr)";
+            setKeplrStatus("Connect Keplr", false);
+            applyHotwalletActionGates({
+                osmoUsdcNum: NaN,
+                osmoArkeoNum: NaN,
+                arkeoBalNum: NaN,
+                lacksKeplr: true,
+            });
+            refreshHotwallets();
+            return;
+        }
+        if (!window.keplr || !window.getOfflineSigner) {
+            showResultModal("Connect Keplr", "Keplr extension is required for signing on Osmosis.");
+            setKeplrStatus("Connect Keplr Wallet", false);
+            return;
+        }
+        try {
+            if (btn) btn.disabled = true;
+            setKeplrStatus("Connecting...", false);
+            const rpc = await ensureOsmosisRpc();
+            if (!rpc) throw new Error("Osmosis RPC unavailable");
+            if (!window.Cosmos) throw new Error("CosmJS bundle missing");
+            keplrOsmoAddress = await getCosmosBundle().connectKeplr({ chainId: OSMOSIS_CHAIN_ID, rpcEndpoint: rpc });
+            const addrEl = document.getElementById("walletOsmoAddress");
+            if (addrEl) addrEl.textContent = keplrOsmoAddress || "—";
+            setKeplrStatus("Keplr Connected", true);
+            registerKeplrKeystoreChange();
+            refreshHotwallets();
+        } catch (err) {
+            console.error("Keplr connect failed", err);
+            setKeplrStatus("Connect Failed", false);
+            showResultModal("Connect Keplr", `Failed to connect Keplr: ${err}`);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    function registerKeplrKeystoreChange() {
+        if (keplrKeystoreAttached || !window.Cosmos) return;
+        keplrKeystoreAttached = true;
+        getCosmosBundle().onKeplrKeystoreChange(async () => {
+            try {
+                const rpc = await ensureOsmosisRpc();
+                keplrOsmoAddress = await getCosmosBundle().connectKeplr({ chainId: OSMOSIS_CHAIN_ID, rpcEndpoint: rpc });
+                const addrEl = document.getElementById("walletOsmoAddress");
+                if (addrEl) addrEl.textContent = keplrOsmoAddress || "(connect Keplr)";
+                setKeplrStatus(keplrOsmoAddress ? "Keplr Connected" : "Connect Keplr Wallet", !!keplrOsmoAddress);
+                refreshHotwallets();
+            } catch (err) {
+                console.error("Keplr keystore change handling failed", err);
+            }
+        }, { chainId: OSMOSIS_CHAIN_ID, rpcEndpoint: osmosisRpcHttp });
+    }
+
+    function showEthGasInfo() {
+        const msg = "To send or move USDC from this wallet, you need a small amount of ETH to pay gas.";
+        showResultModal("Gas Reminder", msg);
+    }
+
+    function showOsmoGasInfo() {
+        const msg = "To send or move tokens (including USDC) on Osmosis, you need a small amount of OSMO to pay gas.";
+        showResultModal("Gas Reminder", msg);
+    }
+
+    function parseNumber(text) {
+        if (!text) return NaN;
+        const num = parseFloat(String(text).replace(/[^\d.\-]/g, ""));
+        return num;
+    }
+
+    function escapeHtml(str) {
+        if (str === undefined || str === null) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
+    }
+
+    function setOsmoGasGates(osmoBalanceText) {
+        const osmoVal = parseNumber(osmoBalanceText);
+        const hasGas = Number.isFinite(osmoVal) && osmoVal > 0;
+        const reason = "Requires OSMO for gas.";
+        const toggle = (id, allowed) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (!el.dataset.baseTitle) el.dataset.baseTitle = el.title || "";
+            if (allowed) {
+                el.disabled = false;
+                el.title = el.dataset.baseTitle;
+            } else {
+                el.disabled = true;
+                el.title = `${el.dataset.baseTitle || ""} (${reason})`.trim();
+            }
+        };
+        toggle("convertUsdcBtn", hasGas);
+        toggle("convertArkeoBtn", hasGas);
+        toggle("convertArkeoNativeBtn", hasGas);
+    }
+
+    function applyHotwalletActionGates({ osmoUsdcNum, osmoArkeoNum, arkeoBalNum, lacksKeplr }) {
+        const setDisabled = (el, disabled) => {
+            if (!el) return;
+            el.disabled = !!disabled;
+            el.classList.toggle("disabled", !!disabled);
+        };
+        const usdcToArkeoBtn = document.getElementById("convertUsdcBtn");
+        const arkeoToUsdcBtn = document.getElementById("convertArkeoBtn");
+        const arkeoToNativeBtn = document.getElementById("convertArkeoNativeBtn");
+        const arkeoToOsmosisBtn = document.getElementById("convertArkeoToOsmosisBtn");
+        setDisabled(usdcToArkeoBtn, lacksKeplr || !Number.isFinite(osmoUsdcNum) || osmoUsdcNum <= 0);
+        setDisabled(arkeoToUsdcBtn, lacksKeplr || !Number.isFinite(osmoArkeoNum) || osmoArkeoNum <= 0);
+        setDisabled(arkeoToNativeBtn, lacksKeplr || !Number.isFinite(osmoArkeoNum) || osmoArkeoNum <= 0);
+        setDisabled(arkeoToOsmosisBtn, lacksKeplr || !Number.isFinite(arkeoBalNum) || arkeoBalNum <= 0);
+    }
+
+    async function refreshHotwalletLogBox(targetId = "convertUsdcLog") {
+        const box = document.getElementById(targetId);
+        if (!box) return;
+        try {
+            const resp = await fetch(apiUrl("/api/hotwallet/logs?limit=200"), { cache: "no-store" });
+            const data = await resp.json();
+            const entries = Array.isArray(data?.logs) ? data.logs : Array.isArray(data) ? data : [];
+            const lines = entries
+                .map((e) => {
+                    const ts = e?.ts || "";
+                    const msg = e?.msg || e?.message || e?.action || "";
+                    const stage = e?.stage ? ` [${e.stage}]` : "";
+                    const swap = e?.swap_tx ? ` swap=${e.swap_tx}` : "";
+                    const ibc = e?.ibc_tx ? ` ibc=${e.ibc_tx}` : "";
+                    return `${ts}${stage ? " " + stage : ""}  ${msg}${swap || ""}${ibc || ""}`;
+                })
+                .join("\n");
+            box.value = lines || "No log entries yet.";
+            box.scrollTop = box.scrollHeight;
+        } catch (err) {
+            box.value = `Failed to load logs: ${err}`;
+        }
+    }
+
+    function startHotwalletLogPoll(targetId = "convertUsdcLog", intervalMs = 5000) {
+        stopHotwalletLogPoll();
+        refreshHotwalletLogBox(targetId);
+        convertLogPoll = setInterval(() => refreshHotwalletLogBox(targetId), intervalMs);
+    }
+
+    function stopHotwalletLogPoll() {
+        if (convertLogPoll) {
+            clearInterval(convertLogPoll);
+            convertLogPoll = null;
+        }
+    }
+
+    function appendConvertLog(line) {
+        if (line) {
+            try {
+                fetch(apiUrl("/api/hotwallet/log-note"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ msg: line }),
+                });
+            } catch (e) {
+                // ignore
+            }
+        }
+        refreshHotwalletLogBox("convertUsdcLog");
+    }
+
+    async function keplrSwapExactAmountIn({
+        amountInBase,
+        tokenInDenom,
+        tokenOutDenom,
+        minOutBase,
+        memo = "",
+        logFn,
+    }) {
+        const log = logFn || (() => {});
+        const rpc = await ensureOsmosisRpc();
+        if (!rpc) throw new Error("Osmosis RPC unavailable");
+        log(`Signing swap: ${tokenInDenom} -> ${tokenOutDenom}`);
+        const result = await getCosmosBundle().signAndBroadcastSwap({
+            chainId: OSMOSIS_CHAIN_ID,
+            rpcEndpoint: rpc,
+            senderAddress: keplrOsmoAddress,
+            tokenInDenom,
+            tokenOutDenom,
+            amountInBase,
+            minOutBase,
+            memo,
+        });
+        log(`Swap submitted: tx ${result.transactionHash}`);
+        return result.transactionHash;
+    }
+
+    function setConvertButtonEnabled(enabled) {
+        const btn = document.getElementById("convertUsdcSubmitBtn");
+        if (btn) {
+            btn.disabled = !enabled;
+            if (!enabled) btn.classList.add("disabled");
+            else btn.classList.remove("disabled");
+        }
+    }
+
+    function debouncedConvertQuote() {
+        if (convertQuoteTimer) clearTimeout(convertQuoteTimer);
+        setConvertButtonEnabled(false);
+        convertQuoteTimer = setTimeout(fetchConvertQuote, 350);
+    }
+
+    function debouncedConvertArkeoQuote() {
+        if (convertArkeoQuoteTimer) clearTimeout(convertArkeoQuoteTimer);
+        setConvertArkeoButtonEnabled(false);
+        convertArkeoQuoteTimer = setTimeout(fetchConvertArkeoQuote, 350);
+    }
+
+    function setConvertArkeoButtonEnabled(enabled) {
+        const btn = document.getElementById("convertArkeoSubmitBtn");
+        if (btn) {
+            btn.disabled = !enabled;
+            if (!enabled) btn.classList.add("disabled");
+            else btn.classList.remove("disabled");
+        }
+    }
+
+    function setConvertArkeoNativeButtonEnabled(enabled) {
+        const btn = document.getElementById("convertArkeoNativeSubmitBtn");
+        if (btn) {
+            btn.disabled = !enabled;
+            if (!enabled) btn.classList.add("disabled");
+            else btn.classList.remove("disabled");
+        }
+    }
+
+    function setConvertArkeoToOsmosisButtonEnabled(enabled) {
+        const btn = document.getElementById("convertArkeoToOsmosisSubmitBtn");
+        if (btn) {
+            btn.disabled = !enabled;
+            if (!enabled) btn.classList.add("disabled");
+            else btn.classList.remove("disabled");
+        }
+    }
+
+    function appendConvertArkeoLog(line) {
+        if (line) {
+            try {
+                fetch(apiUrl("/api/hotwallet/log-note"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ msg: line }),
+                });
+            } catch (e) { /* noop */ }
+        }
+        refreshHotwalletLogBox("convertArkeoLog");
+    }
+
+    function appendConvertArkeoNativeLog(line) {
+        if (line) {
+            try {
+                fetch(apiUrl("/api/hotwallet/log-note"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ msg: line }),
+                });
+            } catch (e) { /* noop */ }
+        }
+        refreshHotwalletLogBox("convertArkeoNativeLog");
+    }
+
+    function appendConvertArkeoToOsmosisLog(line) {
+        if (line) {
+            try {
+                fetch(apiUrl("/api/hotwallet/log-note"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ msg: line }),
+                });
+            } catch (e) { /* noop */ }
+        }
+        refreshHotwalletLogBox("convertArkeoToOsmosisLog");
+    }
+
+    function openConvertArkeoModal(evt) {
+        if (evt && evt.stopPropagation) evt.stopPropagation();
+        if (!ensureOsmoAccountConnected()) return;
+        const modal = document.getElementById("convertArkeoModal");
+        const amtInput = document.getElementById("convertArkeoAmount");
+        const logBox = document.getElementById("convertArkeoLog");
+        const logRow = document.getElementById("convertArkeoLogRow");
+        if (logBox) logBox.value = "";
+        if (logRow) logRow.style.display = "none";
+        startHotwalletLogPoll("convertArkeoLog", 5000);
+        if (convertArkeoQuoteTimer) {
+            clearTimeout(convertArkeoQuoteTimer);
+            convertArkeoQuoteTimer = null;
+        }
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        if (amtInput) {
+            amtInput.value = "";
+            amtInput.placeholder = isNaN(avail) ? "Available: 0.00000000" : `Available: ${avail.toFixed(8)}`;
+        }
+        if (modal) modal.classList.remove("hidden");
+        setConvertArkeoButtonEnabled(false);
+        fetchConvertArkeoQuote();
+    }
+
+    function openConvertArkeoNativeModal(evt) {
+        if (evt && evt.stopPropagation) evt.stopPropagation();
+        if (!ensureOsmoAccountConnected()) return;
+        const modal = document.getElementById("convertArkeoNativeModal");
+        const amtInput = document.getElementById("convertArkeoNativeAmount");
+        const logBox = document.getElementById("convertArkeoNativeLog");
+        const logRow = document.getElementById("convertArkeoNativeLogRow");
+        const estBox = document.getElementById("convertArkeoNativeEst");
+        if (logBox) logBox.value = "";
+        if (logRow) logRow.style.display = "none";
+        if (estBox) estBox.textContent = "—";
+        startHotwalletLogPoll("convertArkeoNativeLog", 5000);
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        if (amtInput) {
+            amtInput.value = "";
+            amtInput.placeholder = isNaN(avail) ? "Available: 0.00000000" : `Available: ${avail.toFixed(8)}`;
+        }
+        if (modal) modal.classList.remove("hidden");
+        setConvertArkeoNativeButtonEnabled(false);
+    }
+
+    function openConvertArkeoToOsmosisModal(evt) {
+        if (evt && evt.stopPropagation) evt.stopPropagation();
+        if (!ensureOsmoAccountConnected()) return;
+        const modal = document.getElementById("convertArkeoToOsmosisModal");
+        const amtInput = document.getElementById("convertArkeoToOsmosisAmount");
+        const logBox = document.getElementById("convertArkeoToOsmosisLog");
+        const logRow = document.getElementById("convertArkeoToOsmosisLogRow");
+        const estBox = document.getElementById("convertArkeoToOsmosisEst");
+        if (logBox) logBox.value = "";
+        if (logRow) logRow.style.display = "none";
+        if (estBox) estBox.textContent = "—";
+        startHotwalletLogPoll("convertArkeoToOsmosisLog", 5000);
+        const balText = document.getElementById("walletArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        if (amtInput) {
+            amtInput.value = "";
+            amtInput.placeholder = isNaN(avail) ? "Available: 0.000000" : `Available: ${avail.toFixed(6)}`;
+        }
+        if (modal) modal.classList.remove("hidden");
+        setConvertArkeoToOsmosisButtonEnabled(false);
+    }
+
+    function openConvertUsdcModal(evt) {
+        if (evt && evt.stopPropagation) evt.stopPropagation();
+        if (!ensureOsmoAccountConnected()) return;
+        const modal = document.getElementById("convertUsdcModal");
+        const amtInput = document.getElementById("convertUsdcAmount");
+        const logBox = document.getElementById("convertUsdcLog");
+        const logRow = document.getElementById("convertUsdcLogRow");
+        if (logBox) logBox.value = "";
+        if (logRow) logRow.style.display = "none";
+        startHotwalletLogPoll("convertUsdcLog", 5000);
+        if (convertAutoClose) {
+            clearTimeout(convertAutoClose);
+            convertAutoClose = null;
+        }
+        const balText = document.getElementById("walletOsmoUsdcBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        if (amtInput) {
+            amtInput.value = "";
+            amtInput.placeholder = isNaN(avail) ? "Available: 0.000000" : `Available: ${avail.toFixed(6)}`;
+        }
+        if (modal) modal.classList.remove("hidden");
+        setConvertButtonEnabled(false);
+        fetchConvertQuote();
+    }
+
+    function closeConvertUsdcModal() {
+        const modal = document.getElementById("convertUsdcModal");
+        if (modal) modal.classList.add("hidden");
+        setConvertButtonEnabled(true);
+        stopHotwalletLogPoll();
+        if (convertWaitTimer) {
+            clearInterval(convertWaitTimer);
+            convertWaitTimer = null;
+        }
+        if (convertAutoClose) {
+            clearTimeout(convertAutoClose);
+            convertAutoClose = null;
+        }
+    }
+
+    function closeConvertArkeoModal() {
+        const modal = document.getElementById("convertArkeoModal");
+        if (modal) modal.classList.add("hidden");
+        setConvertArkeoButtonEnabled(true);
+        stopHotwalletLogPoll();
+        if (convertArkeoWaitTimer) {
+            clearInterval(convertArkeoWaitTimer);
+            convertArkeoWaitTimer = null;
+        }
+    }
+
+    function closeConvertArkeoNativeModal() {
+        const modal = document.getElementById("convertArkeoNativeModal");
+        if (modal) modal.classList.add("hidden");
+        setConvertArkeoNativeButtonEnabled(true);
+        stopHotwalletLogPoll();
+        if (convertArkeoNativeWaitTimer) {
+            clearInterval(convertArkeoNativeWaitTimer);
+            convertArkeoNativeWaitTimer = null;
+        }
+    }
+
+    function closeConvertArkeoToOsmosisModal() {
+        const modal = document.getElementById("convertArkeoToOsmosisModal");
+        if (modal) modal.classList.add("hidden");
+        setConvertArkeoToOsmosisButtonEnabled(true);
+        stopHotwalletLogPoll("convertArkeoToOsmosisLog");
+        if (convertArkeoToOsmosisWaitTimer) {
+            clearInterval(convertArkeoToOsmosisWaitTimer);
+            convertArkeoToOsmosisWaitTimer = null;
+        }
+    }
+
+    async function fetchConvertQuote() {
+        const estEl = document.getElementById("convertUsdcEst");
+        const note = document.getElementById("convertUsdcPriceNote");
+        const amtInput = document.getElementById("convertUsdcAmount");
+        const amt = parseNumber(amtInput?.value);
+        if (!amt || isNaN(amt) || amt <= 0) {
+            if (estEl) estEl.textContent = "—";
+            if (note) note.textContent = "Enter an amount to quote.";
+            setConvertButtonEnabled(false);
+            return;
+        }
+        if (note) note.textContent = "Fetching quote...";
+        try {
+            const resp = await fetch(apiUrl("/api/osmosis-quote-usdc-to-arkeo"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount: amt.toFixed(6) }),
+            });
+            const data = await resp.json();
+            if (!resp.ok || data.error) {
+                if (estEl) estEl.textContent = "—";
+                if (note) note.textContent = data?.error ? `Quote failed: ${data.error}` : "Quote failed";
+                setConvertButtonEnabled(false);
+                return;
+            }
+            convertUsdcPrice = data;
+            const out = data.amount_out || 0;
+            const minOut = data.min_amount_out || 0;
+            if (estEl) estEl.textContent = `≈ ${Number(out).toFixed(6)} ARKEO`;
+            if (note && data.slippage_bps !== undefined) {
+                note.textContent = `* Min received from pool (${(data.slippage_bps / 100).toFixed(2)}% slippage): ${Number(minOut).toFixed(6)} ARKEO`;
+            } else if (note) {
+                note.textContent = "Quote ready";
+            }
+            setConvertButtonEnabled(true);
+        } catch (err) {
+            if (estEl) estEl.textContent = "—";
+            if (note) note.textContent = `Quote failed: ${err}`;
+            setConvertButtonEnabled(false);
+        }
+    }
+
+    let convertArkeoQuoteReqId = 0;
+    async function fetchConvertArkeoQuote(retries = 1) {
+        const reqId = ++convertArkeoQuoteReqId;
+        const estEl = document.getElementById("convertArkeoEst");
+        const note = document.getElementById("convertArkeoPriceNote");
+        const amtInput = document.getElementById("convertArkeoAmount");
+        const amt = parseNumber(amtInput?.value);
+        if (!amt || isNaN(amt) || amt <= 0) {
+            if (estEl) estEl.textContent = "—";
+            if (note) note.textContent = "Enter an amount to quote.";
+            setConvertArkeoButtonEnabled(false);
+            return;
+        }
+        const attemptFetch = async (remaining, sameReqId) => {
+            if (note) note.textContent = remaining < retries ? "Retrying quote..." : "Fetching quote...";
+            try {
+                const resp = await fetch(apiUrl("/api/osmosis-quote-arkeo-to-usdc"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ amount: amt.toFixed(8) }),
+                });
+                const text = await resp.text();
+                let data = {};
+                try { data = JSON.parse(text); } catch (e) { data = { error: text || "Quote failed" }; }
+                if (sameReqId !== convertArkeoQuoteReqId) return;
+                if (!resp.ok || data.error) {
+                    if (remaining > 0) {
+                        setTimeout(() => attemptFetch(remaining - 1, sameReqId), 500);
+                        return;
+                    }
+                    if (estEl) estEl.textContent = "—";
+                    if (note) note.textContent = data?.error ? `Quote failed: ${data.error}` : `Quote failed`;
+                    setConvertArkeoButtonEnabled(false);
+                    return;
+                }
+                convertArkeoPrice = data;
+                const out = data.amount_out || 0;
+                const minOut = data.min_amount_out || 0;
+                if (estEl) estEl.textContent = `≈ ${Number(out).toFixed(6)} USDC`;
+                if (note && data.slippage_bps !== undefined) {
+                    note.textContent = `* Min received from pool (${(data.slippage_bps / 100).toFixed(2)}% slippage): ${Number(minOut).toFixed(6)} USDC`;
+                } else if (note) {
+                    note.textContent = "Quote ready";
+                }
+                setConvertArkeoButtonEnabled(true);
+            } catch (err) {
+                if (sameReqId !== convertArkeoQuoteReqId) return;
+                if (remaining > 0) {
+                    setTimeout(() => attemptFetch(remaining - 1, sameReqId), 500);
+                    return;
+                }
+                if (estEl) estEl.textContent = "—";
+                if (note) note.textContent = `Quote failed: ${err}`;
+                setConvertArkeoButtonEnabled(false);
+            }
+        };
+        attemptFetch(retries, reqId);
+    }
+
+    async function submitConvertUsdc(evt) {
+        evt.preventDefault();
+        if (!ensureOsmoAccountConnected()) return;
+        const logRow = document.getElementById("convertUsdcLogRow");
+        if (logRow) logRow.style.display = "block";
+        appendConvertLog("Convert Osmosis USDC to ARKEO (kept on Osmosis; no IBC).");
+        const amtInput = document.getElementById("convertUsdcAmount");
+        const amt = parseNumber(amtInput?.value);
+        const balText = document.getElementById("walletOsmoUsdcBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const errs = [];
+        if (!amt || isNaN(amt) || amt <= 0) errs.push("Enter a valid amount > 0.");
+        if (!isNaN(avail) && avail >= 0 && amt > avail) errs.push(`Amount exceeds available USDC (${avail.toFixed(6)}).`);
+        if (!convertUsdcPrice || !convertUsdcPrice.amount_out) errs.push("Quote not ready yet; please wait.");
+        if (!convertUsdcPrice?.usdc_denom || !convertUsdcPrice?.arkeo_denom) errs.push("Swap denoms unavailable.");
+        if (errs.length) {
+            appendConvertLog(errs.join(" "));
+            return;
+        }
+        setConvertButtonEnabled(false);
+        const btn = document.getElementById("convertUsdcSubmitBtn");
+        if (btn) btn.disabled = true;
+        appendConvertLog(`Submitting convert of ${amt.toFixed(6)} USDC...`);
+        if (convertWaitTimer) {
+            clearInterval(convertWaitTimer);
+            convertWaitTimer = null;
+        }
+        convertWaitTimer = setInterval(() => {
+            appendConvertLog("Waiting for swap... still working.");
+        }, 10000);
+        try {
+            const minOutBase = convertUsdcPrice.min_amount_out_base || Math.max(1, Math.floor((convertUsdcPrice.amount_out_base || 0) * 0.99));
+            const txHash = await keplrSwapExactAmountIn({
+                amountInBase: Math.round(amt * 1_000_000),
+                tokenInDenom: convertUsdcPrice.usdc_denom,
+                tokenOutDenom: convertUsdcPrice.arkeo_denom,
+                minOutBase,
+                memo: "USDC->ARKEO swap (pool 2977)",
+                logFn: appendConvertLog,
+            });
+            if (convertWaitTimer) {
+                clearInterval(convertWaitTimer);
+                convertWaitTimer = null;
+            }
+            appendConvertLog(`Swap complete. Tx: ${txHash}`);
+            if (!convertAutoClose) {
+                convertAutoClose = setTimeout(() => {
+                    closeConvertUsdcModal();
+                }, 2000);
+            }
+            refreshHotwallets();
+        } catch (err) {
+            appendConvertLog(`Error: ${err}`);
+            if (convertWaitTimer) {
+                clearInterval(convertWaitTimer);
+                convertWaitTimer = null;
+            }
+            setConvertButtonEnabled(true);
+        } finally {
+            // keep disabled until modal is reopened
+        }
+    }
+
+    function checkConvertArkeoAmount() {
+        const amtInput = document.getElementById("convertArkeoAmount");
+        const amt = parseNumber(amtInput?.value);
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const enable = amt && !isNaN(amt) && amt > 0 && (isNaN(avail) || amt <= avail);
+        setConvertArkeoButtonEnabled(enable);
+        debouncedConvertArkeoQuote();
+    }
+
+    function checkConvertArkeoNativeAmount() {
+        const amtInput = document.getElementById("convertArkeoNativeAmount");
+        const amt = parseNumber(amtInput?.value);
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const enable = amt && !isNaN(amt) && amt > 0 && (isNaN(avail) || amt <= avail);
+        setConvertArkeoNativeButtonEnabled(enable);
+        const estBox = document.getElementById("convertArkeoNativeEst");
+        if (estBox) {
+            estBox.textContent = enable ? `${amt.toFixed(8)} ARKEO` : "—";
+        }
+    }
+
+    function checkConvertArkeoToOsmosisAmount() {
+        const amtInput = document.getElementById("convertArkeoToOsmosisAmount");
+        const amt = parseNumber(amtInput?.value);
+        const balText = document.getElementById("walletArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const enable = amt && !isNaN(amt) && amt > 0 && (isNaN(avail) || amt <= avail);
+        setConvertArkeoToOsmosisButtonEnabled(enable);
+        const estBox = document.getElementById("convertArkeoToOsmosisEst");
+        if (estBox) {
+            estBox.textContent = enable ? `${amt.toFixed(8)} ARKEO` : "—";
+        }
+    }
+
+    function setConvertUsdcMax() {
+        const balText = document.getElementById("walletOsmoUsdcBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const amtInput = document.getElementById("convertUsdcAmount");
+        if (!isNaN(avail) && amtInput) {
+            amtInput.value = avail.toFixed(6);
+            debouncedConvertQuote();
+        }
+    }
+
+    function setConvertArkeoMax() {
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const amtInput = document.getElementById("convertArkeoAmount");
+        if (!isNaN(avail) && amtInput) {
+            amtInput.value = avail.toFixed(8);
+            checkConvertArkeoAmount();
+        }
+    }
+
+    function setConvertArkeoNativeMax() {
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const amtInput = document.getElementById("convertArkeoNativeAmount");
+        if (!isNaN(avail) && amtInput) {
+            amtInput.value = avail.toFixed(8);
+            checkConvertArkeoNativeAmount();
+        }
+    }
+
+    function setConvertArkeoToOsmosisMax() {
+        const balText = document.getElementById("walletArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const amtInput = document.getElementById("convertArkeoToOsmosisAmount");
+        if (!isNaN(avail) && amtInput) {
+            amtInput.value = avail.toFixed(6);
+            checkConvertArkeoToOsmosisAmount();
+        }
+    }
+
+    async function submitConvertArkeo(evt) {
+        evt.preventDefault();
+        if (!ensureOsmoAccountConnected()) return;
+        appendConvertArkeoLog("Convert Osmosis ARKEO to USDC.");
+        const amtInput = document.getElementById("convertArkeoAmount");
+        const amt = parseNumber(amtInput?.value);
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const logRow = document.getElementById("convertArkeoLogRow");
+        if (logRow) logRow.style.display = "block";
+        const errs = [];
+        if (!amt || isNaN(amt) || amt <= 0) errs.push("Enter a valid amount > 0.");
+        if (!isNaN(avail) && avail >= 0 && amt > avail) errs.push(`Amount exceeds available ARKEO (${avail.toFixed(8)}).`);
+        if (!convertArkeoPrice?.arkeo_denom || !convertArkeoPrice?.usdc_denom) errs.push("Swap denoms unavailable.");
+        if (errs.length) {
+            appendConvertArkeoLog(errs.join(" "));
+            return;
+        }
+        setConvertArkeoButtonEnabled(false);
+        const btn = document.getElementById("convertArkeoSubmitBtn");
+        if (btn) btn.disabled = true;
+        appendConvertArkeoLog(`Submitting convert of ${amt.toFixed(8)} ARKEO...`);
+        if (convertArkeoWaitTimer) {
+            clearInterval(convertArkeoWaitTimer);
+            convertArkeoWaitTimer = null;
+        }
+        convertArkeoWaitTimer = setInterval(() => {
+            appendConvertArkeoLog("Waiting for swap... still working.");
+        }, 10000);
+        try {
+            const minOutBase =
+                convertArkeoPrice?.min_amount_out_base ||
+                Math.max(1, Math.floor((convertArkeoPrice?.amount_out_base || 0) * 0.99));
+            const txHash = await keplrSwapExactAmountIn({
+                amountInBase: Math.round(amt * 100_000_000),
+                tokenInDenom: convertArkeoPrice?.arkeo_denom || "",
+                tokenOutDenom: convertArkeoPrice?.usdc_denom || "",
+                minOutBase,
+                memo: "ARKEO->USDC swap (pool 2977)",
+                logFn: appendConvertArkeoLog,
+            });
+            if (convertArkeoWaitTimer) {
+                clearInterval(convertArkeoWaitTimer);
+                convertArkeoWaitTimer = null;
+            }
+            appendConvertArkeoLog(`Swap submitted on Osmosis. Tx: ${txHash}`);
+            setTimeout(() => closeConvertArkeoModal(), 2500);
+            refreshHotwallets();
+        } catch (err) {
+            appendConvertArkeoLog(`Error: ${err}`);
+            if (convertArkeoWaitTimer) {
+                clearInterval(convertArkeoWaitTimer);
+                convertArkeoWaitTimer = null;
+            }
+            setConvertArkeoButtonEnabled(true);
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function submitConvertArkeoToOsmosis(evt) {
+        evt.preventDefault();
+        if (!ensureOsmoAccountConnected()) return;
+        const logRow = document.getElementById("convertArkeoToOsmosisLogRow");
+        if (logRow) logRow.style.display = "block";
+        appendConvertArkeoToOsmosisLog("IBC transfer ARKEO (Arkeo) to Osmosis.");
+        const amtInput = document.getElementById("convertArkeoToOsmosisAmount");
+        const amt = parseNumber(amtInput?.value);
+        const balText = document.getElementById("walletArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const errs = [];
+        if (!amt || isNaN(amt) || amt <= 0) errs.push("Enter a valid amount > 0.");
+        if (!isNaN(avail) && avail >= 0 && amt > avail) errs.push(`Amount exceeds available ARKEO (${avail.toFixed(6)}).`);
+        if (errs.length) {
+            appendConvertArkeoToOsmosisLog(errs.join(" "));
+            return;
+        }
+        setConvertArkeoToOsmosisButtonEnabled(false);
+        appendConvertArkeoToOsmosisLog(`Submitting IBC transfer of ${amt.toFixed(8)} ARKEO...`);
+        if (convertArkeoToOsmosisWaitTimer) {
+            clearInterval(convertArkeoToOsmosisWaitTimer);
+            convertArkeoToOsmosisWaitTimer = null;
+        }
+        convertArkeoToOsmosisWaitTimer = setInterval(() => {
+            appendConvertArkeoToOsmosisLog("Waiting for IBC... still working.");
+        }, 10000);
+        try {
+            const resp = await fetch(apiUrl("/api/hotwallet/arkeo-to-osmosis"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    amount: amt.toFixed(8),
+                    osmosis_address: keplrOsmoAddress || "",
+                }),
+            });
+            const data = await resp.json();
+            if (convertArkeoToOsmosisWaitTimer) {
+                clearInterval(convertArkeoToOsmosisWaitTimer);
+                convertArkeoToOsmosisWaitTimer = null;
+            }
+            if (!resp.ok) {
+                appendConvertArkeoToOsmosisLog(`Convert failed: ${data.error || resp.status}`);
+                if (data.ibc_tx) appendConvertArkeoToOsmosisLog(`IBC tx: ${data.ibc_tx}`);
+                if (data.raw_log) appendConvertArkeoToOsmosisLog(`IBC raw log: ${data.raw_log}`);
+                if (data.detail && !data.raw_log) appendConvertArkeoToOsmosisLog(`IBC detail: ${data.detail}`);
+                if (data.ibc_cmd) appendConvertArkeoToOsmosisLog(`IBC cmd: ${JSON.stringify(data.ibc_cmd)}`);
+                setConvertArkeoToOsmosisButtonEnabled(true);
+                return;
+            }
+            if (data.ibc_tx) appendConvertArkeoToOsmosisLog(`IBC tx: ${data.ibc_tx}`);
+            if (data.arkeo_denom) appendConvertArkeoToOsmosisLog(`Osmosis ARKEO denom: ${data.arkeo_denom}`);
+            if (data.packet_sequence) {
+                appendConvertArkeoToOsmosisLog(
+                    `Packet seq ${data.packet_sequence} (src ${data.osmo_src_channel || "-"} -> dst ${data.arkeo_dst_channel || "-"})`
+                );
+            }
+            if (data.tx_code !== undefined && data.tx_code !== null) {
+                appendConvertArkeoToOsmosisLog(`Arkeo tx code: ${data.tx_code}`);
+            }
+            if (data.arrival_confirmed) {
+                appendConvertArkeoToOsmosisLog("IBC complete: ARKEO arrived on Osmosis.");
+                setTimeout(() => closeConvertArkeoToOsmosisModal(), 2500);
+            } else {
+                appendConvertArkeoToOsmosisLog("Transfer submitted. Still pending arrival on Osmosis; check status/logs for updates.");
+                setTimeout(() => closeConvertArkeoToOsmosisModal(), 3000);
+            }
+            refreshHotwallets();
+        } catch (err) {
+            if (convertArkeoToOsmosisWaitTimer) {
+                clearInterval(convertArkeoToOsmosisWaitTimer);
+                convertArkeoToOsmosisWaitTimer = null;
+            }
+            appendConvertArkeoToOsmosisLog(`Error: ${err}`);
+            setConvertArkeoToOsmosisButtonEnabled(true);
+        }
+    }
+
+    async function submitConvertArkeoNative(evt) {
+        evt.preventDefault();
+        if (!ensureOsmoAccountConnected()) return;
+        const logRow = document.getElementById("convertArkeoNativeLogRow");
+        if (logRow) logRow.style.display = "block";
+        appendConvertArkeoNativeLog("IBC transfer ARKEO (Osmosis) to native ARKEO.");
+        const amtInput = document.getElementById("convertArkeoNativeAmount");
+        const amt = parseNumber(amtInput?.value);
+        const balText = document.getElementById("walletOsmoArkeoBalance")?.textContent || "";
+        const avail = parseNumber(balText);
+        const errs = [];
+        if (!amt || isNaN(amt) || amt <= 0) errs.push("Enter a valid amount > 0.");
+        if (!isNaN(avail) && avail >= 0 && amt > avail) errs.push(`Amount exceeds available ARKEO (${avail.toFixed(8)}).`);
+        if (errs.length) {
+            appendConvertArkeoNativeLog(errs.join(" "));
+            return;
+        }
+        setConvertArkeoNativeButtonEnabled(false);
+        const btn = document.getElementById("convertArkeoNativeSubmitBtn");
+        if (btn) btn.disabled = true;
+        appendConvertArkeoNativeLog(`Submitting IBC transfer of ${amt.toFixed(8)} ARKEO...`);
+        if (convertArkeoNativeWaitTimer) {
+            clearInterval(convertArkeoNativeWaitTimer);
+            convertArkeoNativeWaitTimer = null;
+        }
+        convertArkeoNativeWaitTimer = setInterval(() => {
+            appendConvertArkeoNativeLog("Waiting for IBC... still working.");
+        }, 10000);
+        try {
+            const cfgRes = await fetch(apiUrl("/api/osmosis-arkeo-config"), { cache: "no-store" });
+            const cfgText = await cfgRes.text();
+            let cfg = {};
+            try {
+                cfg = JSON.parse(cfgText || "{}");
+            } catch (e) {
+                throw new Error(`config parse failed (${cfgRes.status}): ${cfgText?.slice(0, 120) || "no body"}`);
+            }
+            if (!cfgRes.ok) {
+                const errMsg = cfg?.error || cfgRes.statusText || cfgRes.status;
+                throw new Error(`config fetch failed: ${errMsg}`);
+            }
+            const rpc = cfg.osmosis_rpc;
+            const channel = cfg.source_channel || "channel-103074";
+            const port = cfg.source_port || "transfer";
+            const denom = cfg.arkeo_denom || "ibc/AD969E97A63B64B30A6E4D9F598341A403B849F5ACFEAA9F18DBD9255305EC65";
+            const receiver = cfg.arkeo_address || (document.getElementById("walletArkeoAddress")?.textContent || "").trim();
+            if (!rpc) throw new Error("Osmosis RPC missing");
+            if (!receiver) throw new Error("Arkeo address missing");
+            const { signAndBroadcastIbcTransfer, connectKeplr } = getCosmosBundle();
+            const addr = await connectKeplr({ chainId: "osmosis-1", rpcEndpoint: rpc });
+            if (!keplrOsmoAddress) keplrOsmoAddress = addr;
+            const res = await signAndBroadcastIbcTransfer({
+                chainId: "osmosis-1",
+                rpcEndpoint: rpc,
+                senderAddress: keplrOsmoAddress,
+                receiver,
+                denom,
+                amountBase: (amt * 1e8).toFixed(0),
+                sourceChannel: channel,
+                sourcePort: port,
+                gas: 250000,
+            });
+            if (convertArkeoNativeWaitTimer) {
+                clearInterval(convertArkeoNativeWaitTimer);
+                convertArkeoNativeWaitTimer = null;
+            }
+            appendConvertArkeoNativeLog(`IBC submitted: tx ${res.transactionHash}`);
+            appendConvertArkeoNativeLog("Transfer submitted. Arrival pending on Arkeo chain.");
+            setTimeout(() => closeConvertArkeoNativeModal(), 3000);
+            refreshHotwallets();
+        } catch (err) {
+            appendConvertArkeoNativeLog(`Error: ${err}`);
+            setConvertArkeoNativeButtonEnabled(true);
+            if (btn) btn.disabled = false;
+        } finally {
+            // keep disabled until modal reopen
+        }
+    }
+
+    async function viewHotwalletLogs(evt) {
+        if (evt && evt.stopPropagation) evt.stopPropagation();
+        const btn = evt?.currentTarget;
+        if (btn) btn.disabled = true;
+        try {
+            const resp = await fetch(apiUrl("/api/hotwallet/logs?limit=50"), { cache: "no-store" });
+            if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+            const data = await resp.json();
+            const entries = Array.isArray(data?.logs) ? data.logs : Array.isArray(data) ? data : [];
+            if (!entries.length) {
+                showResultModal("Hot Wallet Logs", "No log entries yet.");
+                return;
+            }
+            const text = entries
+                .map((e) => {
+                    const ts = e?.ts || "";
+                    const msg = e?.msg || e?.message || e?.action || "";
+                    const stage = e?.stage ? ` [${e.stage}]` : "";
+                    const swap = e?.swap_tx ? ` swap=${e.swap_tx}` : "";
+                    const ibc = e?.ibc_tx ? ` ibc=${e.ibc_tx}` : "";
+                    return `${ts}${stage ? " " + stage : ""}  ${msg}${swap || ""}${ibc || ""}`;
+                })
+                .join("\n");
+            const body = `<div style="max-height:60vh;overflow:auto;"><pre style="margin:0;white-space:pre-wrap;">${escapeHtml(text)}</pre></div>`;
+            showResultModal("Hot Wallet Status", body, true);
+            scrollResultModalBottom();
+        } catch (err) {
+            showResultModal("Hot Wallet Logs", `Failed to load logs: ${err}`);
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    }
+
+    async function copyOsmoAddress() {
+        const val = document.getElementById("walletOsmoAddress")?.textContent || "";
+        showCopyModal("Copy Osmosis Address", val);
+    }
+
+    async function copyArkeoPubkey() {
+        const val = currentPubkey || document.getElementById("walletArkeoPubkey")?.textContent || "";
+        showCopyModal("Copy Arkeo Pubkey", val);
+    }
+
+    async function copyArkeoAddress() {
+        const val = currentAddress || document.getElementById("walletArkeoAddress")?.textContent || "";
+        showCopyModal("Copy Arkeo Address", val);
+    }
+
+    function showCopyModal(title, value) {
+        if (!value || value === "—" || value === "(unavailable)") {
+            showResultModal(title, "Value unavailable");
+            return;
+        }
+        showResultModal(title, value);
+        try {
+            navigator.clipboard.writeText(value);
+        } catch (e) {
+            /* noop */
+        }
+    }
+
+    function setHotWalletState(open) {
+        hotWalletsOpen = !!open;
+        const content = document.getElementById("hotWalletContent");
+        const caret = document.getElementById("hotWalletCaret");
+        if (content) {
+            content.style.display = hotWalletsOpen ? "block" : "none";
+        }
+        if (caret) {
+            caret.textContent = hotWalletsOpen ? "▾" : "▸";
+        }
+        const header = document.querySelector(".hotwallet-header");
+        if (header) {
+            header.setAttribute("aria-expanded", hotWalletsOpen ? "true" : "false");
+        }
+        const summary = document.getElementById("hotWalletSummary");
+        if (summary) {
+            summary.style.display = hotWalletsOpen ? "none" : "inline-flex";
+        }
+    }
+
+    function setHotWalletDirection(dir) {
+        const upBtn = document.getElementById("hotWalletUpBtn");
+        const downBtn = document.getElementById("hotWalletDownBtn");
+        const isUp = dir === "up";
+        if (upBtn) upBtn.classList.toggle("active", isUp);
+        if (downBtn) downBtn.classList.toggle("active", !isUp);
+        const setVisible = (id, visible) => {
+            const el = document.getElementById(id);
+            if (!el) return;
+            el.style.display = visible ? "" : "none";
+        };
+        const showUsdcToArkeo = dir === "down";
+        const showArkeoToUsdc = dir === "up";
+        const showArkeoNative = dir === "down";
+        const showArkeoToOsmo = dir === "up";
+        setVisible("convertUsdcRow", showUsdcToArkeo);
+        setVisible("convertArkeoBtn", showArkeoToUsdc);
+        setVisible("convertArkeoNativeBtn", showArkeoNative);
+        setVisible("convertArkeoToOsmosisBtn", showArkeoToOsmo);
+        const showDeposits = dir === "down";
+        setVisible("cardOsmosisDeposit", showDeposits);
+        setVisible("cardSquidRouterDeposit", showDeposits);
+        setVisible("cardOsmosisWithdraw", !showDeposits);
+        setVisible("cardSquidRouterWithdraw", !showDeposits);
+        setVisible("flowDiagramDown", showDeposits);
+        setVisible("flowDiagramUp", !showDeposits);
+    }
+
+    function toggleHotWallets() {
+        setHotWalletState(!hotWalletsOpen);
+    }
+
+    function openHotWallets() {
+        setHotWalletState(true);
+    }
+
+    function toggleHotWalletsFromButton() {
+        setHotWalletState(!hotWalletsOpen);
+    }
+
+    const walletEls = {
+        arkeo: { bal: "walletArkeoBalance", addr: "walletArkeoAddress" },
+        osmo: { bal: "walletOsmoBalance", addr: "walletOsmoAddress" },
+    };
+
+    function scheduleWalletRefresh(intervalMs) {
+        try {
+            if (walletRefreshTimer) {
+                clearInterval(walletRefreshTimer);
+                walletRefreshTimer = null;
+            }
+            if (intervalMs > 0) {
+                walletRefreshTimer = setInterval(refreshHotwallets, intervalMs);
+            }
+        } catch (e) {
+            console.warn("scheduleWalletRefresh failed", e);
+        }
+    }
+
+    async function configureWalletRefreshInterval() {
+        let intervalMs = DEFAULT_WALLET_SYNC_MS;
+        try {
+            const res = await fetch(apiUrl("/api/provider-settings"), { cache: "no-store" });
+            if (res && res.ok) {
+                const data = await res.json().catch(() => ({}));
+                const settings = (data && data.settings) || {};
+                const raw = settings.WALLET_SYNC_INTERVAL ?? settings.wallet_sync_interval ?? settings.WALLET_REFRESH_INTERVAL;
+                const parsed = parseInt(raw, 10);
+                if (Number.isFinite(parsed) && parsed >= 0) {
+                    intervalMs = parsed * 1000;
+                }
+            }
+        } catch (e) {
+            console.warn("configureWalletRefreshInterval: falling back to default", e);
+        }
+        scheduleWalletRefresh(intervalMs);
+    }
+
+    async function onSquidRouteCompleted() {
+        try {
+            await refreshHotwallets();
+        } catch (e) {
+            console.warn("Squid route completion refresh failed", e);
+        }
+    }
+
+    async function refreshHotwallets() {
+        try {
+            const fetchNoStore = (url) => fetch(url, { cache: "no-store" });
+            const parseSafe = async (settled) => {
+                if (!settled || settled.status !== "fulfilled") return { error: "request failed" };
+                try {
+                    if (!settled.value.ok) return { error: `${settled.value.status}` };
+                    return await settled.value.json();
+                } catch (err) {
+                    return { error: String(err) };
+                }
+            };
+            const [infoRes, balRes, heightRes, osmoHeightRes, walletsRes, osmoBalRes] = await Promise.allSettled([
+                fetchNoStore(apiUrl("/api/provider-info")),
+                fetchNoStore(apiUrl("/api/balance")),
+                fetchNoStore(apiUrl("/api/block-height")),
+                fetchNoStore(apiUrl("/api/osmosis-block-height")),
+                fetchNoStore(apiUrl("/api/wallets")),
+                fetchNoStore(osmoBalanceUrl()),
+            ]);
+            const info = await parseSafe(infoRes);
+            const bal = await parseSafe(balRes);
+            const height = await parseSafe(heightRes);
+            const osmoHeight = await parseSafe(osmoHeightRes);
+            const wallets = await parseSafe(walletsRes);
+            const osmoBal = await parseSafe(osmoBalRes);
+
+            const bechPub = info && info.pubkey && info.pubkey.bech32;
+            currentPubkey = bechPub || currentPubkey || "";
+            currentAddress = (info && info.address) || currentAddress || "";
+
+            const arkeoPubEl = document.getElementById("walletArkeoPubkey");
+            if (arkeoPubEl) arkeoPubEl.textContent = currentPubkey || "—";
+
+            const blockVal = (!height || height.error) ? "(unavailable)" : formatBlockHeight(height);
+            const arkeoBalanceText = (!bal || bal.error) ? "—" : formatBalance(bal);
+            const arkeoAddrText = currentAddress || "(unavailable)";
+            const arkeoSummaryEl = document.getElementById("walletArkeoBalanceSummary");
+            if (arkeoSummaryEl) arkeoSummaryEl.textContent = arkeoBalanceText || "—";
+            const osmoBlockVal = (!osmoHeight || osmoHeight.error) ? "(unavailable)" : (osmoHeight.height || "(unavailable)");
+            let osmoBalanceText = "—";
+            let osmoUsdcBalanceText = "—";
+            let osmoArkeoBalanceText = "—";
+            if (osmoBal && !osmoBal.error) {
+                osmoBalanceText = osmoBal.osmo || osmoBal.full || osmoBal.balance || "0.000000 OSMO";
+                osmoUsdcBalanceText = osmoBal.usdc || "0.000000 USDC";
+                osmoArkeoBalanceText = osmoBal.arkeo || "0.000000 ARKEO";
+                setKeplrStatus(keplrOsmoAddress ? "Keplr Connected" : "Connect Keplr Wallet", !!keplrOsmoAddress);
+            } else if (keplrOsmoAddress) {
+                setKeplrStatus("Keplr Connected", true);
+            } else {
+                setKeplrStatus("Connect Keplr Wallet", false);
+            }
+            setOsmoGasGates(osmoBalanceText);
+            refreshArkeoPrice();
+
+            const setWallet = (key, balText, addrText) => {
+                const els = walletEls[key];
+                if (!els) return;
+                const balEl = document.getElementById(els.bal);
+                const addrEl = document.getElementById(els.addr);
+                if (balEl) balEl.textContent = balText || "—";
+                if (addrEl) addrEl.textContent = addrText || "—";
+            };
+            setWallet("arkeo", arkeoBalanceText, arkeoAddrText);
+            const osmoAddrText = keplrOsmoAddress || wallets?.osmosis_address || "(connect Keplr)";
+            setWallet("osmo", osmoBalanceText, osmoAddrText);
+            const osmoUsdcEl = document.getElementById("walletOsmoUsdcBalance");
+            if (osmoUsdcEl) osmoUsdcEl.textContent = osmoUsdcBalanceText || "—";
+            const osmoArkeoEl = document.getElementById("walletOsmoArkeoBalance");
+            if (osmoArkeoEl) osmoArkeoEl.textContent = osmoArkeoBalanceText || "—";
+            const osmoArkeoNum = parseNumber(osmoArkeoBalanceText);
+            const osmoUsdcNum = parseNumber(osmoUsdcBalanceText);
+            const arkeoBalNum = parseNumber(arkeoBalanceText);
+            const lacksKeplr = !keplrOsmoAddress;
+            applyHotwalletActionGates({
+                osmoUsdcNum,
+                osmoArkeoNum,
+                arkeoBalNum,
+                lacksKeplr,
+            });
+            const setWithdrawLinkState = (linkEl, disabled) => {
+                if (!linkEl) return;
+                linkEl.classList.toggle("disabled", disabled);
+                linkEl.setAttribute("aria-disabled", disabled ? "true" : "false");
+                linkEl.tabIndex = disabled ? -1 : 0;
+                if (disabled) {
+                    if (!linkEl.dataset.href) linkEl.dataset.href = linkEl.getAttribute("href") || "";
+                    linkEl.removeAttribute("href");
+                } else if (linkEl.dataset.href) {
+                    linkEl.setAttribute("href", linkEl.dataset.href);
+                }
+            };
+            const osmoWithdrawLink = document.querySelector("#cardOsmosisWithdraw a.wallet-action-btn");
+            const squidWithdrawLink = document.querySelector("#cardSquidRouterWithdraw a.wallet-action-btn");
+            const disableWithdraw = isNaN(osmoUsdcNum) || osmoUsdcNum <= 0;
+            setWithdrawLinkState(osmoWithdrawLink, disableWithdraw);
+            setWithdrawLinkState(squidWithdrawLink, disableWithdraw);
+            const osmoDepositLink = document.querySelector("#cardOsmosisDeposit a.wallet-action-btn");
+            const squidDepositLink = document.querySelector("#cardSquidRouterDeposit a.wallet-action-btn");
+            const disableDeposit = lacksKeplr;
+            setWithdrawLinkState(osmoDepositLink, disableDeposit);
+            setWithdrawLinkState(squidDepositLink, disableDeposit);
+            const osmoBlock = document.getElementById("walletOsmoBlockBadge");
+            if (osmoBlock) osmoBlock.textContent = osmoBlockVal || "—";
+            const arkeoBlockBadge = document.getElementById("walletArkeoBlockBadge");
+            if (arkeoBlockBadge) arkeoBlockBadge.textContent = blockVal || "—";
+        } catch (err) {
+            console.error("refreshHotwallets failed", err);
+        }
+    }
+
+    async function refreshArkeoPrice(force = false) {
+        const priceEl = document.getElementById("arkeoPriceText");
+        const priceHeaderEl = document.getElementById("arkeoPriceHeaderText");
+        const now = Date.now();
+        if (!force && now - lastArkeoPriceFetch < 5000) return;
+        try {
+            const resp = await fetch(apiUrl("/api/osmosis-quote-arkeo-to-usdc"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ amount: "1" }),
+            });
+            const text = await resp.text();
+            let data = {};
+            try {
+                data = JSON.parse(text || "{}");
+            } catch (e) {
+                data = { error: text || "parse error" };
+            }
+            if (!resp.ok || data.error) {
+                if (priceEl) priceEl.textContent = "$0.00000";
+                if (priceHeaderEl) priceHeaderEl.textContent = "$0.00000";
+                return;
+            }
+            const price = Number(data.amount_out);
+            if (Number.isFinite(price)) {
+                const priceStr = `$${price.toFixed(5)}`;
+                if (priceEl) priceEl.textContent = priceStr;
+                if (priceHeaderEl) priceHeaderEl.textContent = priceStr;
+                lastArkeoPriceFetch = now;
+            }
+        } catch (e) {
+            if (priceEl) priceEl.textContent = "$0.00000";
+            if (priceHeaderEl) priceHeaderEl.textContent = "$0.00000";
+        }
+    }
 
     async function refreshInfo() {
         const debugEl = document.getElementById("debugInfo");
@@ -1410,18 +2999,50 @@ function renderProviderServices() {
         }
     }
 
-    function showResultModal(title, bodyText) {
+    function showResultModal(title, body, asHtml = false) {
         const modal = document.getElementById("resultModal");
-        const t = document.getElementById("modalTitle");
-        const b = document.getElementById("modalBody");
-        if (t) t.textContent = title || "Result";
-        if (b) b.textContent = bodyText || "";
-        if (modal) modal.style.display = "flex";
+        const modalTitle = document.getElementById("modalTitle");
+        const modalBody = document.getElementById("modalBody");
+        if (modalTitle) modalTitle.textContent = title || "Result";
+        if (modalBody) {
+            if (asHtml) {
+                modalBody.innerHTML = body || "";
+            } else {
+                modalBody.textContent = body || "";
+            }
+        }
+        if (modal) modal.classList.remove("hidden");
+    }
+
+    function scrollResultModalBottom() {
+        const doScroll = () => {
+            const modalBody = document.getElementById("modalBody");
+            const scrollTarget =
+                (modalBody && modalBody.querySelector("div[style*='overflow']")) ||
+                (modalBody && modalBody.querySelector("pre")) ||
+                modalBody;
+            if (scrollTarget) {
+                scrollTarget.scrollTop = scrollTarget.scrollHeight;
+            }
+        };
+        setTimeout(doScroll, 50);
+        setTimeout(doScroll, 150);
+        setTimeout(doScroll, 300);
+    }
+
+    function updateModalBody(body) {
+        const modalBody = document.getElementById("modalBody");
+        if (modalBody) modalBody.textContent = body || "";
+    }
+
+    function updateModalBodyHtml(body) {
+        const modalBody = document.getElementById("modalBody");
+        if (modalBody) modalBody.innerHTML = body || "";
     }
 
     function closeModal() {
         const modal = document.getElementById("resultModal");
-        if (modal) modal.style.display = "none";
+        if (modal) modal.classList.add("hidden");
     }
 
     async function ensureProviderSettingsExists() {
@@ -1627,6 +3248,15 @@ function renderProviderServices() {
         const ok = await ensureProviderSettingsExists();
         if (!ok) return;
         fetchAdminPasswordStatus(true);
+        setHotWalletDirection("down");
+        setHotWalletState(false);
+        refreshHotwallets();
+        try {
+            registerKeplrKeystoreChange();
+        } catch (err) {
+            console.warn("Keplr listener not attached", err);
+        }
+        await configureWalletRefreshInterval();
         getVersion();
         showSyncingPill();
         refreshInfo().finally(() => hideSyncingPill());

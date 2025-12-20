@@ -73,7 +73,6 @@
     <div class="row-between align-center">
         <div class="inline">
             <h2 class="mt-0 mb-0">Provider Settings</h2>
-            <div class="hint">Values formerly stored in provider.env. Update and save here.</div>
         </div>
     </div>
     <form id="providerSettingsForm" onsubmit="saveProviderSettings(event)">
@@ -99,6 +98,13 @@
             <td class="value"><input type="text" id="arkeodNode" placeholder="tcp://127.0.0.1:26657" /></td>
         </tr>
         <tr>
+            <td class="label">
+                Osmosis RPC
+                <div class="hint">Remote Osmosis RPC endpoint used for hot wallet balance/block checks.</div>
+            </td>
+            <td class="value"><input type="text" id="osmoRpc" placeholder="http://127.0.0.1:26660" /></td>
+        </tr>
+        <tr>
             <td class="label">Arkeo REST API<div class="hint">REST endpoint for Arkeo queries (http://host:port).</div></td>
             <td class="value"><input type="text" id="arkeodRest" placeholder="http://127.0.0.1" /></td>
         </tr>
@@ -117,6 +123,13 @@
         <tr>
             <td class="label">Admin API Port<div class="hint">Port for the admin API backing all pages.</div></td>
             <td class="value"><input type="text" id="adminApiPort" placeholder="9999" autocomplete="on" /></td>
+        </tr>
+        <tr>
+            <td class="label">
+                Wallet Sync Interval (seconds)
+                <div class="hint">How often to refresh wallet info/balances. Set to 0 to disable.</div>
+            </td>
+            <td class="value"><input type="number" id="walletSyncInterval" placeholder="15" min="0" step="1" /></td>
         </tr>
         <tr>
             <td class="label">
@@ -506,11 +519,13 @@
             if (homeLabel) homeLabel.textContent = homeText ? `(${homeText})` : "";
             if (homeVal) homeVal.textContent = homeText || "(read-only)";
             setProviderInput("arkeodNode", providerSettingsCache.ARKEOD_NODE);
+            setProviderInput("osmoRpc", providerSettingsCache.OSMOSIS_RPC);
             setProviderInput("arkeodRest", providerSettingsCache.PROVIDER_HUB_URI);
             setProviderInput("sentinelNode", providerSettingsCache.SENTINEL_NODE);
             setProviderInput("sentinelPort", providerSettingsCache.SENTINEL_PORT);
             setProviderInput("adminPort", providerSettingsCache.ADMIN_PORT);
             setProviderInput("adminApiPort", providerSettingsCache.ADMIN_API_PORT);
+            setProviderInput("walletSyncInterval", providerSettingsCache.WALLET_SYNC_INTERVAL);
             setProviderInput("hotwalletMnemonic", providerSettingsCache.KEY_MNEMONIC);
             const adminPwdInput = document.getElementById("adminPasswordInput");
             if (adminPwdInput) adminPwdInput.value = data.admin_password || "";
@@ -546,11 +561,13 @@
                 CHAIN_ID: document.getElementById("chainId")?.value || "",
                 ARKEOD_HOME: providerSettingsCache.ARKEOD_HOME || "",
                 ARKEOD_NODE: normalizeRpc(document.getElementById("arkeodNode")?.value || ""),
+                OSMOSIS_RPC: document.getElementById("osmoRpc")?.value || "",
                 PROVIDER_HUB_URI: document.getElementById("arkeodRest")?.value || "",
                 SENTINEL_NODE: document.getElementById("sentinelNode")?.value || "",
                 SENTINEL_PORT: document.getElementById("sentinelPort")?.value || "",
                 ADMIN_PORT: document.getElementById("adminPort")?.value || "",
                 ADMIN_API_PORT: document.getElementById("adminApiPort")?.value || "",
+                WALLET_SYNC_INTERVAL: document.getElementById("walletSyncInterval")?.value || "",
                 KEY_MNEMONIC: document.getElementById("hotwalletMnemonic")?.value || "",
             },
         };

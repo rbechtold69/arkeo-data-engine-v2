@@ -1835,24 +1835,27 @@
             const osmoArkeoEl = document.getElementById("walletOsmoArkeoBalance");
             if (osmoArkeoEl) osmoArkeoEl.textContent = osmoArkeoBalanceText || "—";
             const osmoArkeoNum = parseNumber(osmoArkeoBalanceText);
+            const osmoUsdcNum = parseNumber(osmoUsdcBalanceText);
             const arkeoBalNum = parseNumber(arkeoBalanceText);
+            const lacksKeplr = !keplrOsmoAddress;
+            const arkeoToUsdcDisabled = lacksKeplr || isNaN(osmoArkeoNum) || osmoArkeoNum <= 0;
+            const arkeoToNativeDisabled = lacksKeplr || isNaN(osmoArkeoNum) || osmoArkeoNum <= 0;
+            const usdcToArkeoDisabled = lacksKeplr || isNaN(osmoUsdcNum) || osmoUsdcNum <= 0;
             const arkeoToUsdcBtn = document.querySelector("button[aria-label='Convert ARKEO to USDC']");
             if (arkeoToUsdcBtn) {
-                arkeoToUsdcBtn.disabled = isNaN(osmoArkeoNum) || osmoArkeoNum <= 0;
+                arkeoToUsdcBtn.disabled = arkeoToUsdcDisabled;
             }
             const arkeoToNativeBtn = document.querySelector("button[aria-label='Send ARKEO to Arkeo chain']");
             if (arkeoToNativeBtn) {
-                arkeoToNativeBtn.disabled = isNaN(osmoArkeoNum) || osmoArkeoNum <= 0;
+                arkeoToNativeBtn.disabled = arkeoToNativeDisabled;
             }
             const arkeoToOsmoBtn = document.querySelector("button[aria-label='Send ARKEO to Osmosis']");
             if (arkeoToOsmoBtn) {
-                const lacksKeplr = !keplrOsmoAddress;
                 arkeoToOsmoBtn.disabled = lacksKeplr || isNaN(arkeoBalNum) || arkeoBalNum <= 0;
             }
-            const osmoUsdcNum = parseNumber(osmoUsdcBalanceText);
             const usdcToArkeoBtn = document.querySelector("button[aria-label='Convert USDC to ARKEO']");
             if (usdcToArkeoBtn) {
-                usdcToArkeoBtn.disabled = isNaN(osmoUsdcNum) || osmoUsdcNum <= 0;
+                usdcToArkeoBtn.disabled = usdcToArkeoDisabled;
             }
             const setWithdrawLinkState = (linkEl, disabled) => {
                 if (!linkEl) return;
@@ -1872,6 +1875,11 @@
             const disableWithdraw = isNaN(osmoUsdcNum) || osmoUsdcNum <= 0;
             setWithdrawLinkState(osmoWithdrawLink, disableWithdraw);
             setWithdrawLinkState(squidWithdrawLink, disableWithdraw);
+            const osmoDepositLink = document.querySelector("#cardOsmosisDeposit a.wallet-action-btn");
+            const squidDepositLink = document.querySelector("#cardSquidRouterDeposit a.wallet-action-btn");
+            const disableDeposit = lacksKeplr;
+            setWithdrawLinkState(osmoDepositLink, disableDeposit);
+            setWithdrawLinkState(squidDepositLink, disableDeposit);
             const osmoBlock = document.getElementById("walletOsmoBlockBadge");
             if (osmoBlock) osmoBlock.textContent = osmoBlockVal || "—";
             const arkeoBlockBadge = document.getElementById("walletArkeoBlockBadge");
@@ -2207,13 +2215,12 @@
 	                <div class="muted small" style="line-height:1.5;">
 	                    <div style="font-weight:700; margin:0 0 6px 0;">Success</div>
 	                    <ul style="margin:0 0 12px 18px; padding:0;">
-	                        <li>The subscriber successfully pushed the contract CORS config (Settings → CORS Origins) to the provider sentinel.</li>
+	                        <li>The listener CORS origins are applied to proxy responses.</li>
 	                    </ul>
 	                    <div style="font-weight:700; margin:0 0 6px 0;">Common reasons for failure</div>
 	                    <ul style="margin:0 0 0 18px; padding:0;">
-	                        <li>Provider sentinel manage endpoint is unreachable / times out.</li>
-	                        <li>Provider metadata <span class="mono">hub_provider_uri</span> is unreachable (often points at <span class="mono">127.0.0.1:1317</span> from their host).</li>
-	                        <li>Contract not found on the provider, or auth/signature rejected.</li>
+	                        <li>Listener CORS origins is empty or invalid.</li>
+	                        <li>The browser Origin is not allowed by the listener CORS list.</li>
 	                        <li>If Config is red, browser clients may hit CORS errors even if the contract works.</li>
 	                    </ul>
 	                </div>
@@ -2603,6 +2610,7 @@
             const statusSelect = buildStatusSelect(l.status, `editStatus-${l.id}`);
             const topServices = dedupTopServices(Array.isArray(l.top_services) ? l.top_services : []);
             const whitelist = l.whitelist_ips ? escapeHtml(l.whitelist_ips) : "0.0.0.0 (all)";
+            const corsOrigins = l.cors_allowed_origins ? escapeHtml(l.cors_allowed_origins) : "*";
             const hostForListener = window.location.hostname || "localhost";
             const protoForListener = (window.location.protocol || "").startsWith("https") ? "https" : "http";
             const endpointUrl = portSafe ? `${protoForListener}://${hostForListener}:${portSafe}` : "–";
@@ -2624,17 +2632,11 @@
                                </div>`
                             : "";
                         const statusVal = bp && bp.status ? String(bp.status) : "";
-                        const hasContract = Boolean(bp && bp.last_contract_id);
-                        const hasConfig = Boolean(bp && bp.cors_configured === true);
-                        const overallUp = statusVal.toLowerCase() === "up" && hasContract && hasConfig;
+                        const overallUp = statusVal.toLowerCase() === "up";
                         const statusDot = overallUp
                             ? '<span class="status-dot dot-ok"></span>'
                             : '<span class="status-dot dot-err"></span>';
                         let rtDisplay = "—";
-                        const contractDot = bp && bp.last_contract_id ? '<span class="status-dot dot-ok"></span>' : '<span class="status-dot dot-err"></span>';
-                        const configDot = bp && bp.cors_configured === true
-                            ? '<span class="status-dot dot-ok"></span>'
-                            : '<span class="status-dot dot-err"></span>';
                         if (bp && bp.rt_avg_ms !== undefined && bp.rt_avg_ms !== null) {
                             const avgMs = Number(bp.rt_avg_ms);
                             if (!Number.isNaN(avgMs)) {
@@ -2650,28 +2652,12 @@
                             <td class="ts-col-num"><span class="muted small" style="color:#fff; font-weight:700;">${idx + 1}</span></td>
                             <td class="ts-col-name"><span class="muted small" style="color:#fff; font-weight:700;">${escapeHtml(name)}${inactive ? " (Inactive)" : ""}</span></td>
                             <td class="ts-col-rate"><span class="muted small" style="color:#fff; font-weight:700;">${escapeHtml(rate)}</span></td>
-                            <td class="ts-col-status">${contractDot}</td>
-                            <td class="ts-col-status">${configDot}</td>
                             <td class="ts-col-status">${statusDot}</td>
                             <td class="ts-col-rt"><span class="muted small" style="color:#fff; font-weight:700;">${escapeHtml(rtDisplay)}</span></td>
                             ${isEditing ? `<td class="ts-col-actions">${actions}</td>` : ""}
                         </tr>`;
-                    }).join("") : `<tr><td colspan="8" class="muted small">No providers yet.</td></tr>`;
-                const contractHelpIcon = `<button type="button" class="top-services-help-icon" onclick="showTopServicesHelp('contract', event)" aria-label="Contract help" title="Contract help">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"></circle>
-                            <path d="M12 7.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" fill="currentColor"></path>
-                            <path d="M11.25 10.5h1.5v6h-1.5z" fill="currentColor"></path>
-                        </svg>
-                    </button>`;
-                const configHelpIcon = `<button type="button" class="top-services-help-icon" onclick="showTopServicesHelp('config', event)" aria-label="Config help" title="Config help">
-                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"></circle>
-                            <path d="M12 7.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" fill="currentColor"></path>
-                            <path d="M11.25 10.5h1.5v6h-1.5z" fill="currentColor"></path>
-                        </svg>
-                    </button>`;
-                const head = `<tr><th>#</th><th>Provider</th><th>Price</th><th>Contract ${contractHelpIcon}</th><th>Config ${configHelpIcon}</th><th>Status</th><th>Response Time</th><th></th></tr>`;
+                    }).join("") : `<tr><td colspan="6" class="muted small">No providers yet.</td></tr>`;
+                const head = `<tr><th>#</th><th>Provider</th><th>Price</th><th>Status</th><th>Response Time</th><th></th></tr>`;
                 const svcForTop = l.service_id || l.service;
                 const selectId = `addTopSvc-${l.id}`;
                 const cached = svcForTop ? providersByServiceCache[String(svcForTop)] : undefined;
@@ -2717,16 +2703,10 @@
                                 : "";
                             const actions = "";
                             const statusVal = bp && bp.status ? String(bp.status) : "";
-                            const hasContract = Boolean(bp && bp.last_contract_id);
-                            const hasConfig = Boolean(bp && bp.cors_configured === true);
-                            const overallUp = statusVal.toLowerCase() === "up" && hasContract && hasConfig;
+                            const overallUp = statusVal.toLowerCase() === "up";
                             const statusDot = overallUp
                                 ? '<span class="status-dot dot-ok"></span>'
                                 : '<span class="status-dot dot-err"></span>';
-                        const contractDot = bp && bp.last_contract_id ? '<span class="status-dot dot-ok"></span>' : '<span class="status-dot dot-err"></span>';
-                        const configDot = bp && bp.cors_configured === true
-                            ? '<span class="status-dot dot-ok"></span>'
-                            : '<span class="status-dot dot-err"></span>';
                             let rtDisplay = "—";
                             if (bp && bp.rt_avg_ms !== undefined && bp.rt_avg_ms !== null) {
                                 const avgMs = Number(bp.rt_avg_ms);
@@ -2743,27 +2723,11 @@
                                 <td class="ts-col-num"><span class="muted small" style="color:#fff; font-weight:700;">${idx + 1}</span></td>
                                 <td class="ts-col-name"><span class="muted small" style="color:#fff; font-weight:700;">${escapeHtml(name)}${inactive ? " (Inactive)" : ""}</span></td>
                                 <td class="ts-col-rate"><span class="muted small" style="color:#fff; font-weight:700;">${escapeHtml(rate)}</span></td>
-                                <td class="ts-col-status">${contractDot}</td>
-                                <td class="ts-col-status">${configDot}</td>
                                 <td class="ts-col-status">${statusDot}</td>
                                 <td class="ts-col-rt"><span class="muted small" style="color:#fff; font-weight:700;">${escapeHtml(rtDisplay)}</span></td>
                             </tr>`;
                         }).join("");
-                        const contractHelpIcon = `<button type="button" class="top-services-help-icon" onclick="showTopServicesHelp('contract', event)" aria-label="Contract help" title="Contract help">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"></circle>
-                                    <path d="M12 7.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" fill="currentColor"></path>
-                                    <path d="M11.25 10.5h1.5v6h-1.5z" fill="currentColor"></path>
-                                </svg>
-                            </button>`;
-                        const configHelpIcon = `<button type="button" class="top-services-help-icon" onclick="showTopServicesHelp('config', event)" aria-label="Config help" title="Config help">
-                                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"></circle>
-                                    <path d="M12 7.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Z" fill="currentColor"></path>
-                                    <path d="M11.25 10.5h1.5v6h-1.5z" fill="currentColor"></path>
-                                </svg>
-                            </button>`;
-                        const head = `<tr><th>#</th><th>Provider</th><th>Price</th><th>Contract ${contractHelpIcon}</th><th>Config ${configHelpIcon}</th><th>Status</th><th>Response Time</th></tr>`;
+                        const head = `<tr><th>#</th><th>Provider</th><th>Price</th><th>Status</th><th>Response Time</th></tr>`;
                         return `<table class="top-services-table">
                             <thead>${head}</thead>
                             <tbody>${rows}</tbody>
@@ -2790,14 +2754,18 @@
                 </tr>
                 <tr class="listener-sub">
                     <td colspan="5">
-                    <div class="muted small" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:start;">
+                    <div class="muted small" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; align-items:start;">
                         <div style="display:flex; flex-direction:column; gap:4px;">
                             <div class="muted small">Endpoint:</div>
                             <div class="muted"><span class="mono" style="color:#fff;"><strong>${escapeHtml(endpointUrl)}</strong></span> ${portSafe ? `<button class="copy-btn" onclick="copyListenerEndpoint('${escapeHtml(endpointUrl)}')">Copy</button>` : ""}</div>
                         </div>
                         <div style="display:flex; flex-direction:column; gap:4px;">
                             <div class="muted small">Whitelist IPs:</div>
-                            <div class="muted"><span class="mono" style="color:#fff;"><strong>${l.whitelist_ips ? escapeHtml(l.whitelist_ips) : "0.0.0.0 (all)"}</strong></span></div>
+                            <input type="text" id="editWhitelist-${l.id}" class="full-input" placeholder="0.0.0.0 (all)" value="${escapeHtml(l.whitelist_ips || "")}">
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <div class="muted small">CORS Origins:</div>
+                            <input type="text" id="editCorsOrigins-${l.id}" class="full-input" placeholder="* or http://localhost:8079" value="${corsOrigins}">
                         </div>
                     </div>
                         <div class="muted small" style="margin-top:8px;">Polling Options</div>
@@ -2852,7 +2820,7 @@
             ${isOpen ? `
             <tr class="listener-sub">
                 <td colspan="5">
-                    <div class="muted small" style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; align-items:start;">
+                    <div class="muted small" style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:8px; align-items:start;">
                         <div style="display:flex; flex-direction:column; gap:4px;">
                             <div class="muted small">Endpoint:</div>
                             <div class="muted"><span class="mono" style="color:#fff;"><strong>${escapeHtml(endpointUrl)}</strong></span> ${portSafe ? `<button class="copy-btn" onclick="copyListenerEndpoint('${escapeHtml(endpointUrl)}')">Copy</button>` : ""}</div>
@@ -2860,6 +2828,10 @@
                         <div style="display:flex; flex-direction:column; gap:4px;">
                             <div class="muted small">Whitelist IPs:</div>
                             <div class="muted small"><span class="mono" style="color:#fff;"><strong>${whitelist}</strong></span></div>
+                        </div>
+                        <div style="display:flex; flex-direction:column; gap:4px;">
+                            <div class="muted small">CORS Origins:</div>
+                            <div class="muted small"><span class="mono" style="color:#fff;"><strong>${corsOrigins}</strong></span></div>
                         </div>
                     </div>
                 </td>
@@ -2984,10 +2956,12 @@
         const svcId = (svcIdInput && svcIdInput.value) || "";
         const status = document.getElementById(`editStatus-${id}`)?.value || "";
         const whitelist = document.getElementById(`editWhitelist-${id}`)?.value || "";
+        const corsOrigins = document.getElementById(`editCorsOrigins-${id}`)?.value || "";
         const current = listenersCache.find((l) => String(l.id) === String(id));
         const body = {
             status,
             whitelist_ips: whitelist,
+            cors_allowed_origins: corsOrigins,
             health_method: document.getElementById(`editHealthMethod-${id}`)?.value || "",
             health_payload: document.getElementById(`editHealthPayload-${id}`)?.value || "",
             health_header: document.getElementById(`editHealthHeader-${id}`)?.value || "",
@@ -3606,16 +3580,8 @@
                         const contractOk = ok && Boolean(data?.arkeo_contract_id || data?.active_contract_id);
                         if (!contractOk) allOk = false;
 
-                        const corsOkVal = timings?.cors_ok;
-                        const configOk = corsOkVal === true;
-                        const configFailed = corsOkVal === false;
-                        if (configFailed) allOk = false;
-                        const configMs = Number(timings?.cors_ms);
-                        const configMsText = Number.isFinite(configMs) ? `${Math.round(configMs)} ms` : "—";
-
                         appendPollLog(`  Test ${i + 1}/${runs}:`);
                         appendPollLog(`    - Contract: ${contractOk ? "OK" : "Failed"} (${contractMsText})`);
-                        appendPollLog(`    - Config: ${configOk ? "OK" : (configFailed ? "Failed" : "—")} (${configMsText})`);
                         if (providerMismatch) {
                             appendPollLog(`    - Provider: Failed (expected ${expectedProvider} got ${usedProvider})`);
                         }
@@ -3627,7 +3593,6 @@
                     } catch (e) {
                         appendPollLog(`  Test ${i + 1}/${runs}:`);
                         appendPollLog(`    - Contract: Failed (—)`);
-                        appendPollLog(`    - Config: Failed (—)`);
                         appendPollLog(`    - Error: ${e}`);
                         allOk = false;
                     }
@@ -3658,10 +3623,6 @@
         }
         const sorted = [...latestTop].sort((a, b) => {
             const statusScore = (x) => {
-                // penalize missing contract or cors config
-                const hasContract = Boolean(x?.last_contract_id);
-                const hasConfig = Boolean(x?.cors_configured);
-                if (!hasContract || !hasConfig) return 3;
                 const s = String(x?.status || "").toLowerCase();
                 if (s === "up") return 0;
                 if (s === "down") return 2;

@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import shutil
 import shlex
 import subprocess
 import sys
@@ -77,6 +78,25 @@ def _ensure_tcp_scheme(url: str | None) -> str:
         return "tcp://" + s[len("https://") :]
     return s
 
+
+def _ensure_http_rpc(url: str | None) -> str:
+    """Return an HTTP(S) RPC URL suitable for browser use; converts tcp:// to http://."""
+    if not url:
+        return ""
+    s = _strip_quotes(str(url).strip())
+    lower = s.lower()
+    if lower.startswith("tcp://"):
+        return "http://" + s[len("tcp://") :]
+    return s
+
+
+def _safe_float(val, default: float = 0.0) -> float:
+    """Convert to float, returning default on failure."""
+    try:
+        return float(val)
+    except Exception:
+        return default
+
 ARKEOD_NODE = _strip_quotes(
     os.getenv("ARKEOD_NODE")
     or os.getenv("EXTERNAL_ARKEOD_NODE")
@@ -98,6 +118,9 @@ SENTINEL_CONFIG_PATH = os.getenv("SENTINEL_CONFIG_PATH", "/app/config/sentinel.y
 SENTINEL_ENV_PATH = os.getenv("SENTINEL_ENV_PATH", "/app/config/sentinel.env")
 PROVIDER_ENV_PATH = os.getenv("PROVIDER_ENV_PATH", "/app/provider.env")
 CACHE_DIR = os.getenv("CACHE_DIR", "/app/cache")
+LOG_DIR = os.path.join(CACHE_DIR, "logs") if CACHE_DIR else "/app/cache/logs"
+HOTWALLET_LOG = os.path.join(LOG_DIR, "hotwallet-tx.log")
+HOTWALLET_LOG_MAX_BYTES = int(os.getenv("HOTWALLET_LOG_MAX_BYTES") or "524288")
 CONFIG_DIR = os.getenv("CONFIG_DIR", "/app/config")
 PROVIDER_SETTINGS_PATH = os.getenv("PROVIDER_SETTINGS_PATH") or (
     os.path.join(CONFIG_DIR or "/app/config", "provider-settings.json")
@@ -112,6 +135,23 @@ ADMIN_UI_ORIGIN = os.getenv("ADMIN_UI_ORIGIN") or f"http://localhost:{os.getenv(
 # token -> expiry_ts
 ADMIN_SESSIONS: dict[str, float] = {}
 CLAIMS_HEARTBEAT_PATH = os.path.join(CACHE_DIR, "claims-heartbeat.json") if CACHE_DIR else "claims-heartbeat.json"
+OSMOSIS_RPC = _strip_quotes(os.getenv("OSMOSIS_RPC") or "")
+OSMOSIS_HOME = os.path.expanduser(os.getenv("OSMOSIS_HOME", "/app/config/osmosis"))
+OSMOSIS_KEY_NAME = os.getenv("OSMOSIS_KEY_NAME", "osmo-provider")
+OSMOSIS_DENOM_CACHE = os.path.join(CACHE_DIR or "/app/cache", "osmo_denom_cache.json")
+DEFAULT_OSMOSIS_USDC_DENOMS = [
+    # Axelar canonical USDC on Osmosis
+    "ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2",
+    # Noble USDC (IBC)
+    "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4",
+]
+_env_osmo_denoms = [d.strip() for d in (os.getenv("OSMOSIS_USDC_DENOMS") or "").split(",") if d.strip()]
+OSMOSIS_USDC_DENOMS = _env_osmo_denoms if _env_osmo_denoms else DEFAULT_OSMOSIS_USDC_DENOMS.copy()
+MIN_OSMO_GAS = _safe_float(os.getenv("MIN_OSMO_GAS") or 0.1, 0.1)
+DEFAULT_SLIPPAGE_BPS = int(os.getenv("DEFAULT_SLIPPAGE_BPS") or "100")
+ARRIVAL_TOLERANCE_BPS = int(os.getenv("ARRIVAL_TOLERANCE_BPS") or "100")
+OSMO_TO_ARKEO_CHANNEL = "channel-103074"
+ARKEO_TO_OSMO_CHANNEL = "channel-1"
 ENV_EXPORT_KEYS = [
     "PROVIDER_NAME",
     "MONIKER",
@@ -133,6 +173,8 @@ ENV_EXPORT_KEYS = [
     "SENTINEL_PORT",
     "ADMIN_PORT",
     "ADMIN_API_PORT",
+    "OSMOSIS_RPC",
+    "WALLET_SYNC_INTERVAL",
 ]
 
 def _normalize_base(url: str | None, default_port: str | None = None, default_scheme: str = "http") -> str:
@@ -241,6 +283,844 @@ def run_with_input(cmd: list[str], input_text: str) -> tuple[int, str]:
         return proc.returncode, proc.stdout.decode("utf-8")
     except Exception as e:
         return 1, str(e)
+
+
+def _pick_executable(name: str, candidates: list[str]) -> str | None:
+    """Return the first existing executable for name or candidates."""
+    found = shutil.which(name)
+    if found and os.path.isfile(found):
+        return found
+    for cand in candidates:
+        if cand and os.path.isfile(cand):
+            return cand
+    return None
+
+
+def _append_hotwallet_log(entry: dict) -> None:
+    """Append a JSONL entry to the hotwallet log (best effort)."""
+    try:
+        if os.path.isfile(HOTWALLET_LOG) and os.path.getsize(HOTWALLET_LOG) > HOTWALLET_LOG_MAX_BYTES:
+            try:
+                backup = f"{HOTWALLET_LOG}.bak.{int(time.time())}"
+                os.rename(HOTWALLET_LOG, backup)
+                try:
+                    with open(backup, "r", encoding="utf-8", errors="replace") as bf:
+                        tail_lines = bf.readlines()[-500:]
+                    with open(HOTWALLET_LOG, "w", encoding="utf-8") as nf:
+                        nf.writelines(tail_lines)
+                except Exception:
+                    open(HOTWALLET_LOG, "w").close()
+            except Exception:
+                pass
+        os.makedirs(os.path.dirname(HOTWALLET_LOG), exist_ok=True)
+        with open(HOTWALLET_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False))
+            f.write("\n")
+    except Exception:
+        pass
+
+
+def _read_hotwallet_logs(limit: int = 50) -> list[dict]:
+    """Return the last N log entries in chronological order (oldest first)."""
+    if not os.path.isfile(HOTWALLET_LOG):
+        return []
+    try:
+        with open(HOTWALLET_LOG, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        lines = lines[-limit:]
+        out: list[dict] = []
+        for ln in lines:
+            try:
+                out.append(json.loads(ln))
+            except Exception:
+                continue
+        return out
+    except Exception:
+        return []
+
+
+def _mask_cmd_sensitive(cmd: list[str]) -> list[str]:
+    """Return a copy of cmd with sensitive args (mnemonic, rpc-url) masked."""
+    if not isinstance(cmd, list):
+        return cmd
+    masked = []
+    skip_next = False
+    for i, part in enumerate(cmd):
+        if skip_next:
+            skip_next = False
+            continue
+        lower = str(part).lower()
+        if lower in ("--mnemonic", "--rpc-url"):
+            masked.append(part)
+            if i + 1 < len(cmd):
+                masked.append("***")
+                skip_next = True
+            continue
+        masked.append(part)
+    return masked
+
+
+def _extract_txhash(out: str) -> str | None:
+    """Extract txhash: <hash> from osmosisd/arkeod output (json or text)."""
+    if not out:
+        return None
+    try:
+        raw = out.strip()
+        try_json = raw
+        if "\n" in raw:
+            try_json = raw.splitlines()[-1]
+        data = json.loads(try_json)
+        if isinstance(data, dict):
+            txh = data.get("txhash") or data.get("txHash")
+            if txh and re.fullmatch(r"[0-9A-Fa-f]{64}", txh):
+                return txh
+            tx_resp = data.get("tx_response") or {}
+            txh = tx_resp.get("txhash")
+            if txh and re.fullmatch(r"[0-9A-Fa-f]{64}", txh):
+                return txh
+    except Exception:
+        pass
+    m = re.search(r"txhash[:\"\\s]*([0-9A-Fa-f]{64})", out)
+    return m.group(1) if m else None
+
+
+def _parse_send_packet(data: dict) -> dict | None:
+    """Parse send_packet event (packet sequence + channels) from an arkeod tx JSON."""
+    if not isinstance(data, dict):
+        return None
+    logs = []
+    if "logs" in data:
+        logs = data.get("logs") or []
+    elif "tx_response" in data:
+        logs = data.get("tx_response", {}).get("logs") or []
+
+    def scan_events(events: list[dict]) -> dict | None:
+        for ev in events or []:
+            if ev.get("type") != "send_packet":
+                continue
+            attrs = {a.get("key"): a.get("value") for a in ev.get("attributes") or []}
+            seq = attrs.get("packet_sequence")
+            src_ch = attrs.get("packet_src_channel")
+            dst_ch = attrs.get("packet_dst_channel")
+            if seq and src_ch and dst_ch:
+                return {
+                    "packet_sequence": seq,
+                    "src_channel": src_ch,
+                    "dst_channel": dst_ch,
+                    "src_port": attrs.get("packet_src_port"),
+                    "dst_port": attrs.get("packet_dst_port"),
+                }
+        return None
+
+    for log in logs:
+        found = scan_events(log.get("events") or [])
+        if found:
+            return found
+
+    top_events = data.get("events") or data.get("tx_response", {}).get("events") or []
+    return scan_events(top_events)
+
+
+def _wait_for_osmo_balance_increase(
+    addr: str, denom: str, base: int, attempts: int = 12, sleep_s: int = 5
+) -> tuple[bool, int]:
+    """Poll Osmosis balance until denom increases by at least base units; returns (ok, final_amt)."""
+    try:
+        start_balances = _osmosis_balances_raw(addr)
+        start_amt = 0
+        for b in start_balances:
+            if b.get("denom") == denom:
+                try:
+                    start_amt = int(b.get("amount", "0"))
+                except Exception:
+                    start_amt = 0
+        last_amt = start_amt
+        for _ in range(attempts):
+            time.sleep(sleep_s)
+            bals = _osmosis_balances_raw(addr)
+            for b in bals:
+                if b.get("denom") == denom:
+                    try:
+                        amt = int(b.get("amount", "0"))
+                    except Exception:
+                        amt = 0
+                    last_amt = amt
+                    if amt >= start_amt + base:
+                        return True, amt
+        return False, last_amt
+    except Exception:
+        return False, 0
+
+
+def _arkeo_balance(addr: str) -> tuple[int, str | None]:
+    """Return (amount_base_units, error) for Arkeo wallet."""
+    try:
+        cmd = [
+            "arkeod",
+            "--home",
+            ARKEOD_HOME,
+            "query",
+            "bank",
+            "balances",
+            addr,
+            "--node",
+            ARKEOD_NODE,
+            "--output",
+            "json",
+        ]
+        code, out = run_list(cmd)
+        if code != 0:
+            return 0, f"arkeod query exit={code}: {out}"
+        data = json.loads(out)
+        balances = data.get("balances") or data.get("result") or []
+        for b in balances:
+            denom = b.get("denom", "")
+            if denom == "uarkeo":
+                try:
+                    return int(b.get("amount", "0")), None
+                except Exception:
+                    return 0, None
+        return 0, None
+    except Exception as e:
+        return 0, str(e)
+
+
+# ---------- Osmosis helpers ----------
+def _osmosis_balances_raw(addr: str) -> list[dict]:
+    """Return raw balances list for an Osmosis address."""
+    def _via_osmosisd() -> list[dict]:
+        cmd = [
+            "osmosisd",
+            "query",
+            "bank",
+            "balances",
+            addr,
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ]
+        code, out = run_list(cmd)
+        if code != 0:
+            raise RuntimeError(f"osmosis balances exit={code}: {out}")
+        data = json.loads(out)
+        return data.get("balances") or data.get("result") or []
+
+    def _via_rest_fallback() -> list[dict]:
+        url = f"https://rest.cosmos.directory/osmosis/cosmos/bank/v1beta1/balances/{addr}"
+        code, out = run_list(["curl", "-s", url])
+        if code != 0:
+            raise RuntimeError(f"osmosis balances rest exit={code}: {out}")
+        data = json.loads(out)
+        return data.get("balances") or data.get("result") or []
+
+    try:
+        return _via_osmosisd()
+    except Exception as e:
+        try:
+            return _via_rest_fallback()
+        except Exception:
+            raise e
+
+
+def _load_osmo_cache() -> dict:
+    try:
+        os.makedirs(os.path.dirname(OSMOSIS_DENOM_CACHE) or ".", exist_ok=True)
+        if os.path.exists(OSMOSIS_DENOM_CACHE):
+            with open(OSMOSIS_DENOM_CACHE, "r") as f:
+                return json.load(f)
+    except Exception:
+        return {}
+    return {}
+
+
+def _save_osmo_cache(cache: dict) -> None:
+    try:
+        os.makedirs(os.path.dirname(OSMOSIS_DENOM_CACHE) or ".", exist_ok=True)
+        with open(OSMOSIS_DENOM_CACHE, "w") as f:
+            json.dump(cache, f, indent=2, sort_keys=True)
+    except Exception:
+        pass
+
+
+def _query_denom_trace_cached(ibc_hash: str, cache: dict) -> tuple[dict, dict, bool]:
+    """Return (trace, cache, cache_updated)."""
+    if not ibc_hash:
+        return {}, cache, False
+    if ibc_hash in cache:
+        return cache.get(ibc_hash) or {}, cache, False
+    try:
+        cmd = [
+            "osmosisd",
+            "query",
+            "ibc-transfer",
+            "denom-trace",
+            ibc_hash,
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ]
+        code, out = run_list(cmd)
+        if code != 0:
+            return {}, cache, False
+        data = json.loads(out)
+        trace = data.get("denom_trace") or {}
+        cache[ibc_hash] = trace
+        return trace, cache, True
+    except Exception:
+        return {}, cache, False
+
+
+def _resolve_base_denom(denom: str, cache: dict) -> tuple[str, dict, bool]:
+    """Return (base_denom, cache, cache_updated)."""
+    if not denom:
+        return "", cache, False
+    if not denom.startswith("ibc/"):
+        return denom, cache, False
+    ibc_hash = denom.split("/", 1)[1] if "/" in denom else ""
+    trace, cache, updated = _query_denom_trace_cached(ibc_hash, cache)
+    base = trace.get("base_denom") or denom
+    return base, cache, updated
+
+
+def _query_all_denom_metadata() -> list[dict]:
+    try:
+        cmd = [
+            "osmosisd",
+            "query",
+            "bank",
+            "denom-metadata",
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ]
+        code, out = run_list(cmd)
+        if code != 0:
+            return []
+        data = json.loads(out)
+        return data.get("metadatas") or []
+    except Exception:
+        return []
+
+
+def _build_metadata_index(metadatas: list[dict]) -> dict:
+    """base_denom -> (symbol, decimals)"""
+    idx: dict[str, tuple[str, int]] = {}
+    for md in metadatas:
+        base = md.get("base")
+        display = md.get("display")
+        denom_units = md.get("denom_units") or []
+        decimals = None
+        for du in denom_units:
+            if du.get("denom") == display:
+                try:
+                    decimals = int(du.get("exponent", 0))
+                except Exception:
+                    decimals = 0
+                break
+        if decimals is None and denom_units:
+            try:
+                decimals = max(int(du.get("exponent", 0)) for du in denom_units)
+            except Exception:
+                decimals = None
+        if base and display and decimals is not None:
+            idx[base] = (str(display).upper(), int(decimals))
+    return idx
+
+
+def _heuristic_symbol_and_decimals(base_denom: str | None, denom: str) -> tuple[str | None, int | None]:
+    if base_denom:
+        b = base_denom.lower()
+        if b == "uosmo":
+            return "OSMO", 6
+        if b in ("uusdc", "usdc"):
+            return "USDC", 6
+        if b in ("uarkeo", "arkeo"):
+            return "ARKEO", 8
+        if b.startswith("u") and len(b) > 1:
+            return b[1:].upper(), 6
+        return b.upper(), None
+    if denom.lower() == "uosmo":
+        return "OSMO", 6
+    return None, None
+
+
+def _resolve_osmo_assets(addr: str) -> tuple[list[dict] | None, str | None]:
+    """Resolve Osmosis assets with denom-traces/metadata."""
+    if not OSMOSIS_RPC:
+        return None, "OSMOSIS_RPC not configured"
+    cache = _load_osmo_cache()
+    cache_updated = False
+    try:
+        bal_cmd = [
+            "osmosisd",
+            "query",
+            "bank",
+            "balances",
+            addr,
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ]
+        code, out = run_list(bal_cmd)
+        if code != 0:
+            return None, f"osmosis balance exit={code}: {out}"
+        data = json.loads(out)
+        balances = data.get("balances") or data.get("result") or []
+    except Exception as e:
+        return None, str(e)
+
+    md_idx = _build_metadata_index(_query_all_denom_metadata())
+    assets: list[dict] = []
+
+    for b in balances:
+        denom = b.get("denom", "")
+        amt = b.get("amount", "0")
+        try:
+            amount_int = int(amt)
+        except Exception:
+            amount_int = 0
+        is_ibc = denom.startswith("ibc/")
+        base_denom = None
+        path = None
+        if is_ibc:
+            ibc_hash = denom.split("/", 1)[1] if "/" in denom else ""
+            trace, cache, updated = _query_denom_trace_cached(ibc_hash, cache)
+            cache_updated = cache_updated or updated
+            base_denom = trace.get("base_denom")
+            path = trace.get("path")
+
+        symbol = None
+        decimals = None
+        if base_denom and base_denom in md_idx:
+            symbol, decimals = md_idx.get(base_denom) or (None, None)
+        elif denom in md_idx:
+            symbol, decimals = md_idx.get(denom) or (None, None)
+        else:
+            symbol, decimals = _heuristic_symbol_and_decimals(base_denom, denom)
+
+        if (base_denom or "").lower() in ("uarkeo", "arkeo") or denom.lower() == "uarkeo":
+            symbol = "ARKEO"
+            decimals = 8
+
+        display_amount = None
+        if decimals is not None:
+            display_amount = amount_int / (10 ** decimals)
+        label = symbol
+        if is_ibc and symbol:
+            label = f"{symbol} (IBC)"
+
+        assets.append(
+            {
+                "denom": denom,
+                "amount": amount_int,
+                "is_ibc": is_ibc,
+                "base_denom": base_denom,
+                "path": path,
+                "symbol": symbol,
+                "decimals": decimals,
+                "display_amount": display_amount,
+                "label": label or denom,
+            }
+        )
+
+    if cache_updated:
+        _save_osmo_cache(cache)
+
+    return assets, None
+
+
+def _resolve_osmo_denoms(addr: str) -> tuple[dict, str | None]:
+    """Resolve and cache USDC/ARKEO Osmosis denoms from balances."""
+    assets, err = _resolve_osmo_assets(addr)
+    if err:
+        return {}, err
+    settings = _merge_provider_settings()
+    usdc_denom = settings.get("USDC_OSMO_DENOM") or os.getenv("USDC_OSMO_DENOM") or ""
+    arkeo_denom = settings.get("ARKEO_OSMO_DENOM") or os.getenv("ARKEO_OSMO_DENOM") or ""
+    usdc_best_amt = 0
+    arkeo_best_amt = 0
+
+    for a in assets or []:
+        denom = a.get("denom") or ""
+        base = (a.get("base_denom") or denom or "").lower()
+        amt = int(a.get("amount") or 0)
+        if "usdc" in base and amt >= usdc_best_amt:
+            usdc_best_amt = amt
+            usdc_denom = denom
+        if "arkeo" in base and amt >= arkeo_best_amt:
+            arkeo_best_amt = amt
+            arkeo_denom = denom
+
+    if usdc_denom or arkeo_denom:
+        try:
+            _write_bridge_denoms(usdc_denom, arkeo_denom)
+        except Exception:
+            pass
+
+    return {"usdc_denom": usdc_denom, "arkeo_denom": arkeo_denom, "assets": assets}, None
+
+
+def _write_bridge_denoms(usdc_denom: str | None, arkeo_denom: str | None):
+    """Persist discovered Osmosis denoms to provider settings."""
+    if not usdc_denom and not arkeo_denom:
+        return
+    settings = _merge_provider_settings()
+    if usdc_denom:
+        settings["USDC_OSMO_DENOM"] = usdc_denom
+    if arkeo_denom:
+        settings["ARKEO_OSMO_DENOM"] = arkeo_denom
+    try:
+        _write_provider_settings_file(settings)
+    except Exception:
+        pass
+
+
+def _pool_2977_state() -> tuple[dict | None, str | None]:
+    """Return reserves and denoms for pool 2977 (USDC/ARKEO)."""
+    if not OSMOSIS_RPC:
+        return None, "OSMOSIS_RPC not configured"
+    cache = _load_osmo_cache()
+    cache_updated = False
+    try:
+        cmd = [
+            "osmosisd",
+            "query",
+            "gamm",
+            "pool",
+            "2977",
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ]
+        code, out = run_list(cmd)
+        if code != 0:
+            return None, f"pool query exit={code}: {out}"
+        data = json.loads(out)
+        pool = data.get("pool") or {}
+        assets = pool.get("pool_assets") or pool.get("assets") or []
+        swap_fee_str = pool.get("pool_params", {}).get("swap_fee") or pool.get("swap_fee") or "0"
+    except Exception as e:
+        return None, str(e)
+
+    usdc_amt = None
+    arkeo_amt = None
+    usdc_denom = None
+    arkeo_denom = None
+
+    for a in assets:
+        token = a.get("token") or a.get("asset") or {}
+        denom = token.get("denom") or ""
+        amt_raw = token.get("amount") or "0"
+        try:
+            amt_int = int(amt_raw)
+        except Exception:
+            amt_int = 0
+        base, cache, updated = _resolve_base_denom(denom, cache)
+        cache_updated = cache_updated or updated
+        b_lower = base.lower()
+        if "usdc" in b_lower and usdc_amt is None:
+            usdc_amt = amt_int
+            usdc_denom = denom
+        elif "arkeo" in b_lower and arkeo_amt is None:
+            arkeo_amt = amt_int
+            arkeo_denom = denom
+
+    if cache_updated:
+        _save_osmo_cache(cache)
+
+    try:
+        swap_fee = float(swap_fee_str)
+    except Exception:
+        swap_fee = 0.0
+
+    if usdc_amt is None or arkeo_amt is None:
+        return None, "unable to derive pool reserves"
+
+    return (
+        {
+            "usdc_denom": usdc_denom,
+            "arkeo_denom": arkeo_denom,
+            "reserve_usdc": usdc_amt,
+            "reserve_arkeo": arkeo_amt,
+            "swap_fee": swap_fee,
+        },
+        None,
+    )
+
+
+def _osmosis_quote_usdc_to_arkeo(amount_float: float) -> tuple[dict | None, str | None]:
+    """Quote ARKEO out for a given USDC in (pool 2977)."""
+    if amount_float <= 0:
+        return None, "amount must be > 0"
+    if not OSMOSIS_RPC:
+        return None, "OSMOSIS_RPC not configured"
+
+    pool_state, pool_err = _pool_2977_state()
+    if pool_err or not pool_state:
+        return None, pool_err or "pool unavailable"
+    usdc_denom = pool_state.get("usdc_denom") or os.getenv("USDC_OSMO_DENOM") or ""
+    arkeo_denom = pool_state.get("arkeo_denom") or os.getenv("ARKEO_OSMO_DENOM") or ""
+    if not arkeo_denom or not usdc_denom:
+        return None, "ARKEO/USDC denoms on Osmosis not found"
+
+    amt_in_base = int(round(amount_float * 1_000_000))
+    if amt_in_base <= 0:
+        return None, "amount too small"
+
+    quote_cmds = [
+        [
+            "osmosisd",
+            "query",
+            "gamm",
+            "estimate-swap-exact-amount-in",
+            "--pool-id",
+            "2977",
+            "--token-in",
+            f"{amt_in_base}{usdc_denom}",
+            "--token-out-denom",
+            arkeo_denom,
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ],
+        [
+            "osmosisd",
+            "query",
+            "poolmanager",
+            "estimate-swap-exact-amount-in",
+            "2977",
+            f"{amt_in_base}{usdc_denom}",
+            arkeo_denom,
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ],
+        [
+            "osmosisd",
+            "query",
+            "poolmanager",
+            "estimate-swap-exact-amount-in",
+            f"{amt_in_base}{usdc_denom}",
+            arkeo_denom,
+            "--node",
+            OSMOSIS_RPC,
+            "--output",
+            "json",
+        ],
+    ]
+    code = 1
+    out = ""
+    for cmd in quote_cmds:
+        code, out = run_list(cmd)
+        if code == 0:
+            break
+    if code != 0:
+        pool_state, pool_err = _pool_2977_state()
+        if pool_err or not pool_state:
+            return None, f"quote failed exit={code}: {out}"
+        usdc_res = pool_state.get("reserve_usdc") or 0
+        arkeo_res = pool_state.get("reserve_arkeo") or 0
+        swap_fee = pool_state.get("swap_fee") or 0.0
+        fee_adj_in = amt_in_base * (1 - swap_fee)
+        out_base = int((fee_adj_in * arkeo_res) / (usdc_res + fee_adj_in)) if (usdc_res + fee_adj_in) > 0 else 0
+        min_out_base = max(1, int(out_base * (1 - (DEFAULT_SLIPPAGE_BPS / 10_000.0))))
+        return (
+            {
+                "amount_in": amount_float,
+                "amount_in_base": amt_in_base,
+                "amount_out": out_base / 1e8,
+                "amount_out_base": out_base,
+                "min_amount_out": min_out_base / 1e8,
+                "min_amount_out_base": min_out_base,
+                "slippage_bps": DEFAULT_SLIPPAGE_BPS,
+                "usdc_denom": usdc_denom,
+                "arkeo_denom": arkeo_denom,
+                "pool_id": "2977",
+                "swap_fee": swap_fee,
+                "mode": "computed",
+            },
+            None,
+        )
+    try:
+        data = json.loads(out)
+    except Exception:
+        return None, "quote parse error"
+    out_str = (
+        data.get("token_out_amount")
+        or data.get("amount_out")
+        or data.get("amount")
+        or data.get("token_out")
+        or ""
+    )
+    try:
+        out_base = int(out_str)
+    except Exception:
+        return None, f"quote invalid amount: {out_str}"
+
+    min_out_base = max(1, int(out_base * (1 - (DEFAULT_SLIPPAGE_BPS / 10_000.0))))
+    return (
+        {
+            "amount_in": amount_float,
+            "amount_in_base": amt_in_base,
+            "amount_out": out_base / 1e8,
+            "amount_out_base": out_base,
+            "min_amount_out": min_out_base / 1e8,
+            "min_amount_out_base": min_out_base,
+            "slippage_bps": DEFAULT_SLIPPAGE_BPS,
+            "usdc_denom": usdc_denom,
+            "arkeo_denom": arkeo_denom,
+            "pool_id": "2977",
+        },
+        None,
+    )
+
+
+def _osmosis_quote_arkeo_to_usdc(amount_float: float) -> tuple[dict | None, str | None]:
+    """Quote USDC out for a given ARKEO in (pool 2977, reverse direction)."""
+    if amount_float <= 0:
+        return None, "amount must be > 0"
+    if not OSMOSIS_RPC:
+        return None, "OSMOSIS_RPC not configured"
+
+    pool_state, pool_err = _pool_2977_state()
+    if pool_err or not pool_state:
+        return None, pool_err or "pool unavailable"
+    usdc_denom = pool_state.get("usdc_denom") or os.getenv("USDC_OSMO_DENOM") or ""
+    arkeo_denom = pool_state.get("arkeo_denom") or os.getenv("ARKEO_OSMO_DENOM") or ""
+    if not arkeo_denom or not usdc_denom:
+        return None, "ARKEO/USDC denoms on Osmosis not found"
+
+    amt_in_base = int(round(amount_float * 100_000_000))
+    if amt_in_base <= 0:
+        return None, "amount too small"
+
+    pool_state, pool_err = _pool_2977_state()
+    if pool_err or not pool_state:
+        return None, pool_err or "pool unavailable"
+    usdc_res = pool_state.get("reserve_usdc") or 0
+    arkeo_res = pool_state.get("reserve_arkeo") or 0
+    if usdc_res <= 0 or arkeo_res <= 0:
+        return None, "pool reserves unavailable"
+    swap_fee = pool_state.get("swap_fee") or 0.003
+    fee_adj_in = amt_in_base * (1 - swap_fee)
+    out_base = int((fee_adj_in * usdc_res) / (arkeo_res + fee_adj_in)) if (arkeo_res + fee_adj_in) > 0 else 0
+    if out_base <= 0:
+        return None, "quote returned zero"
+    min_out_base = max(1, int(out_base * (1 - (DEFAULT_SLIPPAGE_BPS / 10_000.0))))
+    return (
+        {
+            "amount_in": amount_float,
+            "amount_in_base": amt_in_base,
+            "amount_out": out_base / 1e6,
+            "amount_out_base": out_base,
+            "min_amount_out": min_out_base / 1e6,
+            "min_amount_out_base": min_out_base,
+            "slippage_bps": DEFAULT_SLIPPAGE_BPS,
+            "usdc_denom": usdc_denom,
+            "arkeo_denom": arkeo_denom,
+            "pool_id": "2977",
+            "swap_fee": swap_fee,
+            "mode": "computed",
+        },
+        None,
+    )
+
+
+def _osmosis_block_height_internal() -> tuple[str | None, str | None]:
+    """Return (height_str, error_str) from the configured OSMOSIS_RPC endpoint."""
+    rpc = _ensure_http_rpc(OSMOSIS_RPC)
+    if not rpc:
+        return None, "OSMOSIS_RPC not configured"
+    try:
+        payload = json.dumps({"jsonrpc": "2.0", "id": 1, "method": "status", "params": []}).encode()
+        req = urllib.request.Request(
+            rpc,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read())
+            sync_info = data.get("result", {}).get("sync_info") or data.get("SyncInfo") or {}
+            height = sync_info.get("latest_block_height") or sync_info.get("latest_block")
+            if height is None:
+                return None, "no height in response"
+            return str(height), None
+    except Exception as e:
+        return None, str(e)
+
+
+def _osmosis_balance_internal(addr: str | None) -> tuple[str | dict | None, str | None]:
+    """Return (balance, error) for the provided Osmosis address."""
+    if not addr:
+        return None, "address required"
+    resolved, err = _resolve_osmo_denoms(addr)
+    if err:
+        return None, err
+    assets = resolved.get("assets") or []
+    if not assets:
+        return {
+            "osmo": "0.000000 OSMO",
+            "usdc": "0.000000 USDC",
+            "arkeo": "0.000000 ARKEO",
+            "assets": [],
+        }, None
+
+    settings = _merge_provider_settings()
+    total_osmo = 0
+    total_usdc = 0
+    total_arkeo = 0
+    other_parts: list[str] = []
+    arkeo_denom = resolved.get("arkeo_denom") or settings.get("ARKEO_OSMO_DENOM") or os.getenv("ARKEO_OSMO_DENOM") or ""
+    usdc_denom = resolved.get("usdc_denom") or settings.get("USDC_OSMO_DENOM") or os.getenv("USDC_OSMO_DENOM") or ""
+
+    for a in assets:
+        denom = a.get("denom") or ""
+        base = (a.get("base_denom") or denom or "").lower()
+        amt = int(a.get("amount") or 0)
+        if denom == "uosmo" or base == "uosmo":
+            total_osmo += amt
+            continue
+        if "usdc" in base:
+            total_usdc += amt
+            continue
+        if "arkeo" in base:
+            total_arkeo += amt
+            continue
+        other_parts.append(f"{amt} {denom}")
+
+    osmo_str = f"{total_osmo/1e6:.6f} OSMO"
+    usdc_str = f"{total_usdc/1e6:.6f} USDC"
+    arkeo_str = f"{total_arkeo/1e8:.8f} ARKEO"
+    extras = ", ".join(other_parts) if other_parts else ""
+    combined_parts = [p for p in [osmo_str, usdc_str, arkeo_str if arkeo_denom else "", extras] if p]
+    combined = ", ".join(combined_parts)
+
+    if usdc_denom or arkeo_denom:
+        try:
+            _write_bridge_denoms(usdc_denom, arkeo_denom)
+        except Exception:
+            pass
+
+    return (
+        {
+            "osmo": osmo_str,
+            "usdc": usdc_str,
+            "arkeo": arkeo_str,
+            "arkeo_denom": arkeo_denom,
+            "usdc_denom": usdc_denom,
+            "full": combined,
+            "assets": assets,
+        },
+        None,
+    )
 
 
 def _is_local_request() -> bool:
@@ -388,6 +1268,19 @@ def derive_pubkeys(user: str, keyring_backend: str) -> tuple[str, str, str | Non
     return raw_pubkey, bech32_pubkey, None
 
 
+def derive_address(user: str, keyring_backend: str) -> tuple[str, str | None]:
+    """Return (address, error) for the given key."""
+    cmd = (
+        f"arkeod --home {ARKEOD_HOME} "
+        f"--keyring-backend {keyring_backend} "
+        f"keys show {user} -a"
+    )
+    code, out = run(cmd)
+    if code != 0:
+        return "", out
+    return out.strip(), None
+
+
 def provider_pubkeys_response(user: str, keyring_backend: str):
     """Helper to return pubkey info even if derivation fails."""
     raw_pubkey, bech32_pubkey, pubkey_err = derive_pubkeys(user, keyring_backend)
@@ -433,6 +1326,341 @@ def block_height():
         return jsonify({"height": str(height) if height is not None else None, "status": data})
     except json.JSONDecodeError:
         return jsonify({"error": "invalid JSON from status", "detail": out, "cmd": cmd}), 500
+
+
+@app.get("/api/osmosis-block-height")
+def osmosis_block_height():
+    """Return the latest Osmosis block height from OSMOSIS_RPC."""
+    height, err = _osmosis_block_height_internal()
+    if err:
+        return jsonify({"error": err}), 200
+    return jsonify({"height": height})
+
+
+def _osmosis_address_from_request() -> tuple[str | None, str | None]:
+    """Return (address, error) for Osmosis balance queries."""
+    req_addr = _strip_quotes(request.args.get("address") or request.args.get("addr") or "")
+    if req_addr:
+        return req_addr, None
+    settings = _merge_provider_settings()
+    addr = settings.get("OSMOSIS_ADDRESS")
+    if not addr:
+        return None, "OSMOSIS_ADDRESS not available"
+    return addr, None
+
+
+@app.get("/api/osmosis-balance")
+def osmosis_balance():
+    """
+    Return Osmosis balance for a provided address (preferred) or the derived hot wallet.
+    Use /api/osmosis/balances?address=... for an explicit address to avoid hot wallet dependency.
+    """
+    addr, addr_err = _osmosis_address_from_request()
+    bal, err = _osmosis_balance_internal(addr)
+    if addr_err and not bal:
+        return jsonify({"error": addr_err}), 200
+    if err:
+        return jsonify({"error": err}), 200
+    if isinstance(bal, dict):
+        return jsonify(bal)
+    return jsonify({"balance": bal})
+
+
+@app.get("/api/osmosis/balances")
+def osmosis_balances():
+    """Return Osmosis balances for an explicit address; Keplr-backed flow uses this."""
+    addr = _strip_quotes(request.args.get("address") or request.args.get("addr") or "")
+    if not addr:
+        return jsonify({"error": "address query param required"}), 400
+    bal, err = _osmosis_balance_internal(addr)
+    if err:
+        return jsonify({"error": err, "address": addr}), 200
+    if isinstance(bal, dict):
+        bal["address"] = addr
+        return jsonify(bal)
+    return jsonify({"balance": bal, "address": addr})
+
+
+@app.get("/api/osmosis-rpc")
+def osmosis_rpc_get():
+    """Return HTTP(S) Osmosis RPC endpoint (tcp converted to http)."""
+    rpc = _ensure_http_rpc(OSMOSIS_RPC)
+    return jsonify({"rpc": rpc})
+
+
+@app.get("/api/osmosis-arkeo-config")
+def osmosis_arkeo_config():
+    """Return basic config for Osmosis->Arkeo IBC (denom/channel/rpc)."""
+    try:
+        try:
+            arkeo_addr, addr_err = derive_address(KEY_NAME, KEYRING)
+        except Exception:
+            arkeo_addr, addr_err = "", "addr_error"
+        arkeo_denom = globals().get("ARKEO_OSMO_DENOM") or "ibc/AD969E97A63B64B30A6E4D9F598341A403B849F5ACFEAA9F18DBD9255305EC65"
+        channel = globals().get("OSMO_TO_ARKEO_CHANNEL") or "channel-103074"
+        payload = {
+            "arkeo_denom": arkeo_denom,
+            "source_channel": channel,
+            "source_port": "transfer",
+            "osmosis_rpc": _ensure_http_rpc(OSMOSIS_RPC),
+            "osmosis_chain_id": "osmosis-1",
+            "arkeo_address": arkeo_addr,
+            "arkeo_address_error": addr_err,
+        }
+        return jsonify(payload)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.post("/api/osmosis-quote-usdc-to-arkeo")
+def osmosis_quote_usdc_to_arkeo():
+    """Return swap quote for USDC -> ARKEO using pool 2977."""
+    try:
+        data = request.get_json(force=True) or {}
+    except Exception:
+        data = {}
+    amt = data.get("amount") or data.get("usdc") or data.get("amt")
+    try:
+        amt_f = float(amt)
+    except Exception:
+        return jsonify({"error": "invalid amount"}), 400
+    quote, err = _osmosis_quote_usdc_to_arkeo(amt_f)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(quote or {})
+
+
+@app.post("/api/osmosis-quote-arkeo-to-usdc")
+def osmosis_quote_arkeo_to_usdc():
+    """Return swap quote for ARKEO -> USDC using pool 2977."""
+    try:
+        data = request.get_json(force=True) or {}
+    except Exception:
+        data = {}
+    amt = data.get("amount") or data.get("arkeo") or data.get("amt")
+    try:
+        amt_f = float(amt)
+    except Exception:
+        return jsonify({"error": "invalid amount"}), 400
+    quote, err = _osmosis_quote_arkeo_to_usdc(amt_f)
+    if err:
+        return jsonify({"error": err}), 400
+    return jsonify(quote or {})
+
+
+@app.get("/api/hotwallet/logs")
+def hotwallet_logs():
+    """Return recent hotwallet log entries (JSONL file)."""
+    limit = request.args.get("limit") or "50"
+    try:
+        limit = int(limit)
+    except Exception:
+        limit = 50
+    if limit <= 0:
+        limit = 50
+    logs = _read_hotwallet_logs(limit=limit)
+    return jsonify({"logs": logs})
+
+
+@app.post("/api/hotwallet/log-note")
+def hotwallet_log_note():
+    """Allow UI to append a short note into the hotwallet log for continuity with modal status."""
+    payload = request.get_json(silent=True) or {}
+    msg = (payload.get("msg") or payload.get("message") or "").strip()
+    if not msg:
+        return jsonify({"error": "msg required"}), 400
+    now_ts = datetime.datetime.utcnow().isoformat() + "Z"
+    _append_hotwallet_log({"action": "client_note", "msg": msg, "source": "ui", "ts": now_ts})
+    return jsonify({"ok": True})
+
+
+@app.post("/api/hotwallet/arkeo-to-osmosis")
+def hotwallet_arkeo_to_osmosis():
+    """
+    IBC transfer native ARKEO (Arkeo chain) to wrapped ARKEO on Osmosis.
+    """
+    payload = request.get_json(silent=True) or {}
+    amount = payload.get("amount")
+    try:
+        amt_float = float(amount)
+    except Exception:
+        return jsonify({"error": "invalid amount"}), 400
+    if amt_float <= 0:
+        return jsonify({"error": "amount must be > 0"}), 400
+    amt_base = int(round(amt_float * 100_000_000))
+
+    if not ARKEO_TO_OSMO_CHANNEL:
+        return jsonify({"error": "ARKEO_TO_OSMO_CHANNEL not configured"}), 400
+
+    settings = _merge_provider_settings()
+    osmo_addr = payload.get("osmosis_address") or settings.get("OSMOSIS_ADDRESS")
+    if not osmo_addr:
+        return jsonify({"error": "osmosis address required (connect Keplr or set OSMOSIS_ADDRESS)"}), 400
+    arkeo_addr, addr_err = derive_address(KEY_NAME, KEYRING)
+    if addr_err:
+        return jsonify({"error": f"arkeo address: {addr_err}"}), 400
+
+    arkeo_bal, bal_err = _arkeo_balance(arkeo_addr)
+    if bal_err:
+        return jsonify({"error": f"arkeo balance: {bal_err}"}), 500
+    if arkeo_bal < amt_base:
+        return jsonify({"error": f"insufficient ARKEO (have {arkeo_bal/1e6:.6f}, need {amt_float:.6f})"}), 400
+
+    try:
+        denoms_res, denom_err = _resolve_osmo_denoms(osmo_addr)
+    except Exception as e:
+        return jsonify({"error": f"osmosis denoms: {e}"}), 500
+    if denom_err:
+        return jsonify({"error": denom_err}), 500
+    arkeo_denom = denoms_res.get("arkeo_denom")
+    if not arkeo_denom:
+        return jsonify({"error": "ARKEO denom on Osmosis not found"}), 400
+
+    osmo_balances = _osmosis_balances_raw(osmo_addr)
+    osmo_start = 0
+    for b in osmo_balances:
+        if b.get("denom") == arkeo_denom:
+            try:
+                osmo_start = int(b.get("amount", "0"))
+            except Exception:
+                osmo_start = 0
+            break
+
+    _append_hotwallet_log({"action": "arkeo_to_osmosis", "stage": "start", "amount": amt_float})
+
+    ibc_cmd = [
+        "arkeod",
+        "--home",
+        ARKEOD_HOME,
+        "--keyring-backend",
+        KEYRING,
+        "tx",
+        "ibc-transfer",
+        "transfer",
+        "transfer",
+        ARKEO_TO_OSMO_CHANNEL,
+        osmo_addr,
+        f"{amt_base}uarkeo",
+        "--from",
+        KEY_NAME,
+        "--chain-id",
+        CHAIN_ID,
+        "--node",
+        ARKEOD_NODE,
+        "--gas",
+        "auto",
+        "--gas-adjustment",
+        "1.5",
+        "--gas-prices",
+        "0.025uarkeo",
+        "--broadcast-mode",
+        "sync",
+        "-y",
+        "-o",
+        "json",
+    ]
+    ibc_code, ibc_out = run_list(ibc_cmd)
+    ibc_tx = _extract_txhash(ibc_out)
+    tx_code = None
+    tx_raw_log = None
+    packet_info = None
+    try:
+        packet_info = _parse_send_packet(json.loads(ibc_out) if ibc_out else {})
+    except Exception:
+        packet_info = None
+
+    if ibc_tx and not packet_info:
+        try:
+            tx_json_raw = run_list(
+                [
+                    "arkeod",
+                    "--home",
+                    ARKEOD_HOME,
+                    "query",
+                    "tx",
+                    ibc_tx,
+                    "--node",
+                    ARKEOD_NODE,
+                    "-o",
+                    "json",
+                ]
+            )[1]
+            tx_raw_log = tx_json_raw
+            parsed = json.loads(tx_json_raw)
+            tx_code = (parsed.get("tx_response") or {}).get("code")
+            packet_info = _parse_send_packet(parsed)
+        except Exception:
+            packet_info = None
+
+    if ibc_code != 0 or not ibc_tx:
+        _append_hotwallet_log({"action": "arkeo_to_osmosis", "stage": "ibc_failed", "detail": ibc_out})
+        return (
+            jsonify(
+                {
+                    "error": "ibc transfer failed",
+                    "detail": ibc_out,
+                    "raw_log": ibc_out,
+                    "ibc_cmd": ibc_cmd,
+                    "ibc_exit": ibc_code,
+                }
+            ),
+            500,
+        )
+
+    _append_hotwallet_log(
+        {
+            "action": "arkeo_to_osmosis",
+            "stage": "submitted",
+            "ibc_tx": ibc_tx,
+            "osmo_start": osmo_start,
+            "arkeo_sent": amt_base,
+            "arkeo_addr": arkeo_addr,
+            "osmo_addr": osmo_addr,
+            "packet_sequence": packet_info.get("packet_sequence") if packet_info else None,
+            "osmo_src_channel": packet_info.get("src_channel") if packet_info else None,
+            "arkeo_dst_channel": packet_info.get("dst_channel") if packet_info else None,
+            "packet_info_found": bool(packet_info),
+            "tx_code": tx_code,
+            "tx_raw_log": tx_raw_log,
+        }
+    )
+
+    arrived, osmo_final = _wait_for_osmo_balance_increase(osmo_addr, arkeo_denom, amt_base, attempts=30, sleep_s=6)
+    _append_hotwallet_log(
+        {
+            "action": "arkeo_to_osmosis",
+            "stage": "arrival" if arrived else "pending",
+            "ibc_tx": ibc_tx,
+            "osmo_start": osmo_start,
+            "osmo_final": osmo_final,
+            "arkeo_sent": amt_base,
+            "arrived": arrived,
+            "packet_sequence": packet_info.get("packet_sequence") if packet_info else None,
+            "osmo_src_channel": packet_info.get("src_channel") if packet_info else None,
+            "arkeo_dst_channel": packet_info.get("dst_channel") if packet_info else None,
+            "packet_info_found": bool(packet_info),
+            "tx_code": tx_code,
+            "tx_raw_log": tx_raw_log,
+        }
+    )
+
+    return jsonify(
+        {
+            "status": "submitted",
+            "ibc_tx": ibc_tx,
+            "osmo_start": osmo_start,
+            "osmo_final": osmo_final,
+            "arkeo_denom": arkeo_denom,
+            "arrival_confirmed": arrived,
+            "packet_sequence": packet_info.get("packet_sequence") if packet_info else None,
+            "osmo_src_channel": packet_info.get("src_channel") if packet_info else None,
+            "arkeo_dst_channel": packet_info.get("dst_channel") if packet_info else None,
+            "packet_info_found": bool(packet_info),
+            "tx_code": tx_code,
+            "tx_raw_log": tx_raw_log,
+            "ibc_cmd": _mask_cmd_sensitive(ibc_cmd),
+        }
+    )
 
 
 @app.get("/api/key")
@@ -939,6 +2167,7 @@ def provider_info():
     provider_metadata = (export_bundle and export_bundle.get("env_file")) or _load_env_file(SENTINEL_ENV_PATH)
 
     base = provider_pubkeys_response(user, keyring_backend)
+    address, addr_err = derive_address(user, keyring_backend)
     # Ensure provider metadata reflects the current hotwallet pubkey and sentinel URI
     try:
         if isinstance(provider_metadata, dict):
@@ -957,9 +2186,27 @@ def provider_info():
             "provider_metadata": provider_metadata,
             "provider_export": export_bundle,
             "provider_export_path": PROVIDER_EXPORT_PATH,
+            "address": address,
         }
     )
+    if addr_err:
+        base["address_error"] = addr_err
     return jsonify(base)
+
+
+@app.get("/api/wallets")
+def wallets_info():
+    """Return wallet addresses for arkeo/osmosis (no mnemonics)."""
+    settings = _merge_provider_settings()
+    _apply_provider_settings(settings)
+    address, _err = derive_address(KEY_NAME, KEYRING)
+    osmo_addr = settings.get("OSMOSIS_ADDRESS") or ""
+    return jsonify(
+        {
+            "arkeo_address": address,
+            "osmosis_address": osmo_addr,
+        }
+    )
 
 
 @app.get("/api/services")
@@ -1499,6 +2746,14 @@ def _default_provider_settings() -> dict:
         "SENTINEL_PORT": os.getenv("SENTINEL_PORT") or DEFAULT_SENTINEL_PORT,
         "ADMIN_PORT": os.getenv("ADMIN_PORT") or DEFAULT_ADMIN_PORT,
         "ADMIN_API_PORT": os.getenv("ADMIN_API_PORT") or DEFAULT_ADMIN_API_PORT,
+        "OSMOSIS_RPC": _strip_quotes(os.getenv("OSMOSIS_RPC") or ""),
+        "OSMOSIS_USDC_DENOMS": OSMOSIS_USDC_DENOMS,
+        "USDC_OSMO_DENOM": os.getenv("USDC_OSMO_DENOM", "ibc/498A0751C798A0D9A389AA3691123DADA57DAA4FE165D5C75894505B876BA6E4"),
+        "ARKEO_OSMO_DENOM": os.getenv("ARKEO_OSMO_DENOM", "ibc/AD969E97A63B64B30A6E4D9F598341A403B849F5ACFEAA9F18DBD9255305EC65"),
+        "MIN_OSMO_GAS": MIN_OSMO_GAS,
+        "DEFAULT_SLIPPAGE_BPS": DEFAULT_SLIPPAGE_BPS,
+        "ARRIVAL_TOLERANCE_BPS": ARRIVAL_TOLERANCE_BPS,
+        "WALLET_SYNC_INTERVAL": os.getenv("WALLET_SYNC_INTERVAL", "15"),
     }
     return defaults
 
@@ -1528,14 +2783,27 @@ def _merge_provider_settings(overrides: dict | None = None) -> dict:
     except Exception:
         pass
     merged["ARKEOD_HOME"] = _expand_tilde(merged.get("ARKEOD_HOME") or ARKEOD_HOME)
+    if merged.get("ARKEOD_NODE"):
+        merged["ARKEOD_NODE"] = _ensure_tcp_scheme(_strip_quotes(merged.get("ARKEOD_NODE") or ""))
     if not merged.get("ARKEOD_NODE"):
         merged["ARKEOD_NODE"] = ARKEOD_NODE
+    merged.pop("OSMO_TO_ARKEO_CHANNEL", None)
+    merged.pop("ARKEO_TO_OSMO_CHANNEL", None)
+    denoms = merged.get("OSMOSIS_USDC_DENOMS")
+    if isinstance(denoms, str):
+        merged["OSMOSIS_USDC_DENOMS"] = [d.strip() for d in denoms.split(",") if d.strip()]
+    if not merged.get("OSMOSIS_USDC_DENOMS"):
+        merged["OSMOSIS_USDC_DENOMS"] = DEFAULT_OSMOSIS_USDC_DENOMS.copy()
+    merged.pop("OSMOSIS_MNEMONIC", None)
+    merged.pop("OSMOSIS_ADDRESS", None)
+    merged.pop("OSMOSIS_KEY_NAME", None)
+    merged.pop("OSMOSIS_HOME", None)
     return merged
 
 
 def _apply_provider_settings(settings: dict) -> None:
     """Apply provider settings to globals and os.environ for runtime use."""
-    global KEY_NAME, KEYRING, ARKEOD_HOME, ARKEOD_NODE, CHAIN_ID, NODE_ARGS, CHAIN_ARGS
+    global KEY_NAME, KEYRING, ARKEOD_HOME, ARKEOD_NODE, CHAIN_ID, NODE_ARGS, CHAIN_ARGS, OSMOSIS_RPC, OSMOSIS_USDC_DENOMS, MIN_OSMO_GAS, DEFAULT_SLIPPAGE_BPS, OSMO_TO_ARKEO_CHANNEL, ARKEO_TO_OSMO_CHANNEL
     if not isinstance(settings, dict):
         return
     KEY_NAME = settings.get("KEY_NAME", KEY_NAME)
@@ -1546,6 +2814,20 @@ def _apply_provider_settings(settings: dict) -> None:
     CHAIN_ID = _strip_quotes(settings.get("CHAIN_ID") or CHAIN_ID)
     NODE_ARGS = ["--node", ARKEOD_NODE] if ARKEOD_NODE else []
     CHAIN_ARGS = ["--chain-id", CHAIN_ID] if CHAIN_ID else []
+    try:
+        denoms = settings.get("OSMOSIS_USDC_DENOMS") or []
+        if isinstance(denoms, str):
+            denoms = [d.strip() for d in denoms.split(",") if d.strip()]
+        if not isinstance(denoms, list):
+            denoms = []
+        if not denoms:
+            denoms = DEFAULT_OSMOSIS_USDC_DENOMS.copy()
+        OSMOSIS_USDC_DENOMS = denoms
+    except Exception:
+        OSMOSIS_USDC_DENOMS = DEFAULT_OSMOSIS_USDC_DENOMS.copy()
+    OSMOSIS_RPC = _strip_quotes(settings.get("OSMOSIS_RPC") or OSMOSIS_RPC or "")
+    OSMO_TO_ARKEO_CHANNEL = "channel-103074"
+    ARKEO_TO_OSMO_CHANNEL = "channel-1"
 
     env_overrides = {
         "KEY_NAME": KEY_NAME,
@@ -1559,6 +2841,14 @@ def _apply_provider_settings(settings: dict) -> None:
         "ADMIN_PORT": settings.get("ADMIN_PORT", ""),
         "ADMIN_API_PORT": settings.get("ADMIN_API_PORT", ""),
         "KEY_MNEMONIC": settings.get("KEY_MNEMONIC", ""),
+        "OSMOSIS_RPC": settings.get("OSMOSIS_RPC", ""),
+        "OSMOSIS_USDC_DENOMS": ",".join(OSMOSIS_USDC_DENOMS) if OSMOSIS_USDC_DENOMS else "",
+        "USDC_OSMO_DENOM": settings.get("USDC_OSMO_DENOM", ""),
+        "ARKEO_OSMO_DENOM": settings.get("ARKEO_OSMO_DENOM", ""),
+        "MIN_OSMO_GAS": MIN_OSMO_GAS,
+        "DEFAULT_SLIPPAGE_BPS": DEFAULT_SLIPPAGE_BPS,
+        "ARRIVAL_TOLERANCE_BPS": ARRIVAL_TOLERANCE_BPS,
+        "WALLET_SYNC_INTERVAL": settings.get("WALLET_SYNC_INTERVAL", ""),
     }
     for k, v in env_overrides.items():
         if v is None:

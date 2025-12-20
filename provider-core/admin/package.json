@@ -1,0 +1,25 @@
+{
+  "name": "arkeo-admin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Admin UI build for Keplr/CosmJS browser bundle",
+  "scripts": {
+    "build": "esbuild src/keplr.ts --bundle --platform=browser --format=iife --global-name=Cosmos --target=es2020 --alias:crypto=crypto-browserify --alias:stream=stream-browserify --alias:util=util --alias:assert=assert --alias:process=process --inject:src/shims.ts --outfile=vendor/cosmos.bundle.js"
+  },
+  "dependencies": {
+    "@cosmjs/proto-signing": "0.32.4",
+    "@cosmjs/stargate": "0.32.4",
+    "assert": "2.1.0",
+    "buffer": "6.0.3",
+    "events": "3.3.0",
+    "crypto-browserify": "3.12.0",
+    "long": "5.2.3",
+    "osmojs": "16.15.0",
+    "process": "0.11.10",
+    "stream-browserify": "3.0.0",
+    "util": "0.12.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.21.5"
+  }
+}

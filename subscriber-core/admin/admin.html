@@ -120,13 +120,6 @@
         </tr>
         <tr>
             <td class="label">
-                CORS Allowed Origins
-                <div class="hint">Comma-separated origins (e.g., http://localhost:8079) sent to sentinel contract config for browser access.</div>
-            </td>
-            <td class="value"><input type="text" id="corsAllowedOrigins" placeholder="http://localhost:8079" autocomplete="on" /></td>
-        </tr>
-        <tr>
-            <td class="label">
                 Arkeo Hot Wallet Mnemonic
                 <div class="hint">Stored for on-chain Arkeo operations.</div>
             </td>
@@ -423,7 +416,6 @@
         ARKEOD_NODE: "tcp://127.0.0.1:26657",
         OSMOSIS_RPC: "",
         KEY_MNEMONIC: "",
-        CORS_ALLOWED_ORIGINS: "*",
         ETH_ADDRESS: "",
         ADMIN_PORT: "8079",
         ADMIN_API_PORT: "9998",
@@ -475,7 +467,6 @@
         if (homeVal) homeVal.textContent = homeText || "(read-only)";
         setInputWithDefault("arkeodNode", subscriberSettingsCache.ARKEOD_NODE, "ARKEOD_NODE");
         setInputWithDefault("osmoRpc", subscriberSettingsCache.OSMOSIS_RPC, "OSMOSIS_RPC");
-        setInputWithDefault("corsAllowedOrigins", subscriberSettingsCache.CORS_ALLOWED_ORIGINS, "CORS_ALLOWED_ORIGINS");
         setSubscriberInput("hotwalletMnemonic", subscriberSettingsCache.KEY_MNEMONIC);
         setInputWithDefault("adminPort", subscriberSettingsCache.ADMIN_PORT, "ADMIN_PORT");
         setInputWithDefault("adminApiPort", subscriberSettingsCache.ADMIN_API_PORT, "ADMIN_API_PORT");
@@ -514,7 +505,6 @@
                 ARKEOD_HOME: subscriberSettingsCache.ARKEOD_HOME || DEFAULTS.ARKEOD_HOME,
                 ARKEOD_NODE: normalizeRpc(document.getElementById("arkeodNode")?.value || DEFAULTS.ARKEOD_NODE),
                 OSMOSIS_RPC: document.getElementById("osmoRpc")?.value || DEFAULTS.OSMOSIS_RPC,
-                CORS_ALLOWED_ORIGINS: document.getElementById("corsAllowedOrigins")?.value || DEFAULTS.CORS_ALLOWED_ORIGINS,
                 KEY_MNEMONIC: document.getElementById("hotwalletMnemonic")?.value || "",
                 ADMIN_PORT: document.getElementById("adminPort")?.value || DEFAULTS.ADMIN_PORT,
                 ADMIN_API_PORT: document.getElementById("adminApiPort")?.value || DEFAULTS.ADMIN_API_PORT,
