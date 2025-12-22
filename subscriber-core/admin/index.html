@@ -6,6 +6,7 @@
     <link rel="stylesheet" href="style.css">
     <link rel="icon" href="images/favicon.ico">
     <link rel="shortcut icon" href="images/favicon.ico">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="vendor/cosmos.bundle.js"></script>
 </head>
 <body>
@@ -227,6 +228,24 @@
         </div>
     </div>
 </div>
+</div>
+
+<div class="card">
+    <div class="row-between align-center">
+        <h2 class="mt-0 mb-0">Subscriber Spending</h2>
+        <div class="range-toggle">
+            <button class="toggle-btn" data-range="daily" onclick="changeEarningsRange('daily')">Daily</button>
+            <button class="toggle-btn" data-range="weekly" onclick="changeEarningsRange('weekly')">Weekly</button>
+            <button class="toggle-btn" data-range="monthly" onclick="changeEarningsRange('monthly')">Monthly</button>
+            <button class="toggle-btn active" data-range="all_time" onclick="changeEarningsRange('all_time')">All Time</button>
+        </div>
+    </div>
+    <div class="chart-wrapper">
+        <canvas id="earningsChart" height="220"></canvas>
+        <div id="earningsChartEmpty" class="muted chart-empty hidden"></div>
+    </div>
+    <div id="earningsChartStatus" class="muted small-text"></div>
+    <div id="claimTotals" class="claims-grid muted card-body" data-has-content="0">(loading spending totals...)</div>
 </div>
 
 <div class="card">
@@ -507,7 +526,21 @@
 <script>
     let currentPubkey = "";
     let currentAddress = "";
+    let lastBlockHeight = null;
     const OSMOSIS_CHAIN_ID = "osmosis-1";
+    const BLOCK_TIME_SECONDS = 5.8;
+    const EARNINGS_TIME_WINDOWS = {
+        daily: 24 * 60 * 60,
+        weekly: 7 * 24 * 60 * 60,
+        monthly: 30 * 24 * 60 * 60,
+        all_time: 0,
+    };
+    const EARNINGS_CACHE_MS = 60000;
+    let earningsRange = "all_time";
+    let earningsChartInstance = null;
+    let earningsChartCache = {};
+    let lastSpendingTotals = [];
+    let spendingEndpointAvailable = null;
     let keplrOsmoAddress = "";
     let osmosisRpcHttp = "";
     let keplrKeystoreAttached = false;
@@ -1598,6 +1631,299 @@
         return resp.height.toString();
     }
 
+    function getNumericHeight(val) {
+        if (val === undefined || val === null) return null;
+        if (typeof val === "number") return Number.isFinite(val) ? val : null;
+        if (typeof val === "string") {
+            const num = Number(val);
+            if (!Number.isNaN(num)) return num;
+        }
+        const raw =
+            (val && val.height) ||
+            (val && val.status && (
+                val.status.latest_block_height ||
+                val.status.latest_block ||
+                (val.status.SyncInfo && val.status.SyncInfo.latest_block_height) ||
+                (val.status.sync_info && val.status.sync_info.latest_block_height)
+            ));
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    function estimateHeightsForRange(range) {
+        const latest = getNumericHeight(lastBlockHeight);
+        if (!latest) return { from: null, to: null };
+        const seconds = EARNINGS_TIME_WINDOWS[range];
+        if (!seconds || range === "all_time") {
+            return { from: 0, to: latest };
+        }
+        const blocksBack = Math.ceil(seconds / BLOCK_TIME_SECONDS);
+        const from = Math.max(0, latest - blocksBack);
+        return { from, to: latest };
+    }
+
+    function updateEarningsRangeButtons(activeRange) {
+        const buttons = document.querySelectorAll(".toggle-btn[data-range]");
+        buttons.forEach((btn) => {
+            const r = btn.dataset.range;
+            if (r === activeRange) btn.classList.add("active");
+            else btn.classList.remove("active");
+        });
+    }
+
+    function isServiceTypeKnown(serviceId) {
+        if (!serviceId) return false;
+        if (!serviceTypesCache || !serviceTypesCache.length) return false;
+        const sid = String(serviceId);
+        return serviceTypesCache.some((s) => String(s.service_id) === sid);
+    }
+
+    function resolveServiceLabel(rawService) {
+        const key = rawService !== undefined && rawService !== null ? String(rawService) : "";
+        const label = formatServiceLabel(key);
+        return label || key || "(unknown service)";
+    }
+
+    function buildServiceChartEntries(list) {
+        return (list || [])
+            .map((st) => {
+                const totalU =
+                    Number(
+                        st.total_paid_uarkeo ??
+                        st.tokens_paid_total_uarkeo ??
+                        st.total ??
+                        st.paid ??
+                        0
+                    );
+                const value = totalU / 1e8;
+                const svc = st.service || st.service_id || st.name || "";
+                if (!isServiceTypeKnown(svc)) return null;
+                return { label: resolveServiceLabel(svc), value };
+            })
+            .filter((d) => d && d.value > 0);
+    }
+
+    function renderEarningsChart(data) {
+        const canvas = document.getElementById("earningsChart");
+        const emptyEl = document.getElementById("earningsChartEmpty");
+        if (!canvas) return;
+        const hasData = Array.isArray(data) && data.length > 0;
+        if (!hasData) {
+            if (earningsChartInstance) {
+                earningsChartInstance.destroy();
+                earningsChartInstance = null;
+            }
+            canvas.classList.add("hidden");
+            if (emptyEl) {
+                emptyEl.classList.remove("hidden");
+                emptyEl.textContent = "No spending data yet.";
+            }
+            return;
+        }
+        canvas.classList.remove("hidden");
+        if (emptyEl) emptyEl.classList.add("hidden");
+        const ctx = canvas.getContext("2d");
+        if (!ctx || typeof Chart === "undefined") return;
+        const labels = data.map((d) => d.label);
+        const values = data.map((d) => d.value);
+        if (earningsChartInstance) {
+            earningsChartInstance.data.labels = labels;
+            earningsChartInstance.data.datasets[0].data = values;
+            earningsChartInstance.update();
+            return;
+        }
+        earningsChartInstance = new Chart(ctx, {
+            type: "bar",
+            data: {
+                labels,
+                datasets: [
+                    {
+                        label: "ARKEO Spent",
+                        data: values,
+                        backgroundColor: "rgba(59, 224, 255, 0.35)",
+                        borderColor: "rgba(59, 224, 255, 0.8)",
+                        borderWidth: 1.5,
+                        borderRadius: 6,
+                    },
+                ],
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.parsed.y.toFixed(6)} ARKEO`,
+                        },
+                    },
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: { color: "rgba(255,255,255,0.08)" },
+                        ticks: { color: "#cbd5e1" },
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: { color: "#94a3b8" },
+                    },
+                },
+            },
+        });
+    }
+
+    function renderSpendingTotals(serviceTotals) {
+        const el = document.getElementById("claimTotals");
+        if (!el) return;
+        if (!listenersCache || !listenersCache.length) {
+            el.textContent = "No listener services configured yet.";
+            el.classList.add("muted");
+            el.dataset.hasContent = "0";
+            return;
+        }
+        const totalsMap = new Map();
+        (Array.isArray(serviceTotals) ? serviceTotals : []).forEach((t) => {
+            const rawKey = t?.service ?? t?.service_id ?? t?.name ?? "";
+            if (!rawKey) return;
+            const key = String(rawKey);
+            totalsMap.set(key, t);
+            const numKey = Number(key);
+            if (!Number.isNaN(numKey)) {
+                totalsMap.set(String(numKey), t);
+            }
+        });
+        const serviceSeen = new Set();
+        const services = [];
+        listenersCache.forEach((l) => {
+            const svcId = l?.service_id ?? l?.service ?? l?.serviceId ?? l?.serviceID ?? "";
+            const key = String(svcId || "");
+            if (!key || serviceSeen.has(key)) return;
+            serviceSeen.add(key);
+            const displayName =
+                l?.service_description ||
+                formatServiceLabel(svcId) ||
+                l?.service_name ||
+                key ||
+                "Service";
+            services.push({ id: key, label: displayName });
+        });
+        if (!services.length) {
+            el.textContent = "No listener services configured yet.";
+            el.classList.add("muted");
+            el.dataset.hasContent = "0";
+            return;
+        }
+        services.sort((a, b) => a.label.localeCompare(b.label, "en-US", { sensitivity: "base" }));
+        const cards = services.map((svc) => {
+            const lookupKey = svc.id;
+            const totalEntry = totalsMap.get(lookupKey) || totalsMap.get(String(lookupKey).toLowerCase());
+            const paid = Number(totalEntry?.total_paid_uarkeo ?? totalEntry?.tokens_paid_total_uarkeo ?? totalEntry?.total ?? totalEntry?.paid ?? 0);
+            const txCount = Number(totalEntry?.tx_count ?? totalEntry?.payg_requests_total ?? 0);
+            const arkeoVal = paid / 1e8;
+            const arkeoStr = arkeoVal.toLocaleString("en-US", { minimumFractionDigits: 8, maximumFractionDigits: 8 });
+            return `
+                <div class="claim-card">
+                    <div class="claim-title">${escapeHtml(svc.label || "(unknown service)")}</div>
+                    <div class="claim-metric">${arkeoStr} ARKEO</div>
+                    <div class="claim-meta">${txCount} transactions</div>
+                </div>
+            `;
+        });
+        el.classList.remove("muted");
+        el.innerHTML = cards.join("") || "<div class=\"muted\">No spending totals available.</div>";
+        el.dataset.hasContent = "1";
+    }
+
+    async function loadEarningsByService(range = earningsRange, force = false) {
+        earningsRange = range;
+        updateEarningsRangeButtons(range);
+        const statusEl = document.getElementById("earningsChartStatus");
+        if (statusEl) statusEl.textContent = "";
+        const gateAuthed = sessionStorage.getItem("adminAuthed") === "1" || adminSessionAuthed || !adminPasswordEnabled;
+        if (adminPasswordEnabled && !gateAuthed) {
+            if (statusEl) statusEl.textContent = "Enter the admin password to view spending.";
+            renderEarningsChart([]);
+            lastSpendingTotals = [];
+            renderSpendingTotals([]);
+            return;
+        }
+        if (!serviceTypesCache || !serviceTypesCache.length) {
+            if (statusEl) statusEl.textContent = "Waiting for active service types...";
+            refreshServiceTypes(false, null, true);
+            renderEarningsChart([]);
+            renderSpendingTotals(lastSpendingTotals);
+            return;
+        }
+        if (spendingEndpointAvailable === false && !force) {
+            if (statusEl) statusEl.textContent = "Subscriber spending endpoint not available yet.";
+            renderEarningsChart([]);
+            lastSpendingTotals = [];
+            renderSpendingTotals([]);
+            return;
+        }
+        const now = Date.now();
+        const cacheEntry = earningsChartCache[range];
+        if (!force && cacheEntry && now - cacheEntry.fetched < EARNINGS_CACHE_MS) {
+            renderEarningsChart(cacheEntry.data);
+            lastSpendingTotals = cacheEntry.totals || [];
+            renderSpendingTotals(lastSpendingTotals);
+            return;
+        }
+        const { from, to } = estimateHeightsForRange(range);
+        const body = {};
+        if (range !== "all_time" && (from === null || to === null)) {
+            if (statusEl) statusEl.textContent = "Waiting for latest block height...";
+            return;
+        }
+        if (range !== "all_time" && from !== null && to !== null) {
+            body.from_height = from;
+            body.to_height = to;
+        }
+        try {
+            const res = await fetch(apiUrl("/api/subscriber-totals"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+                body: JSON.stringify(body),
+            });
+            if (res.status === 404) {
+                spendingEndpointAvailable = false;
+                if (statusEl) statusEl.textContent = "Subscriber spending endpoint not available yet.";
+                renderEarningsChart([]);
+                lastSpendingTotals = [];
+                renderSpendingTotals([]);
+                return;
+            }
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok || (data && data.error)) {
+                if (statusEl) statusEl.textContent = data && data.error ? `Error: ${data.error}` : `Error ${res.status}`;
+                renderEarningsChart([]);
+                lastSpendingTotals = [];
+                renderSpendingTotals([]);
+                return;
+            }
+            const services = Array.isArray(data.service_totals) ? data.service_totals : [];
+            const chartData = buildServiceChartEntries(services);
+            chartData.sort((a, b) => b.value - a.value);
+            const top = chartData.slice(0, 10);
+            earningsChartCache[range] = { data: top, fetched: now, totals: services };
+            renderEarningsChart(top);
+            lastSpendingTotals = services;
+            renderSpendingTotals(lastSpendingTotals);
+            spendingEndpointAvailable = true;
+        } catch (e) {
+            renderEarningsChart([]);
+            lastSpendingTotals = [];
+            renderSpendingTotals([]);
+            if (statusEl) statusEl.textContent = `Failed to load spending: ${e}`;
+        }
+    }
+
+    function changeEarningsRange(range) {
+        loadEarningsByService(range, true);
+        earningsRange = range;
+    }
+
     const API_PORT_DEFAULT = 9998;
     const apiPort = new URLSearchParams(window.location.search).get("api_port") || window.API_PORT || API_PORT_DEFAULT;
     const API_BASE = `${window.location.protocol}//${window.location.hostname}${apiPort ? ":" + apiPort : ""}`;
@@ -1798,6 +2124,7 @@
             const wallets = await parseSafe(walletsRes);
             const osmoBal = await parseSafe(osmoBalRes);
 
+            lastBlockHeight = height;
             const moniker = (info && info.subscriber_name) ||
                 (info && info.provider_metadata && (info.provider_metadata.MONIKER || info.provider_metadata.PROVIDER_NAME)) || "";
             const desc = "";
@@ -1900,6 +2227,9 @@
             if (osmoBlock) osmoBlock.textContent = osmoBlockVal || "—";
             const arkeoBlockBadge = document.getElementById("walletArkeoBlockBadge");
             if (arkeoBlockBadge) arkeoBlockBadge.textContent = blockVal || "—";
+            if (document.getElementById("earningsChart")) {
+                loadEarningsByService(earningsRange);
+            }
         } catch (err) {
             console.error("refreshHeader failed", err);
         }
@@ -2500,6 +2830,8 @@
                 if (rerenderTable && !listenersEditingId) {
                     renderListenersTable();
                 }
+                renderSpendingTotals(lastSpendingTotals);
+                loadEarningsByService(earningsRange, true);
             }
         } catch (e) {
             // ignore fetch errors; will retry on next trigger
@@ -2532,6 +2864,7 @@
             populatePortStartSelect();
             renderListenersTable();
             renderListenerLogs();
+            renderSpendingTotals(lastSpendingTotals);
             if (!serviceTypesCache.length) {
                 refreshServiceTypes(true);
             }
@@ -3007,6 +3340,7 @@
                 openListenerId = newId; // ensure the new listener drawer opens
             }
             await loadListeners();
+            loadEarningsByService(earningsRange, true);
             if (newId) {
                 const elId = `listener-${newId}`;
                 // wait for DOM render
@@ -3100,6 +3434,7 @@
             }
             listenersEditingId = null;
             await loadListeners();
+            loadEarningsByService(earningsRange, true);
         } catch (err) {
             showResultModal("Update Listener", `Failed to update listener: ${err}`);
         }
@@ -3190,6 +3525,7 @@
             }
             listenersEditingId = null;
             await loadListeners();
+            loadEarningsByService(earningsRange, true);
         } catch (err) {
             showResultModal("Delete Listener", `Failed to delete listener: ${err}`);
         }

@@ -9751,6 +9751,212 @@ def provider_totals():
     )
 
 
+@app.post("/api/subscriber-totals")
+def subscriber_totals():
+    """Summarize contract spending for this subscriber using cached provider-contracts."""
+    body = request.get_json(silent=True) or {}
+    service_filter = (body.get("service") or "").strip()
+    from_h = str(body.get("from_height") or body.get("from") or 0)
+    to_h = str(body.get("to_height") or body.get("to") or 999_999_999)
+    from_h_int = _safe_int(from_h, 0)
+    to_h_int = _safe_int(to_h, 999_999_999)
+
+    def empty_summary(subscriber_pubkey: str = "", err: str | None = None, detail=None):
+        return jsonify(
+            {
+                "subscriber_pubkey": subscriber_pubkey or None,
+                "service_filter": service_filter or None,
+                "from_height": from_h,
+                "to_height": to_h,
+                "tokens_paid_total_uarkeo": 0,
+                "tokens_paid_finalized_uarkeo": 0,
+                "payg_requests_total": 0,
+                "active_contracts": 0,
+                "settled_contracts": 0,
+                "remaining_uarkeo": 0,
+                "contracts": [],
+                "service_totals": [],
+                "error": err,
+                "detail": detail,
+            }
+        ), 200
+
+    raw_pubkey, bech32_pubkey, pub_err = derive_pubkeys(KEY_NAME, KEYRING)
+    subscriber_pubkey = bech32_pubkey or raw_pubkey
+    if not subscriber_pubkey:
+        return empty_summary("", "failed to derive subscriber pubkey", pub_err)
+    subscriber_pubkey_alts = {subscriber_pubkey.strip()}
+    if raw_pubkey:
+        subscriber_pubkey_alts.add(raw_pubkey.strip())
+
+    contracts_raw = _load_cached("provider-contracts")
+    contracts = []
+    if isinstance(contracts_raw, dict):
+        data = contracts_raw.get("data")
+        if isinstance(data, dict):
+            for key in ("contracts", "contract", "result"):
+                val = data.get(key)
+                if isinstance(val, list):
+                    contracts = val
+                    break
+        elif isinstance(data, list):
+            contracts = data
+    if not isinstance(contracts, list):
+        contracts = []
+
+    filtered = []
+    for c in contracts:
+        if not isinstance(c, dict):
+            continue
+        client_val = c.get("client") or c.get("subscriber") or c.get("subscriber_pubkey") or ""
+        client_val = str(client_val).strip().strip('"')
+        if not client_val or client_val not in subscriber_pubkey_alts:
+            continue
+        service_val = c.get("service") or c.get("service_id") or c.get("serviceID") or c.get("name") or ""
+        service_val = str(service_val).strip()
+        if service_filter and service_val != service_filter:
+            continue
+        contract_id = c.get("contract_id") or c.get("id") or c.get("contractID") or c.get("contractId") or ""
+        contract_type = (c.get("type") or c.get("authorization") or "").upper()
+        settlement_height = _safe_int(
+            c.get("settlement_height")
+            or c.get("settlementHeight")
+            or c.get("settlementheight")
+            or 0,
+            0,
+        )
+        height_for_filter = None
+        for key in ("settlement_height", "settlementHeight", "settlementheight", "height"):
+            if key in c and c.get(key) is not None:
+                try:
+                    height_for_filter = int(str(c.get(key)).strip().strip('"'))
+                    break
+                except Exception:
+                    height_for_filter = None
+        if height_for_filter is None:
+            try:
+                raw_h = c.get("raw", {}).get("height")
+                if raw_h is not None:
+                    height_for_filter = int(str(raw_h).strip().strip('"'))
+            except Exception:
+                height_for_filter = None
+        if from_h_int > 0 or to_h_int < 999_999_999:
+            if height_for_filter is not None:
+                if height_for_filter < from_h_int or height_for_filter > to_h_int:
+                    continue
+            else:
+                continue
+
+        settlement_duration = _safe_int(
+            c.get("settlement_duration") or c.get("settlementDuration") or c.get("settlementduration") or 0,
+            0,
+        )
+        paid = _safe_int(c.get("paid"), 0)
+        deposit = _safe_int(c.get("deposit"), 0)
+        nonce = _safe_int(c.get("nonce"), 0)
+        if nonce == 0:
+            continue
+        rate_amount = 0
+        rate_val = c.get("rate") or c.get("rates") or c.get("pay_as_you_go_rate") or c.get("pay_as_you_go_rates")
+        if isinstance(rate_val, list) and rate_val:
+            try:
+                rate_amount = _safe_int((rate_val[0] or {}).get("amount"), 0)
+            except Exception:
+                rate_amount = 0
+        elif isinstance(rate_val, dict):
+            rate_amount = _safe_int(rate_val.get("amount"), 0)
+        tx_count = nonce if "PAY" in contract_type else 0
+        filtered.append(
+            {
+                "contract_id": str(contract_id),
+                "service": service_val,
+                "type": contract_type,
+                "paid": paid,
+                "deposit": deposit,
+                "remaining": max(0, deposit - paid),
+                "nonce": nonce,
+                "tx_count": tx_count,
+                "settlement_height": settlement_height,
+                "settlement_duration": settlement_duration,
+                "rate_amount": rate_amount,
+            }
+        )
+
+    if not filtered:
+        return empty_summary(subscriber_pubkey)
+
+    tokens_paid_total = sum(c["paid"] for c in filtered)
+    tokens_paid_finalized = sum(c["paid"] for c in filtered if c["settlement_height"] > 0)
+    payg_requests_total = sum(c["nonce"] for c in filtered if "PAY" in c["type"])
+    active_contracts = sum(1 for c in filtered if c["settlement_height"] == 0)
+    settled_contracts = sum(1 for c in filtered if c["settlement_height"] > 0)
+    remaining_total = sum(c["remaining"] for c in filtered)
+
+    service_totals_map: dict[str, dict] = {}
+    for c in filtered:
+        svc = c["service"] or ""
+        st = service_totals_map.setdefault(
+            svc,
+            {
+                "service": svc,
+                "tokens_paid_total_uarkeo": 0,
+                "tokens_paid_finalized_uarkeo": 0,
+                "payg_requests_total": 0,
+                "tx_count": 0,
+                "active_contracts": 0,
+                "settled_contracts": 0,
+                "remaining_uarkeo": 0,
+                "deposit_total_uarkeo": 0,
+                "contracts": [],
+            },
+        )
+        st["tokens_paid_total_uarkeo"] += c["paid"]
+        if c["settlement_height"] > 0:
+            st["tokens_paid_finalized_uarkeo"] += c["paid"]
+            st["settled_contracts"] += 1
+        else:
+            st["active_contracts"] += 1
+        st["payg_requests_total"] += c["nonce"] if "PAY" in c["type"] else 0
+        st["tx_count"] += c.get("tx_count", 0)
+        st["remaining_uarkeo"] += c["remaining"]
+        st["deposit_total_uarkeo"] += c["deposit"]
+        st["contracts"].append(
+            {
+                "contract_id": c["contract_id"],
+                "service": c["service"],
+                "type": c["type"],
+                "paid": c["paid"],
+                "deposit": c["deposit"],
+                "remaining": c["remaining"],
+                "nonce": c["nonce"],
+                "settlement_height": c["settlement_height"],
+                "settlement_duration": c["settlement_duration"],
+            }
+        )
+
+    for st in service_totals_map.values():
+        st["contracts"].sort(key=lambda x: int(x["contract_id"]) if str(x["contract_id"]).isdigit() else str(x["contract_id"]))
+
+    service_totals = sorted(service_totals_map.values(), key=lambda x: x["service"])
+
+    return jsonify(
+        {
+            "subscriber_pubkey": subscriber_pubkey,
+            "service_filter": service_filter or None,
+            "from_height": from_h,
+            "to_height": to_h,
+            "tokens_paid_total_uarkeo": tokens_paid_total,
+            "tokens_paid_finalized_uarkeo": tokens_paid_finalized,
+            "payg_requests_total": payg_requests_total,
+            "active_contracts": active_contracts,
+            "settled_contracts": settled_contracts,
+            "remaining_uarkeo": remaining_total,
+            "contracts": filtered,
+            "service_totals": service_totals,
+        }
+    )
+
+
 _bootstrap_thread = threading.Thread(target=_bootstrap_listeners_from_cache, daemon=True)
 _bootstrap_thread.start()
 
