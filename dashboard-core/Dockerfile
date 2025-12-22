@@ -5,8 +5,9 @@ RUN apt-get update && apt-get install -y git make build-essential curl jq && rm 
 
 WORKDIR /src
 
-# Clone Arkeo source (same branch used by subscriber-core)
-RUN git clone --branch Upgrade-for-v1.0.16 --single-branch https://github.com/arkeonetwork/arkeo.git
+# Clone Arkeo source (pin to main by default)
+ARG ARKEO_REF=master
+RUN git clone --branch ${ARKEO_REF} --single-branch https://github.com/arkeonetwork/arkeo.git
 
 WORKDIR /src/arkeo
 
