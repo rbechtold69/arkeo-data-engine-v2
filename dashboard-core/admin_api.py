@@ -29,6 +29,9 @@ LOG_FILES = {
     "dashboard_info": "/var/log/dashboard-info.log",
 }
 
+ARKEO_DECIMALS = 8
+ARKEO_DIVISOR = 10**ARKEO_DECIMALS
+
 DASHBOARD_INFO_FILE = os.getenv("DASHBOARD_INFO_FILE", "/app/cache/dashboard_info.json")
 try:
     BLOCK_TIME_SECONDS = float(os.getenv("BLOCK_TIME_SECONDS", "5.79954919"))
@@ -55,6 +58,18 @@ def add_cors(resp):
 
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _format_arkeo_amount(uarkeo) -> str:
+    try:
+        amount = int(uarkeo or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    sign = "-" if amount < 0 else ""
+    amount = abs(amount)
+    whole = amount // ARKEO_DIVISOR
+    frac = amount % ARKEO_DIVISOR
+    return f"{sign}{whole}.{frac:0{ARKEO_DECIMALS}d}"
 
 
 def _load_cached(name: str) -> dict:
@@ -422,9 +437,11 @@ def cache_counts():
         counts["contracts"] = len(contracts_list)
         total_paid, total_tx = _contracts_all_time_totals(contracts_list)
         counts["total_paid_uarkeo"] = total_paid
+        counts["total_paid_arkeo"] = _format_arkeo_amount(total_paid)
         counts["total_transactions"] = total_tx
     else:
         counts["total_paid_uarkeo"] = 0
+        counts["total_paid_arkeo"] = _format_arkeo_amount(0)
         counts["total_transactions"] = 0
 
     services_list = []
@@ -619,6 +636,7 @@ def contracts_range():
             "count": len(filtered),
             "provider_filter": provider_filter,
             "total_paid_uarkeo": total_paid,
+            "total_paid_arkeo": _format_arkeo_amount(total_paid),
             "total_transactions": total_tx,
             "contracts": filtered,
         }
