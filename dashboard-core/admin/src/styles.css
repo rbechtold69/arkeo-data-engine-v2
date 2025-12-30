@@ -29,6 +29,8 @@ body {
   background-color: rgb(15 18 26 / var(--tw-bg-opacity, 1));
   position: relative;
   overflow: hidden;
+  z-index: 0;
+  isolation: isolate;
 }
 .bg-background::after {
   content: "";
@@ -40,11 +42,7 @@ body {
   background-position: 130px 36px;
   background-size: 1400px auto;
   opacity: 0.6;
-  z-index: 0;
-}
-.bg-background > * {
-  position: relative;
-  z-index: 1;
+  z-index: -1;
 }
 @media (max-width: 1024px) {
   .bg-background {

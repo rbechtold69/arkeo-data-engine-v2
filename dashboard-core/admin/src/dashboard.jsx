@@ -897,35 +897,15 @@ docker run -d --name subscriber-core --restart=unless-stopped \\
             <div className="p-6">
               {step === 2 && (
                 <>
-                  <div className="flex items-center gap-2 text-arkeo mb-4"><Icons.Docker /><span className="font-medium">Docker Setup</span></div>
-                  <h3 className="text-lg font-semibold text-white mb-4">Quick Start</h3>
-                  <div className="space-y-4">
-                    <div className="card-surface card-shadow rounded-xl p-4 relative">
-                      <button onClick={() => onCopy?.(providerEnvExample)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
-                      <p className="text-sm text-secondaryText mb-2">1. Create your env file (~/provider.env)</p>
-                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
-                        {providerEnvExample}
-                      </code>
-                    </div>
-                    <div className="card-surface card-shadow rounded-xl p-4 relative">
-                      <button onClick={() => onCopy?.(providerRunCmd)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
-                      <p className="text-sm text-secondaryText mb-2">2. Pull and run the container</p>
-                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
-                        {providerRunCmd}
-                      </code>
-                    </div>
-                    <div className="card-surface card-shadow rounded-xl p-4 relative">
-                      <button onClick={() => onCopy?.('http://localhost:8080')} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
-                      <p className="text-sm text-secondaryText mb-2">3. Open the Admin UI</p>
-                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)] whitespace-pre-wrap">http://localhost:8080</code>
-                    </div>
-                    <div className="bg-primary/10 border border-primary/40 rounded-xl p-4">
-                      <p className="text-arkeo text-sm">💡 On first run, copy the hotwallet mnemonic from logs into provider.env. Then add services, bond, and announce to the marketplace.</p>
-                    </div>
+                  <div className="mb-5 space-y-2">
+                    <p className="text-secondaryText text-sm">The Arkeo Provider Data Engine lets you turn existing infrastructure into steady revenue by publishing services to the marketplace. Run the provider core and admin UI to list endpoints, set pricing, and get paid in ARKEO as subscribers use your data.</p>
+                    <a href="https://github.com/arkeonetwork/arkeo-data-engine/blob/main/provider-core/README.md" target="_blank" rel="noopener noreferrer" className="text-arkeo text-sm font-semibold inline-flex items-center gap-2 hover:brightness-110">
+                        Provider install guide <Icons.External />
+                    </a>
                   </div>
                 <div className="mt-6 flex gap-3">
                   <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-medium secondary-btn hover:brightness-110">Back</button>
-                  <a href="https://github.com/arkeonetwork/arkeo-data-engine" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
+                  <a href="https://github.com/arkeonetwork/arkeo-data-engine/blob/main/provider-core/README.md" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
                     View on GitHub <Icons.External />
                   </a>
                 </div>
@@ -963,35 +943,15 @@ docker run -d --name subscriber-core --restart=unless-stopped \\
             <div className="p-6">
               {step === 2 && (
                 <>
-                  <div className="flex items-center gap-2 text-arkeo mb-4"><Icons.Docker /><span className="font-medium">Docker Setup</span></div>
-                  <h3 className="text-lg font-semibold text-white mb-4">Quick Start</h3>
-                  <div className="space-y-4">
-                    <div className="card-surface card-shadow rounded-xl p-4 relative">
-                      <button onClick={() => onCopy?.(subscriberEnvExample)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
-                      <p className="text-sm text-secondaryText mb-2">1. Create your env file (~/subscriber.env)</p>
-                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
-                        {subscriberEnvExample}
-                      </code>
-                    </div>
-                    <div className="card-surface card-shadow rounded-xl p-4 relative">
-                      <button onClick={() => onCopy?.(subscriberRunCmd)} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
-                      <p className="text-sm text-secondaryText mb-2">2. Pull and run the container</p>
-                      <code className="block whitespace-pre bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-xs font-mono border border-[var(--border)] whitespace-pre-wrap">
-                        {subscriberRunCmd}
-                      </code>
-                    </div>
-                    <div className="card-surface card-shadow rounded-xl p-4 relative">
-                      <button onClick={() => onCopy?.('http://localhost:8079')} className="absolute top-3 right-3 text-xs bg-[var(--surface)] border border-[var(--border)] text-secondaryText px-2 py-1 rounded hover:border-arkeo">Copy</button>
-                      <p className="text-sm text-secondaryText mb-2">3. Open the Admin UI</p>
-                      <code className="block bg-[var(--bg-main)] rounded-lg p-3 text-arkeo text-sm font-mono border border-[var(--border)] whitespace-pre-wrap">http://localhost:8079</code>
-                    </div>
-                  <div className="bg-primary/10 border border-primary/40 rounded-xl p-4">
-                    <p className="text-arkeo text-sm">💡 On first run, copy the hotwallet mnemonic from logs into subscriber.env. Then add listeners, open contracts, and consume data.</p>
+                  <div className="mb-5 space-y-2">
+                    <p className="text-secondaryText text-sm">Arkeo Subscriber Data Engine gives developers and users a managed way to consume blockchain data through a docker-based listener proxy. It auto-selects providers by service and region, handles PAYG contracts and hot-wallet payments, and adds cost-effective failover so your apps stay online without locking into a single provider.</p>
+                    <a href="https://github.com/arkeonetwork/arkeo-data-engine/blob/main/subscriber-core/README.md" target="_blank" rel="noopener noreferrer" className="text-arkeo text-sm font-semibold inline-flex items-center gap-2 hover:brightness-110">
+                      Subscriber install guide <Icons.External />
+                    </a>
                   </div>
-                </div>
                 <div className="mt-6 flex gap-3">
                   <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-medium secondary-btn hover:brightness-110">Back</button>
-                  <a href="https://github.com/arkeonetwork/arkeo-data-engine" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
+                  <a href="https://github.com/arkeonetwork/arkeo-data-engine/blob/main/subscriber-core/README.md" target="_blank" className="flex-1 primary-gradient text-white font-semibold py-3 rounded-xl flex items-center justify-center gap-2 primary-shadow">
                     View on GitHub <Icons.External />
                   </a>
                 </div>

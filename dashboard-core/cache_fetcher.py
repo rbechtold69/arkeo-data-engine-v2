@@ -187,16 +187,11 @@ def _extract_service_types_list(data: Any) -> list[dict[str, Any]]:
     return []
 
 
-def _service_types_cmd(page_key: str | None = None, limit: int | None = None) -> list[str]:
+def _service_types_cmd() -> list[str]:
     cmd = ["arkeod", "--home", ARKEOD_HOME]
     if ARKEOD_NODE:
         cmd.extend(["--node", ARKEOD_NODE])
     cmd.extend(["query", "arkeo", "all-services", "-o", "json"])
-    if limit:
-        cmd.extend(["--page-limit", str(limit)])
-    cmd.append("--page-count-total")
-    if page_key:
-        cmd.extend(["--page-key", str(page_key)])
     return cmd
 
 
@@ -206,8 +201,8 @@ def _contracts_list_cmd(page_key: str | None = None, limit: int | None = None) -
         cmd.extend(["--node", ARKEOD_NODE])
     cmd.extend(["query", "arkeo", "list-contracts", "-o", "json"])
     if limit:
-        cmd.extend(["--page-limit", str(limit)])
-    cmd.append("--page-count-total")
+        cmd.extend(["--limit", str(limit)])
+    cmd.append("--count-total")
     if page_key:
         cmd.extend(["--page-key", str(page_key)])
     return cmd
@@ -219,8 +214,8 @@ def _providers_list_cmd(page_key: str | None = None, limit: int | None = None) -
         cmd.extend(["--node", ARKEOD_NODE])
     cmd.extend(["query", "arkeo", "list-providers", "-o", "json"])
     if limit:
-        cmd.extend(["--page-limit", str(limit)])
-    cmd.append("--page-count-total")
+        cmd.extend(["--limit", str(limit)])
+    cmd.append("--count-total")
     if page_key:
         cmd.extend(["--page-key", str(page_key)])
     return cmd
@@ -347,18 +342,15 @@ def fetch_provider_services_paginated() -> Dict[str, Any]:
 
 
 def fetch_service_types_paginated() -> Dict[str, Any]:
-    """Fetch service types across pages, honoring pagination next_key when present."""
-    page_key = None
+    """Fetch service types (single-page for current CLI)."""
     pages = 0
-    seen_keys: set[str] = set()
     services: list[dict[str, Any]] = []
     raw_seen = 0
     total_cap = _env_int("SERVICE_TYPES_PAGE_LIMIT", 0)
-    per_page_limit = _page_limit("SERVICE_TYPES_PAGE_SIZE")
     last_pagination: Dict[str, Any] = {}
 
     while True:
-        cmd = _service_types_cmd(page_key=page_key, limit=per_page_limit or None)
+        cmd = _service_types_cmd()
         code, out = run_list(cmd)
         if code != 0:
             return {
@@ -411,22 +403,12 @@ def fetch_service_types_paginated() -> Dict[str, Any]:
 
         if total_cap and raw_seen >= total_cap:
             break
-
-        next_key = None
-        if isinstance(last_pagination, dict):
-            next_key = last_pagination.get("next_key") or last_pagination.get("nextKey")
-        if not next_key:
-            break
-        next_key = str(next_key)
-        if next_key in seen_keys:
-            break
-        seen_keys.add(next_key)
-        page_key = next_key
+        break
 
     return {
         "fetched_at": timestamp(),
         "exit_code": 0,
-        "cmd": _service_types_cmd(limit=per_page_limit or None),
+        "cmd": _service_types_cmd(),
         "data": {"services": services, "pagination": last_pagination},
         "pages": pages,
     }
@@ -442,9 +424,9 @@ def build_commands() -> Dict[str, List[str]]:
             "query",
             "arkeo",
             "list-providers",
-            "--page-limit",
+            "--limit",
             str(PAGE_LIMIT),
-            "--page-count-total",
+            "--count-total",
             "-o",
             "json",
         ],
@@ -453,9 +435,9 @@ def build_commands() -> Dict[str, List[str]]:
             "query",
             "arkeo",
             "list-contracts",
-            "--page-limit",
+            "--limit",
             str(PAGE_LIMIT),
-            "--page-count-total",
+            "--count-total",
             "-o",
             "json",
         ],
@@ -465,9 +447,6 @@ def build_commands() -> Dict[str, List[str]]:
             "query",
             "arkeo",
             "all-services",
-            "--page-limit",
-            str(PAGE_LIMIT),
-            "--page-count-total",
             "-o",
             "json",
         ],
