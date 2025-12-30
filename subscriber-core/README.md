@@ -4,8 +4,8 @@ This Docker image provides an Admin UI and API to operate a subscriber hot walle
 
 <details>
 <summary><strong>Preview the Arkeo Data Engine - Subscriber admin UI</strong></summary>
-<a href="../images/readme-subscribers-1.png">
-  <img src="../images/readme-subscribers-1.png" alt="Subscriber admin UI overview" width="800" />
+<a href="../images/arkeo-data-engine-subscriber-2.jpg">
+  <img src="../images/arkeo-data-engine-subscriber-2.jpg" alt="Subscriber admin UI overview" width="800" />
 </a>
 </details>
 
@@ -75,5 +75,5 @@ In the Hot Wallets panel, use the buttons to bridge funds from other chains into
 - Listener data: `/root/.arkeo` (host-mounted to `~/arkeo-data-engine-subscriber/arkeo`).
 - Logs: `/var/log` in the container (for example, `/var/log/subscriber-api.log`).
 
-## Ready to Use
+## That’s It
 - You are now consuming the [Arkeo Data Marketplace](https://marketplace.builtonarkeo.com/).

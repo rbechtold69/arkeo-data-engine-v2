@@ -58,7 +58,7 @@
             </h2>
         </div>
         <div class="collapsible-right">
-            <span id="syncPill" class="status-badge status-warn hidden">Syncing</span>
+            <span id="syncPill" class="status-badge status-warn sync-pill hidden">Syncing</span>
             <div class="hotwallet-summary" id="hotWalletSummary">
                 <svg viewBox="0 0 40 40" width="16" height="16" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                     <path d="M20 0C8.95469 0 0 8.95469 0 20C0 31.0453 8.95469 40 20 40C31.0453 40 40 31.0453 40 20C40 8.95469 31.0453 0 20 0ZM29.527 27.4046H25.4452C24.4316 27.4046 23.4976 26.868 22.9849 25.9976L20.461 21.3076C20.461 21.3076 20.4452 21.2838 20.4372 21.2679L22.2496 20.2186V17.6192L20 16.3196L17.7504 17.6192V20.2186L19.5628 21.2679C19.5628 21.2679 19.5469 21.2917 19.539 21.3076L17.0151 25.9976C16.5024 26.872 15.5644 27.4046 14.5548 27.4046H10.473C9.56677 27.4046 9.00238 26.4189 9.46343 25.6399L18.9905 9.43959C19.4436 8.66852 20.5564 8.66852 21.0095 9.43959L30.5366 25.6359C30.9976 26.4149 30.4332 27.4006 29.527 27.4006V27.4046Z" fill="#ffffff"></path>
@@ -243,6 +243,29 @@
     </div>
     <div id="earningsChartStatus" class="muted small-text"></div>
     <div id="claimTotals" class="claims-grid muted card-body" data-has-content="0">(loading claim totals...)</div>
+</div>
+
+<div class="card">
+    <h2>Provider Dashboard</h2>
+    <div class="metrics-grid header-metrics">
+        <div class="metric-card">
+            <div class="metric-label">Active Providers</div>
+            <div class="metric-value" id="metricProviders">—</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Active Services</div>
+            <div class="metric-value" id="metricServices">—</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Supported Chains</div>
+            <div class="metric-value" id="metricNodeTypes">—</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-value">
+                <button class="primary block-btn" id="cacheRefreshBtn" onclick="refreshCache()">Refresh</button>
+            </div>
+        </div>
+    </div>
 </div>
 
 <div class="card">
@@ -681,6 +704,9 @@
 let providerServicesData = [];
 let providerServiceTotals = [];
 let providerServiceLookup = {};
+let lastProviderServicesPayload = null;
+let lastServiceTypesPayload = null;
+let lastContractsSummary = null;
 let lastSentinelConfig = null;
 let providerSentinelServices = [];
 let providerSentinelHostDisplay = "(unknown)";
@@ -2124,6 +2150,12 @@ let earningsChartCache = {};
             ]);
             const services = await parseSafe(svcRes);
             const allServices = await parseSafe(allSvcRes);
+            if (services && !services.error) {
+                lastProviderServicesPayload = services;
+            }
+            if (allServices && !allServices.error) {
+                lastServiceTypesPayload = allServices;
+            }
 
             const svcLookup = {};
             if (allServices && Array.isArray(allServices.services)) {
@@ -2169,9 +2201,94 @@ let earningsChartCache = {};
             providerSentinelHostDisplay = sentinelHostDisplay;
             renderProviderServices();
             renderClaimTotals();
+            updateDashboardMetrics();
         } catch (e) {
             const svcEl = document.getElementById("providerServices");
         if (svcEl) svcEl.textContent = "Failed to load services: " + e;
+    }
+}
+
+function formatMetricCount(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return "—";
+    return num.toLocaleString("en-US");
+}
+
+function updateDashboardMetrics() {
+    const mProv = document.getElementById("metricProviders");
+    const mSvc = document.getElementById("metricServices");
+    const mCon = document.getElementById("metricContracts");
+    const mSub = document.getElementById("metricSubscribers");
+    const mNode = document.getElementById("metricNodeTypes");
+
+    let providersCount = null;
+    if (lastProviderServicesPayload && Array.isArray(lastProviderServicesPayload.matched_providers)) {
+        providersCount = lastProviderServicesPayload.matched_providers.length;
+    } else if (providerServicesData && providerServicesData.length) {
+        providersCount = 1;
+    }
+
+    let activeServicesCount = null;
+    if (Array.isArray(providerServicesData)) {
+        activeServicesCount = providerServicesData.filter((s) => isServiceActive(s && s.status)).length;
+    }
+
+    let contractsCount = null;
+    let subscribersCount = null;
+    if (lastContractsSummary && typeof lastContractsSummary === "object") {
+        if (Array.isArray(lastContractsSummary.contracts)) {
+            contractsCount = lastContractsSummary.contracts.length;
+            const subs = new Set();
+            lastContractsSummary.contracts.forEach((c) => {
+                const client = c && (c.client || c.subscriber || c.subscriber_address || c.subscriberAddress);
+                if (client) subs.add(String(client));
+            });
+            subscribersCount = subs.size;
+        } else {
+            const active = Number(lastContractsSummary.active_contracts || 0);
+            const settled = Number(lastContractsSummary.settled_contracts || 0);
+            if (Number.isFinite(active) && Number.isFinite(settled)) {
+                contractsCount = active + settled;
+            }
+        }
+    }
+
+    let nodeTypesCount = null;
+    if (lastServiceTypesPayload && Array.isArray(lastServiceTypesPayload.services)) {
+        nodeTypesCount = lastServiceTypesPayload.services.length;
+    }
+
+    if (mProv && providersCount !== null) mProv.textContent = formatMetricCount(providersCount);
+    if (mSvc && activeServicesCount !== null) mSvc.textContent = formatMetricCount(activeServicesCount);
+    if (mCon && contractsCount !== null) mCon.textContent = formatMetricCount(contractsCount);
+    if (mSub && subscribersCount !== null) mSub.textContent = formatMetricCount(subscribersCount);
+    if (mNode && nodeTypesCount !== null) mNode.textContent = formatMetricCount(nodeTypesCount);
+}
+
+async function refreshCache() {
+    const btn = document.getElementById("cacheRefreshBtn");
+    const prevLabel = btn ? btn.textContent : "";
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = "Refreshing...";
+    }
+    showSyncingPill();
+    try {
+        await Promise.allSettled([
+            refreshInfo(),
+            refreshServices(),
+            refreshContractTotals(),
+            refreshVitals(),
+            refreshClaimsHeartbeat(),
+            refreshHotwallets(),
+        ]);
+        await loadEarningsByService(earningsRange, true);
+    } finally {
+        hideSyncingPill();
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = prevLabel || "Refresh";
+        }
     }
 }
 
@@ -2316,6 +2433,7 @@ function renderProviderServices() {
             });
             const data = await res.json();
             if (res.ok) {
+                lastContractsSummary = data;
                 providerServiceTotals = Array.isArray(data.service_totals) ? data.service_totals : [];
             } else {
                 // leave previous totals in place on error to avoid UI jump
@@ -2324,6 +2442,7 @@ function renderProviderServices() {
             // leave previous totals in place on error to avoid UI jump
         }
         renderClaimTotals();
+        updateDashboardMetrics();
     }
 
     function updateSentinelStatusDisplay(sentinelStatus) {
@@ -2697,6 +2816,7 @@ function renderProviderServices() {
             });
             const data = await res.json();
             if (res.ok) {
+                lastContractsSummary = data;
                 providerServiceTotals = Array.isArray(data.service_totals) ? data.service_totals : [];
                 if (data.last_claims_run && data.last_claims_run !== lastClaimsRun) {
                     lastClaimsRun = data.last_claims_run;
@@ -2706,6 +2826,7 @@ function renderProviderServices() {
                 if (providerServiceTotals && providerServiceTotals.length) {
                     loadEarningsByService(earningsRange, true);
                 }
+                updateDashboardMetrics();
             } else if (!hasContent && el) {
                 el.textContent = "Error: " + JSON.stringify(data);
             }
@@ -2746,12 +2867,14 @@ function renderProviderServices() {
             const ctrData = await ctrRes.json().catch(() => ({}));
             if (ctrRes.ok) {
                 append(`Contracts ok: ${JSON.stringify(ctrData)}`);
+                lastContractsSummary = ctrData;
                 providerServiceTotals = Array.isArray(ctrData.service_totals) ? ctrData.service_totals : providerServiceTotals;
                 if (ctrData.last_claims_run && ctrData.last_claims_run !== lastClaimsRun) {
                     lastClaimsRun = ctrData.last_claims_run;
                     updateClaimsHeartbeat(lastClaimsRun);
                 }
                 renderClaimTotals();
+                updateDashboardMetrics();
             } else {
                 append(`Contracts error: ${JSON.stringify(ctrData)}`);
             }

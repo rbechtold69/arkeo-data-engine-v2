@@ -4,8 +4,8 @@ This Docker image includes an admin UI and API paired with the Arkeo sentinel re
 
 <details>
 <summary><strong>🖼️ Preview the "Arkeo Data Engine - Provider" admin UI</strong></summary>
-<a href="../images/readme-providers-1.png">
-  <img src="../images/readme-providers-1.png" alt="Provider admin UI overview" width="800" />
+<a href="../images/arkeo-data-engine-provider-2.jpg">
+  <img src="../images/arkeo-data-engine-provider-2.jpg" alt="Provider admin UI overview" width="800" />
 </a>
 </details>
 

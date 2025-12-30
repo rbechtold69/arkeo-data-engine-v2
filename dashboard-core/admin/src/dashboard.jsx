@@ -897,10 +897,21 @@ docker run -d --name subscriber-core --restart=unless-stopped \\
             <div className="p-6">
               {step === 2 && (
                 <>
-                  <div className="mb-5 space-y-2">
+                  <div className="mb-5 space-y-3">
                     <p className="text-secondaryText text-sm">The Arkeo Provider Data Engine lets you turn existing infrastructure into steady revenue by publishing services to the marketplace. Run the provider core and admin UI to list endpoints, set pricing, and get paid in ARKEO as subscribers use your data.</p>
                     <a href="https://github.com/arkeonetwork/arkeo-data-engine/blob/main/provider-core/README.md" target="_blank" rel="noopener noreferrer" className="text-arkeo text-sm font-semibold inline-flex items-center gap-2 hover:brightness-110">
-                        Provider install guide <Icons.External />
+                      Provider install guide <Icons.External />
+                    </a>
+                    <a href="/images/arkeo-data-engine-provider-2.jpg" target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-white/40 shadow-lg">
+                      <img
+                        src="/images/arkeo-data-engine-provider-2-preview.jpg"
+                        alt="Provider admin UI preview"
+                        className="w-full h-auto block"
+                        loading="lazy"
+                      />
+                    </a>
+                    <a href="/images/arkeo-data-engine-provider-2.jpg" target="_blank" rel="noopener noreferrer" className="text-arkeo text-sm font-semibold inline-flex items-center gap-2 hover:brightness-110">
+                      Provider UI Preview <Icons.External />
                     </a>
                   </div>
                 <div className="mt-6 flex gap-3">
@@ -943,10 +954,21 @@ docker run -d --name subscriber-core --restart=unless-stopped \\
             <div className="p-6">
               {step === 2 && (
                 <>
-                  <div className="mb-5 space-y-2">
+                  <div className="mb-5 space-y-3">
                     <p className="text-secondaryText text-sm">Arkeo Subscriber Data Engine gives developers and users a managed way to consume blockchain data through a docker-based listener proxy. It auto-selects providers by service and region, handles PAYG contracts and hot-wallet payments, and adds cost-effective failover so your apps stay online without locking into a single provider.</p>
                     <a href="https://github.com/arkeonetwork/arkeo-data-engine/blob/main/subscriber-core/README.md" target="_blank" rel="noopener noreferrer" className="text-arkeo text-sm font-semibold inline-flex items-center gap-2 hover:brightness-110">
                       Subscriber install guide <Icons.External />
+                    </a>
+                    <a href="/images/arkeo-data-engine-subscriber-2.jpg" target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-2xl border border-white/40 shadow-lg">
+                      <img
+                        src="/images/arkeo-data-engine-subscriber-2-preview.jpg"
+                        alt="Subscriber admin UI preview"
+                        className="w-full h-auto block"
+                        loading="lazy"
+                      />
+                    </a>
+                    <a href="/images/arkeo-data-engine-subscriber-2.jpg" target="_blank" rel="noopener noreferrer" className="text-arkeo text-sm font-semibold inline-flex items-center gap-2 hover:brightness-110">
+                      Subscriber UI Preview <Icons.External />
                     </a>
                   </div>
                 <div className="mt-6 flex gap-3">

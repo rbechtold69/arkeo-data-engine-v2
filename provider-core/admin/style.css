@@ -304,6 +304,10 @@ td.value {
 .status-ok { background: var(--ok); color: var(--text); }
 .status-warn { background: var(--warn); color: #0f172a; }
 .status-err { background: var(--err); color: #f8fafc; }
+.status-badge.sync-pill {
+    background: #ffffff;
+    color: var(--blue-dark);
+}
 
 .status-dot {
     display: inline-block;
@@ -385,6 +389,29 @@ pre {
 .claim-meta {
     color: var(--muted-2);
     font-size: 12px;
+}
+.metrics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    margin-top: 12px;
+    width: 100%;
+}
+.header-metrics { margin-top: 16px; }
+.metric-card {
+    background: #0b1220;
+    border: 1px solid var(--border-strong);
+    border-radius: 8px;
+    padding: 14px 14px 10px 14px;
+}
+.metric-label { color: var(--muted-2); font-weight: 400; font-size: 12px; }
+.metric-value {
+    font-size: 22px;
+    font-weight: 800;
+    margin-top: 4px;
+}
+.block-btn {
+    width: 100%;
 }
 .footer-card {
     text-align: left;
