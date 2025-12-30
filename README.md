@@ -1,16 +1,26 @@
-# Arkeo Data Marketplace - Management System
-Here are some docker container images that make it easy to participate in the Arkeo Data Marketplace, either by serving blockchain node data as a provider or consuming it as a subscriber.
+# The Arkeo Data Marketplace
+This repository delivers production‑ready Docker images to help teams earn more by publishing blockchain data services as providers, or reduce costs and simplify access by consuming data as subscribers in the Arkeo Data Marketplace. For current network activity and available services, see the [Arkeo Data Marketplace](https://marketplace.builtonarkeo.com).
 
-## Arkeo Provider Admin (Docker Image)
-Run an admin UI to connect your blockchain data nodes to the Arkeo Data Marketplace and earn Arkeo tokens for the data you provide with a blockchain-based pay-as-you-go model.
+## 🔹 Arkeo Data Engine - Provider
+In this docker image, you can use an admin UI to connect your blockchain data nodes to the Arkeo Data Marketplace and earn Arkeo tokens for the data you provide with a blockchain-based pay-as-you-go model.
 
-![Provider admin UI overview](images/readme-providers-1.png)
+<details>
+<summary><strong>🖼️ Preview the "Arkeo Data Engine - Provider" admin UI</strong></summary>
+<a href="images/readme-providers-1.png">
+  <img src="images/readme-providers-1.png" alt="Provider admin UI overview" width="800" />
+</a>
+</details>
 
-Read the full guide: [provider-core/README.md](provider-core/README.md).
+➡️ Read the full guide: [provider-core/README.md](provider-core/README.md).
 
-## Arkeo Subscriber Admin (Docker Image)
-Run an admin UI to create subscriber proxies for the Arkeo Data Marketplace that automatically handle pay-as-you-go blockchain contracts with top providers.
+## 🔹 Arkeo Data Engine - Subscriber
+In this docker image, you can use an admin UI to create subscriber proxies for the Arkeo Data Marketplace that automatically handle pay-as-you-go blockchain contracts with top providers.
 
-![Subscriber admin UI overview](images/readme-subscribers-1.png)
+<details>
+<summary><strong>🖼️ Preview the "Arkeo Data Engine - Subscriber" admin UI</strong></summary>
+<a href="images/readme-subscribers-1.png">
+  <img src="images/readme-subscribers-1.png" alt="Subscriber admin UI overview" width="800" />
+</a>
+</details>
 
-Read the full guide: [subscriber-core/README.md](subscriber-core/README.md).
+➡️ Read the full guide: [subscriber-core/README.md](subscriber-core/README.md).

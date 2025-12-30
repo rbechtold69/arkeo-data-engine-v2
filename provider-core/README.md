@@ -1,67 +1,70 @@
-# Arkeo Provider Admin (Docker Image)
+# Arkeo Data Engine - Provider
 
-Containerized admin UI + API paired with the Arkeo sentinel service reverse-proxy that onboards your node as an Arkeo provider, manages the provider hot wallet, bonds services, and announces them to the Arkeo Data Marketplace for pay-as-you-go access.
+This Docker image includes an admin UI and API paired with the Arkeo sentinel reverse proxy. It onboards your node as an Arkeo provider, manages the provider hot wallet, bonds services, and announces them to the Arkeo Data Marketplace for pay-as-you-go access.
 
-![Provider admin UI overview](../images/readme-providers-1.png)
+<details>
+<summary><strong>🖼️ Preview the "Arkeo Data Engine - Provider" admin UI</strong></summary>
+<a href="../images/readme-providers-1.png">
+  <img src="../images/readme-providers-1.png" alt="Provider admin UI overview" width="800" />
+</a>
+</details>
 
-## Install Docker on you host
-Before you start, install Docker on your host and be comfortable with basic Docker commands (start/stop, logs, pull). Use your OS vendor’s Docker docs.
+## 🔹 Install Docker on Your Host
+Before you start, install Docker on your host and be comfortable with basic Docker commands (start/stop, logs, pull). Use your OS vendor's Docker docs.
 
-## Configure the container (no provider.env required)
-You can pass env vars directly in `docker run` or configure everything in the Admin UI after startup. Settings persist to `/app/config/provider-settings.json` (mounted via the config volume).
-
-Common env vars (all optional; defaults are sane, and `CHAIN_ID` defaults to `arkeo-main-v1`):
+## 🔹 Run the Latest "Arkeo Data Engine - Provider" Docker Image
 ```
-KEY_NAME=provider
-KEY_KEYRING_BACKEND=test
-KEY_MNEMONIC=
-CHAIN_ID=arkeo-main-v1
+#!/usr/bin/env bash
+set -euo pipefail
 
-ARKEOD_HOME=~/.arkeo
-EXTERNAL_ARKEOD_NODE=tcp://provider1.innovationtheory.com:26657
-# use PROVIDER_HUB_URI
-# ARKEO_REST_API_PORT=http://provider1.innovationtheory.com:1317
-
-SENTINEL_NODE=http://provider-core-1.innovationtheory.com
-SENTINEL_PORT=3636
-
-ADMIN_PORT=8080
-ADMIN_API_PORT=9999
-```
-- If you don’t have a mnemonic, leave `KEY_MNEMONIC` empty. On first launch the container will create a hotwallet and print the mnemonic in logs; save it and paste it into the Admin UI (Provider Settings -> Hotwallet Mnemonic) if you want it persisted.
-
-## Run the latest Provider Core docker image
-```bash
 # create host dirs
-mkdir -p ~/provider-core/config ~/provider-core/cache ~/provider-core/arkeo
+mkdir -p ~/arkeo-data-engine-provider/config \
+         ~/arkeo-data-engine-provider/cache \
+         ~/arkeo-data-engine-provider/arkeo
 
-# stop/remove any existing container with this name
-docker stop provider-core || true
-docker rm provider-core || true
+# stop/remove any existing container with this name (race-safe)
+docker rm -f arkeo-data-engine-provider 2>/dev/null || true
+
+# wait until Docker fully releases the name
+while docker ps -a --format '{{.Names}}' | grep -q '^arkeo-data-engine-provider$'; do
+  sleep 1
+done
 
 # pull latest image (optional but recommended)
-docker pull ghcr.io/arkeonetwork/provider-core:latest
+docker pull ghcr.io/arkeonetwork/arkeo-data-engine-provider:latest
 
 # run
-docker run -d --name provider-core --restart=unless-stopped \
-  -e ENV_ADMIN_PORT=8080 \
-  -p 8080:8080 -p 3636:3636 -p 9999:9999 \
-  -v ~/provider-core/config:/app/config \
-  -v ~/subscriber-core/cache:/app/cache \
-  -v ~/provider-core/arkeo:/root/.arkeo \
-  ghcr.io/arkeonetwork/provider-core:latest
+docker run -d --name arkeo-data-engine-provider --restart=unless-stopped \
+  -e ADMIN_PORT=8080 \
+  -e ADMIN_API_PORT=9999 \
+  -p 8080:8080 \
+  -p 3636:3636 \
+  -p 9999:9999 \
+  -v ~/arkeo-data-engine-provider/config:/app/config \
+  -v ~/arkeo-data-engine-provider/cache:/app/cache \
+  -v ~/arkeo-data-engine-provider/arkeo:/root/.arkeo \
+  ghcr.io/arkeonetwork/arkeo-data-engine-provider:latest
 ```
 
-## Using the Provider Core Admin
-- Open firewall for ports 8080 (admin UI), 9999 (admin API), 3636 (sentinel).
-- Admin UI: `http://<host>:8080`
-- Copy the Arkeo address shown at the top; fund the address with a small amount of ARKEO (hotwallet).
-- In Admin: configure sentinel (so your provider is discoverable).
-- Add provider services: pick the service type, set RPC URI and optional user/pass. If your node is firewalled, allow the Docker host IP. The host must reach your node.
+## 🔹 Secure the Admin URLs
+- The Admin UI and API are HTTP-only and manage the hot wallet, so treat these endpoints like credentials and do not expose them to the public internet.
+- Restrict ports 8080 and 9999 to your IP via firewall/security group rules, or keep them behind a private network/VPN.
+- Only expose the sentinel port (3636) publicly if required.
+- Optional: bind the admin ports to localhost only (for example, `-p 127.0.0.1:8080:8080 -p 127.0.0.1:9999:9999`).
+
+## 🔹 Getting ARKEO Tokens
+In the Hot Wallets area, use the buttons to move funds from other chains into Osmosis and Arkeo using exchanges, bridges, and wallets. Keplr provides secure signing for Osmosis actions. Be sure to add a little OSMO for gas.
+
+## 🔹 Using the Provider Core Admin
+- Start in the Admin UI to set the RPC, REST, mnemonic, and other provider settings before proceeding (Admin UI is HTTP at `http://<host>:8080`).
+- Once the mnemonic you want to use is set, copy the Arkeo address in the Hot Wallets area and fund it with a small amount of ARKEO.
+- In the Admin UI, configure the Sentinel so your provider is discoverable.
+- Add your provider services: pick the service type, set the RPC URI, and optional username/password.
+- If your node is firewalled, allow the Docker host IP; the host must be able to reach your node.
 - Each provider service requires a minimum bond of 1 ARKEO to prevent spam.
-- Do a Provider Export when done. Keep your mnemonic and exports safe - they contain secrets.
 
-You’re now on the Arkeo Data Marketplace.
+## 🔹 Cache, Config, and Logs
+- Cache files live under /app/cache (host-mounted to ~/provider-core/cache). Config is under /app/config (host-mounted to ~/provider-core/config). Listener data is in /root/.arkeo (host-mounted to ~/provider-core/arkeo).
 
-## Getting ARKEO Tokens (using the Keplr wallet)
-In Keplr, add the Osmosis chain, swap for `ARKEO` on Osmosis, then IBC-transfer it to your Arkeo address via the `ARKEO (Arkeo/channel-103074)` route. After it lands, it appears as native `ARKEO` on Arkeo. Start with a small test send and keep a little OSMO for fees.
+## 🔹 That’s It
+- You're now on the [Arkeo Data Marketplace](https://marketplace.builtonarkeo.com/).

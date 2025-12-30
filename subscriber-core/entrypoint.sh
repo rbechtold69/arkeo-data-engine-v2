@@ -23,7 +23,8 @@ ARKEOD_NODE=${ARKEOD_NODE:-${EXTERNAL_ARKEOD_NODE:-tcp://provider1.innovationthe
 RPC_URL_DEFAULT=${SENTINEL_RPC_URL:-$ARKEOD_NODE}
 # If rpc url is tcp:// convert to http:// for sentinel
 RPC_URL_DEFAULT=${RPC_URL_DEFAULT/tcp:\/\//http:\/\/}
-ADMIN_PORT=${ADMIN_PORT:-8080}
+ADMIN_PORT=${ADMIN_PORT:-${ENV_ADMIN_PORT:-8080}}
+export ADMIN_PORT
 # Provider hub URI default (user may set PROVIDER_HUB_URI explicitly)
 PROVIDER_HUB_URI=${PROVIDER_HUB_URI:-}
 CACHE_DIR=${CACHE_DIR:-/app/cache}
