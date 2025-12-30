@@ -2531,6 +2531,15 @@ function renderProviderServices() {
             .filter((d) => d.value > 0);
     }
 
+    function formatArkeoChartValue(val) {
+        const num = Number(val);
+        if (!Number.isFinite(num)) return String(val ?? "");
+        return num.toLocaleString("en-US", {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 8,
+        });
+    }
+
     function renderEarningsChart(data) {
         const canvas = document.getElementById("earningsChart");
         const emptyEl = document.getElementById("earningsChartEmpty");
@@ -2582,7 +2591,7 @@ function renderProviderServices() {
                     legend: { display: false },
                     tooltip: {
                         callbacks: {
-                            label: (context) => `${context.parsed.y.toFixed(6)} ARKEO`,
+                            label: (context) => `${formatArkeoChartValue(context.parsed.y)} ARKEO`,
                         },
                     },
                 },
@@ -2590,7 +2599,10 @@ function renderProviderServices() {
                     y: {
                         beginAtZero: true,
                         grid: { color: "rgba(255,255,255,0.08)" },
-                        ticks: { color: "#cbd5e1" },
+                        ticks: {
+                            color: "#cbd5e1",
+                            callback: (value) => formatArkeoChartValue(value),
+                        },
                     },
                     x: {
                         grid: { display: false },

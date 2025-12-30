@@ -21,6 +21,61 @@ expand_tilde() {
 
 echo "Provider-core Admin Mode (hot wallet + web UI only)"
 
+PROVIDER_SETTINGS_PATH=${PROVIDER_SETTINGS_PATH:-/app/config/provider-settings.json}
+if [ -f "$PROVIDER_SETTINGS_PATH" ]; then
+  SETTINGS_EXPORTS=$(python3 - <<'PY'
+import json
+import os
+import shlex
+
+path = os.environ.get("PROVIDER_SETTINGS_PATH", "/app/config/provider-settings.json")
+try:
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f) or {}
+except Exception:
+    raise SystemExit(0)
+
+def emit(key, env_key=None):
+    env_key = env_key or key
+    if (os.environ.get(env_key) or "").strip():
+        return
+    val = data.get(key)
+    if val is None or val == "":
+        return
+    if isinstance(val, list):
+        val = ",".join(str(v) for v in val if v is not None)
+    print(f"export {env_key}={shlex.quote(str(val))}")
+
+keys = [
+    "KEY_NAME",
+    "KEY_KEYRING_BACKEND",
+    "KEY_MNEMONIC",
+    "CHAIN_ID",
+    "ARKEOD_HOME",
+    "ARKEOD_NODE",
+    "PROVIDER_HUB_URI",
+    "SENTINEL_NODE",
+    "SENTINEL_PORT",
+    "ADMIN_PORT",
+    "ADMIN_API_PORT",
+    "OSMOSIS_RPC",
+    "OSMOSIS_USDC_DENOMS",
+    "USDC_OSMO_DENOM",
+    "ARKEO_OSMO_DENOM",
+    "MIN_OSMO_GAS",
+    "DEFAULT_SLIPPAGE_BPS",
+    "ARRIVAL_TOLERANCE_BPS",
+    "WALLET_SYNC_INTERVAL",
+]
+for key in keys:
+    emit(key)
+PY
+)
+  if [ -n "$SETTINGS_EXPORTS" ]; then
+    eval "$SETTINGS_EXPORTS"
+  fi
+fi
+
 KEY_NAME=${KEY_NAME:-provider}
 RAW_KEY_MNEMONIC=${KEY_MNEMONIC:-}
 KEY_KEYRING_BACKEND=${KEY_KEYRING_BACKEND:-test}
@@ -231,7 +286,7 @@ fi
 
 # Sync services in sentinel.yaml with on-chain registered services for this provider
 python3 - <<'PY'
-import json, yaml, subprocess, sys
+import json, os, yaml, subprocess, sys
 from copy import deepcopy
 
 config_path = "${SENTINEL_CONFIG_PATH}"
@@ -252,24 +307,93 @@ existing_services = cfg.get("services") or []
 svc_by_id = {str(s.get("id")): s for s in existing_services if isinstance(s, dict) and s.get("id") is not None}
 svc_by_name = {str(s.get("name")): s for s in existing_services if isinstance(s, dict) and s.get("name")}
 
-# Query on-chain providers
-cmd = ["arkeod", "--home", "${ARKEOD_HOME}"]
+# Query on-chain providers (paginated)
+def _env_int(name, default):
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    try:
+        return int(str(raw).strip())
+    except (TypeError, ValueError):
+        return default
+
+def _page_limit(override_env):
+    per_resource = _env_int(override_env, 0)
+    if per_resource and per_resource > 0:
+        return per_resource
+    global_limit = _env_int("PAGE_LIMIT", 1000)
+    if global_limit and global_limit > 0:
+        return global_limit
+    return None
+
 node = "${ARKEOD_NODE}"
-if node:
-    cmd.extend(["--node", node])
-cmd.extend(["query", "arkeo", "list-providers", "--output", "json"])
+def _env_page_mode(name):
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    norm = str(raw).strip().lower().replace("_", "-")
+    if norm in ("page", "offset"):
+        return "page"
+    if norm in ("page-key", "pagekey", "key", "cursor"):
+        return "page-key"
+    return None
 
-try:
-    out = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode("utf-8")
-except subprocess.CalledProcessError:
-    sys.exit(0)
+page_mode = _env_page_mode("PROVIDER_SERVICES_PAGE_MODE") or "page-key"
+page_key = None
+page = 1
+seen_keys = set()
+providers = []
+per_page_limit = _page_limit("PROVIDER_SERVICES_PAGE_SIZE")
 
-try:
-    data = json.loads(out)
-except json.JSONDecodeError:
-    sys.exit(0)
+while True:
+    cmd = ["arkeod", "--home", "${ARKEOD_HOME}"]
+    if node:
+        cmd.extend(["--node", node])
+    cmd.extend(["query", "arkeo", "list-providers", "--output", "json"])
+    if per_page_limit:
+        cmd.extend(["--limit", str(per_page_limit)])
+    if page_mode == "page-key" and page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    elif page_mode == "page":
+        cmd.extend(["--page", str(page)])
 
-providers = data.get("provider") or data.get("providers") or []
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT).decode("utf-8")
+    except subprocess.CalledProcessError as e:
+        err_out = e.output.decode("utf-8") if e.output else ""
+        if page_mode == "page-key" and "unknown flag" in err_out and "page-key" in err_out:
+            page_mode = "page"
+            page_key = None
+            page = 1
+            seen_keys.clear()
+            providers = []
+            continue
+        sys.exit(0)
+
+    try:
+        data = json.loads(out)
+    except json.JSONDecodeError:
+        sys.exit(0)
+
+    page_providers = data.get("provider") or data.get("providers") or data.get("result") or []
+    if isinstance(page_providers, list):
+        providers.extend(page_providers)
+    pagination = data.get("pagination") if isinstance(data, dict) else {}
+    if page_mode == "page-key":
+        next_key = None
+        if isinstance(pagination, dict):
+            next_key = pagination.get("next_key") or pagination.get("nextKey")
+        if not next_key:
+            break
+        next_key = str(next_key)
+        if next_key in seen_keys:
+            break
+        seen_keys.add(next_key)
+        page_key = next_key
+    else:
+        if not page_providers:
+            break
+        page += 1
 matched = []
 for p in providers:
     if not isinstance(p, dict):
@@ -454,6 +578,100 @@ with path.open("w", encoding="utf-8") as f:
         f.write(f"{k}={requote(v)}\\n")
 PY
 fi
+
+# Sync sentinel env/config from provider-settings.json if present
+python3 - <<'PY'
+import json
+import os
+import shlex
+from pathlib import Path
+
+import yaml
+
+def load_env(path: Path) -> dict:
+    data = {}
+    try:
+        for line in path.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, val = line.split("=", 1)
+            val = val.strip()
+            if (val.startswith("'") and val.endswith("'")) or (val.startswith('"') and val.endswith('"')):
+                val = val[1:-1]
+            data[key.strip()] = val
+    except Exception:
+        pass
+    return data
+
+def write_env(path: Path, data: dict) -> None:
+    try:
+        with path.open("w", encoding="utf-8") as f:
+            for key, val in data.items():
+                f.write(f"{key}={shlex.quote(str(val))}\n")
+    except Exception:
+        pass
+
+settings_path = Path(os.environ.get("PROVIDER_SETTINGS_PATH", "/app/config/provider-settings.json"))
+env_path = Path(os.environ.get("SENTINEL_ENV_PATH", "/app/config/sentinel.env"))
+config_path = Path(os.environ.get("SENTINEL_CONFIG_PATH", "/app/config/sentinel.yaml"))
+
+if not settings_path.is_file() or not env_path.is_file():
+    raise SystemExit(0)
+
+try:
+    with settings_path.open("r", encoding="utf-8") as f:
+        settings = json.load(f) or {}
+except Exception:
+    raise SystemExit(0)
+
+env_data = load_env(env_path)
+
+def pick(key):
+    val = settings.get(key)
+    if val is None or val == "":
+        return None
+    return str(val)
+
+chain_id = pick("CHAIN_ID")
+arkeod_node = pick("ARKEOD_NODE") or pick("EXTERNAL_ARKEOD_NODE")
+sentinel_node = pick("SENTINEL_NODE")
+sentinel_port = pick("SENTINEL_PORT")
+provider_hub = pick("PROVIDER_HUB_URI")
+
+if chain_id:
+    env_data["SOURCE_CHAIN"] = chain_id
+if arkeod_node:
+    env_data["ARKEOD_NODE"] = arkeod_node
+    hostport = arkeod_node
+    for prefix in ("tcp://", "http://", "https://"):
+        if hostport.startswith(prefix):
+            hostport = hostport[len(prefix) :]
+    env_data["EVENT_STREAM_HOST"] = hostport
+if provider_hub:
+    env_data["PROVIDER_HUB_URI"] = provider_hub
+if sentinel_node:
+    env_data["SENTINEL_NODE"] = sentinel_node
+if sentinel_port:
+    env_data["SENTINEL_PORT"] = sentinel_port
+    env_data["PORT"] = sentinel_port
+
+write_env(env_path, env_data)
+
+if sentinel_port and config_path.is_file():
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            cfg = yaml.safe_load(f) or {}
+    except Exception:
+        cfg = {}
+    api_cfg = cfg.setdefault("api", {})
+    api_cfg["listen_addr"] = f"0.0.0.0:{sentinel_port}"
+    try:
+        with config_path.open("w", encoding="utf-8") as f:
+            yaml.safe_dump(cfg, f, sort_keys=False)
+    except Exception:
+        pass
+PY
 
 echo "Starting supervisord (web admin only)..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

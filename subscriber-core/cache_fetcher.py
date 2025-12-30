@@ -29,6 +29,10 @@ METADATA_CACHE_PATH = os.path.join(CACHE_DIR, "metadata.json")
 METADATA_TTL_SECONDS = int(os.getenv("METADATA_TTL_SECONDS", "3600"))  # 1 hour default
 MIN_SERVICE_BOND = int(os.getenv("MIN_SERVICE_BOND", "100000000"))  # 100_000_000 default
 SERVICE_TYPES_TTL_SECONDS = int(os.getenv("SERVICE_TYPES_TTL_SECONDS", "3600"))  # 1 hour default
+_CONTRACTS_PAGE_MODE = None
+_PROVIDERS_PAGE_MODE = None
+_SERVICE_TYPES_PAGE_MODE = None
+_SERVICE_TYPES_LIMIT_SUPPORTED = None
 
 
 def run_list(cmd: List[str]) -> Tuple[int, str]:
@@ -98,7 +102,7 @@ def build_commands() -> Dict[str, List[str]]:
         "status": [*base, "status"],
         "provider-services": [*base, "query", "arkeo", "list-providers", "-o", "json"],
         "provider-contracts": [*base, "query", "arkeo", "list-contracts", "-o", "json"],
-        # services/types are fetched via REST API (no pagination)
+        # service-types are fetched via CLI (supports pagination)
         "service-types": [],
     }
 
@@ -117,6 +121,58 @@ def normalize_result(name: str, code: int, out: str, cmd: List[str]) -> Dict[str
     else:
         payload["error"] = out
     return payload
+
+
+def _extract_pagination(data: Any) -> Dict[str, Any]:
+    if isinstance(data, dict):
+        pag = data.get("pagination")
+        if isinstance(pag, dict):
+            return pag
+        inner = data.get("data")
+        if isinstance(inner, dict):
+            pag = inner.get("pagination")
+            if isinstance(pag, dict):
+                return pag
+    return {}
+
+
+def _extract_providers_list(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        inner = data.get("data") if "data" in data else None
+        if inner is not None:
+            return _extract_providers_list(inner)
+        prov = data.get("providers") or data.get("provider") or data.get("result") or []
+        if isinstance(prov, list):
+            return prov
+    return []
+
+
+def _extract_contracts_list(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        inner = data.get("data") if "data" in data else None
+        if inner is not None:
+            return _extract_contracts_list(inner)
+        items = data.get("contracts") or data.get("contract") or data.get("result") or []
+        if isinstance(items, list):
+            return items
+    return []
+
+
+def _extract_service_types_list(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        inner = data.get("data") if "data" in data else None
+        if inner is not None:
+            return _extract_service_types_list(inner)
+        svc = data.get("services") or data.get("service") or data.get("result") or []
+        if isinstance(svc, list):
+            return svc
+    return []
 
 
 def _parse_services_text(text: str) -> list[dict[str, Any]]:
@@ -164,10 +220,7 @@ def _parse_services_text(text: str) -> list[dict[str, Any]]:
     return services
 
 
-def fetch_services_rest() -> Dict[str, Any]:
-    """Fetch services via REST endpoint without pagination (falls back to Tendermint RPC if REST unavailable)."""
-    rest_err = None
-    # Use arkeod query all-services via RPC
+def _service_types_cmd(page_key: str | None = None, page: int | None = None, limit: int | None = None) -> list[str]:
     cmd = [
         "arkeod",
         "--home",
@@ -180,28 +233,359 @@ def fetch_services_rest() -> Dict[str, Any]:
         "-o",
         "json",
     ]
-    try:
-        code, out = run_list(cmd)
-    except Exception as e:
-        return {
-            "fetched_at": timestamp(),
-            "exit_code": 1,
-            "cmd": ["arkeod query arkeo all-services"],
-            "error": f"rest_err={rest_err}; rpc_exec_err={e}",
-        }
-    payload = normalize_result("service-types", code, out, cmd)
-    if code != 0:
-        payload["error"] = f"rpc_err={payload.get('error', out)}"
-    else:
-        data_val = payload.get("data")
+    if limit:
+        cmd.extend(["--limit", str(limit)])
+    if page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    elif page:
+        cmd.extend(["--page", str(page)])
+    return cmd
+
+
+def fetch_services_rest() -> Dict[str, Any]:
+    """Fetch services via RPC, following pagination if available."""
+    global _SERVICE_TYPES_PAGE_MODE
+    global _SERVICE_TYPES_LIMIT_SUPPORTED
+    rest_err = None
+    forced_mode = _env_page_mode("SERVICE_TYPES_PAGE_MODE")
+    page_mode = forced_mode or _SERVICE_TYPES_PAGE_MODE or "page-key"
+    page_key = None
+    page = 1
+    pages = 0
+    seen_keys: set[str] = set()
+    services: list[dict[str, Any]] = []
+    raw_seen = 0
+    total_cap = _env_int("SERVICE_TYPES_PAGE_LIMIT", 0)
+    per_page_limit = _page_limit("SERVICE_TYPES_PAGE_SIZE")
+    if _SERVICE_TYPES_LIMIT_SUPPORTED is False:
+        per_page_limit = None
+    last_pagination: Dict[str, Any] = {}
+
+    while True:
+        cmd = _service_types_cmd(
+            page_key=page_key if page_mode == "page-key" else None,
+            page=page if page_mode == "page" else None,
+            limit=per_page_limit or None,
+        )
+        try:
+            code, out = run_list(cmd)
+        except Exception as e:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": ["arkeod query arkeo all-services"],
+                "error": f"rest_err={rest_err}; rpc_exec_err={e}",
+            }
+        if code != 0:
+            if "unknown flag" in out and "--limit" in out:
+                _SERVICE_TYPES_LIMIT_SUPPORTED = False
+                per_page_limit = None
+                page_key = None
+                page = 1
+                pages = 0
+                seen_keys.clear()
+                services = []
+                raw_seen = 0
+                last_pagination = {}
+                continue
+            if page_mode == "page-key" and "unknown flag" in out and "page-key" in out:
+                page_mode = "page"
+                if not forced_mode:
+                    _SERVICE_TYPES_PAGE_MODE = "page"
+                page_key = None
+                page = 1
+                pages = 0
+                seen_keys.clear()
+                services = []
+                raw_seen = 0
+                last_pagination = {}
+                continue
+            if page_mode == "page" and "unknown flag" in out and "--page" in out:
+                page_mode = "none"
+                if not forced_mode:
+                    _SERVICE_TYPES_PAGE_MODE = "none"
+                page_key = None
+                page = 1
+                pages = 0
+                seen_keys.clear()
+                services = []
+                raw_seen = 0
+                last_pagination = {}
+                continue
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": code,
+                "cmd": cmd,
+                "error": f"rpc_err={out}",
+            }
+        try:
+            data_val: Any = json.loads(out)
+        except json.JSONDecodeError:
+            parsed = _parse_services_text(out)
+            if parsed:
+                return {
+                    "fetched_at": timestamp(),
+                    "exit_code": 0,
+                    "cmd": cmd,
+                    "data": {"services": parsed},
+                    "parsed_from": "arkeod all-services",
+                }
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": f"rest_err={rest_err}; rpc_parse_failed",
+            }
         if isinstance(data_val, str):
             parsed = _parse_services_text(data_val)
             if parsed:
-                payload["data"] = {"services": parsed}
-                payload["parsed_from"] = "arkeod all-services"
-            else:
-                payload["error"] = f"rest_err={rest_err}; rpc_parse_failed"
+                return {
+                    "fetched_at": timestamp(),
+                    "exit_code": 0,
+                    "cmd": cmd,
+                    "data": {"services": parsed},
+                    "parsed_from": "arkeod all-services",
+                }
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": f"rest_err={rest_err}; rpc_parse_failed",
+            }
+
+        page_services = _extract_service_types_list(data_val)
+        if page_services:
+            services.extend(page_services)
+            raw_seen += len(page_services)
+        pages += 1
+        last_pagination = _extract_pagination(data_val)
+
+        if total_cap and raw_seen >= total_cap:
+            break
+        if page_mode == "none":
+            break
+        if page_mode == "page-key":
+            next_key = None
+            if isinstance(last_pagination, dict):
+                next_key = last_pagination.get("next_key") or last_pagination.get("nextKey")
+            if not next_key:
+                break
+            next_key = str(next_key)
+            if next_key in seen_keys:
+                break
+            seen_keys.add(next_key)
+            page_key = next_key
+        else:
+            if not page_services:
+                break
+            page += 1
+
+    return {
+        "fetched_at": timestamp(),
+        "exit_code": 0,
+        "cmd": _service_types_cmd(limit=per_page_limit or None),
+        "data": {"services": services, "pagination": last_pagination},
+        "pages": pages,
+    }
+
+
+def _contracts_list_cmd(page_key: str | None = None, page: int | None = None, limit: int | None = None) -> list[str]:
+    cmd = ["arkeod", "--home", ARKEOD_HOME]
+    if ARKEOD_NODE:
+        cmd.extend(["--node", ARKEOD_NODE])
+    cmd.extend(["query", "arkeo", "list-contracts", "-o", "json"])
+    if limit:
+        cmd.extend(["--limit", str(limit)])
+    if page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    elif page:
+        cmd.extend(["--page", str(page)])
+    return cmd
+
+
+def fetch_contracts_paginated() -> Dict[str, Any]:
+    """Fetch all contracts across pages, honoring pagination next_key when present."""
+    global _CONTRACTS_PAGE_MODE
+    forced_mode = _env_page_mode("CONTRACTS_PAGE_MODE")
+    page_mode = forced_mode or _CONTRACTS_PAGE_MODE or "page-key"
+    page_key = None
+    page = 1
+    pages = 0
+    seen_keys: set[str] = set()
+    contracts: list[dict[str, Any]] = []
+    raw_seen = 0
+    total_cap = _env_int("CONTRACTS_PAGE_LIMIT", 0)
+    per_page_limit = _page_limit("CONTRACTS_PAGE_SIZE")
+    last_pagination: Dict[str, Any] = {}
+
+    while True:
+        cmd = _contracts_list_cmd(
+            page_key=page_key if page_mode == "page-key" else None,
+            page=page if page_mode == "page" else None,
+            limit=per_page_limit or None,
+        )
+        code, out = run_list(cmd)
+        if code != 0:
+            if page_mode == "page-key" and "unknown flag" in out and "page-key" in out:
+                page_mode = "page"
+                if not forced_mode:
+                    _CONTRACTS_PAGE_MODE = "page"
+                page_key = None
+                page = 1
+                pages = 0
+                seen_keys.clear()
+                contracts = []
+                raw_seen = 0
+                last_pagination = {}
+                continue
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": code,
+                "cmd": cmd,
+                "error": out,
+            }
+        try:
+            data = json.loads(out)
+        except json.JSONDecodeError:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": "invalid JSON from list-contracts",
+            }
+        page_contracts = _extract_contracts_list(data)
+        if isinstance(page_contracts, list):
+            contracts.extend(page_contracts)
+            raw_seen += len(page_contracts)
+        pages += 1
+        last_pagination = _extract_pagination(data)
+
+        if total_cap and raw_seen >= total_cap:
+            break
+
+        if page_mode == "page-key":
+            next_key = None
+            if isinstance(last_pagination, dict):
+                next_key = last_pagination.get("next_key") or last_pagination.get("nextKey")
+            if not next_key:
+                break
+            next_key = str(next_key)
+            if next_key in seen_keys:
+                break
+            seen_keys.add(next_key)
+            page_key = next_key
+        else:
+            if not page_contracts:
+                break
+            page += 1
+
+    payload = {
+        "fetched_at": timestamp(),
+        "exit_code": 0,
+        "cmd": _contracts_list_cmd(limit=per_page_limit or None),
+        "data": {"contracts": contracts, "pagination": last_pagination},
+        "pages": pages,
+    }
     return payload
+
+
+def _providers_list_cmd(page_key: str | None = None, page: int | None = None, limit: int | None = None) -> list[str]:
+    cmd = ["arkeod", "--home", ARKEOD_HOME]
+    if ARKEOD_NODE:
+        cmd.extend(["--node", ARKEOD_NODE])
+    cmd.extend(["query", "arkeo", "list-providers", "-o", "json"])
+    if limit:
+        cmd.extend(["--limit", str(limit)])
+    if page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    elif page:
+        cmd.extend(["--page", str(page)])
+    return cmd
+
+
+def fetch_provider_services_paginated() -> Dict[str, Any]:
+    """Fetch all providers across pages, honoring pagination next_key when present."""
+    global _PROVIDERS_PAGE_MODE
+    forced_mode = _env_page_mode("PROVIDER_SERVICES_PAGE_MODE")
+    page_mode = forced_mode or _PROVIDERS_PAGE_MODE or "page-key"
+    page_key = None
+    page = 1
+    pages = 0
+    seen_keys: set[str] = set()
+    providers: list[dict[str, Any]] = []
+    raw_seen = 0
+    total_cap = _env_int("PROVIDER_SERVICES_PAGE_LIMIT", 0)
+    per_page_limit = _page_limit("PROVIDER_SERVICES_PAGE_SIZE")
+    last_pagination: Dict[str, Any] = {}
+
+    while True:
+        cmd = _providers_list_cmd(
+            page_key=page_key if page_mode == "page-key" else None,
+            page=page if page_mode == "page" else None,
+            limit=per_page_limit or None,
+        )
+        code, out = run_list(cmd)
+        if code != 0:
+            if page_mode == "page-key" and "unknown flag" in out and "page-key" in out:
+                page_mode = "page"
+                if not forced_mode:
+                    _PROVIDERS_PAGE_MODE = "page"
+                page_key = None
+                page = 1
+                pages = 0
+                seen_keys.clear()
+                providers = []
+                raw_seen = 0
+                last_pagination = {}
+                continue
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": code,
+                "cmd": cmd,
+                "error": out,
+            }
+        try:
+            data = json.loads(out)
+        except json.JSONDecodeError:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": "invalid JSON from list-providers",
+            }
+        page_providers = _extract_providers_list(data)
+        if page_providers:
+            providers.extend(page_providers)
+            raw_seen += len(page_providers)
+        pages += 1
+        last_pagination = _extract_pagination(data)
+
+        if total_cap and raw_seen >= total_cap:
+            break
+
+        if page_mode == "page-key":
+            next_key = None
+            if isinstance(last_pagination, dict):
+                next_key = last_pagination.get("next_key") or last_pagination.get("nextKey")
+            if not next_key:
+                break
+            next_key = str(next_key)
+            if next_key in seen_keys:
+                break
+            seen_keys.add(next_key)
+            page_key = next_key
+        else:
+            if not page_providers:
+                break
+            page += 1
+
+    return {
+        "fetched_at": timestamp(),
+        "exit_code": 0,
+        "cmd": _providers_list_cmd(limit=per_page_limit or None),
+        "data": {"providers": providers, "pagination": last_pagination},
+        "pages": pages,
+    }
 
 
 def fetch_metadata_uri(url: str, timeout: float = 5.0) -> Tuple[Any, str | None, int]:
@@ -265,6 +649,36 @@ def _env_int(name: str, default: int) -> int:
         return int(str(raw).strip())
     except (TypeError, ValueError):
         return default
+
+
+def _env_str(name: str) -> str | None:
+    raw = os.getenv(name)
+    if raw is None:
+        return None
+    val = str(raw).strip()
+    return val if val else None
+
+
+def _env_page_mode(name: str) -> str | None:
+    raw = _env_str(name)
+    if not raw:
+        return None
+    norm = raw.strip().lower().replace("_", "-")
+    if norm in ("page", "offset"):
+        return "page"
+    if norm in ("page-key", "pagekey", "key", "cursor"):
+        return "page-key"
+    return None
+
+
+def _page_limit(override_env: str) -> int | None:
+    per_resource = _env_int(override_env, 0)
+    if per_resource and per_resource > 0:
+        return per_resource
+    global_limit = _env_int("PAGE_LIMIT", 1000)
+    if global_limit and global_limit > 0:
+        return global_limit
+    return None
 
 
 # Resolve fetch interval after helpers are defined
@@ -960,9 +1374,9 @@ def _sync_listeners_from_active(active_services_payload: Dict[str, Any], active_
                 merged = {
                     "provider_pubkey": str(pk),
                 }
-                # refresh fields from active data
+                # refresh fields from active data (avoid clobbering runtime status updates)
                 for k in ("status",):
-                    if svc.get(k) is not None:
+                    if svc.get(k) is not None and not ts.get("status_updated_at"):
                         merged[k] = svc.get(k)
                 # preserve metrics/status timestamps if present
                 for k in ("rt_avg_ms", "rt_count", "rt_last_ms", "rt_updated_at", "status_updated_at"):
@@ -1022,6 +1436,16 @@ def fetch_once(commands: Dict[str, List[str]] | None = None, record_status: bool
                     results[name] = payload
                     continue
                 payload = fetch_services_rest()
+            elif name == "provider-services":
+                payload = fetch_provider_services_paginated()
+                if payload.get("exit_code") != 0:
+                    ok = False
+                    fatal_errors.append(f"{name} exit={payload.get('exit_code')}")
+            elif name == "provider-contracts":
+                payload = fetch_contracts_paginated()
+                if payload.get("exit_code") != 0:
+                    ok = False
+                    fatal_errors.append(f"{name} exit={payload.get('exit_code')}")
             else:
                 code, out = run_list(cmd)
                 payload = normalize_result(name, code, out, cmd)

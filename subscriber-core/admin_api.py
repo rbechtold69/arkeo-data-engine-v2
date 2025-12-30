@@ -2306,11 +2306,15 @@ PROXY_DECORATE_RESPONSE = str(os.getenv("PROXY_DECORATE_RESPONSE", "true")).lowe
 PROXY_ARKAUTH_AS_HEADER = str(os.getenv("PROXY_ARKAUTH_AS_HEADER", "false")).lower() in ("1", "true", "yes", "on")
 PROXY_CONTRACT_TIMEOUT = int(os.getenv("PROXY_CONTRACT_TIMEOUT", "10"))
 PROXY_CONTRACT_LIMIT = int(os.getenv("PROXY_CONTRACT_LIMIT", "5000"))
+# Pagination mode for list-contracts; resolved at runtime on first use.
+_CONTRACTS_PAGE_MODE = None
 # Poll/test helper timeout (UI “Poll” and “Test” buttons). Default aligns with lane worst-case
 # (timeout_secs + create_timeout) so first-time contract opens can complete.
 PROXY_TEST_TIMEOUT = float(os.getenv("PROXY_TEST_TIMEOUT", "45.0"))
 PROXY_OPEN_COOLDOWN = int(os.getenv("PROXY_OPEN_COOLDOWN", "0"))  # seconds to cool down a provider after open failure
 PROXY_CONTRACT_CACHE_TTL = 0  # TTL disabled; cached contract reused until invalid
+DOWN_PROVIDER_RECHECK_INTERVAL = _safe_float(os.getenv("DOWN_PROVIDER_RECHECK_INTERVAL") or "600.0", 600.0)
+DOWN_PROVIDER_RECHECK_MAX = int(_safe_float(os.getenv("DOWN_PROVIDER_RECHECK_MAX") or "0", 0.0))
 SIGNHERE_HOME = os.path.join(Path.home(), ".arkeo")
 AXELAR_GAS_AMOUNT_ETH = _safe_float(os.getenv("AXELAR_GAS_AMOUNT_ETH") or 0.0, 0.0)
 MIN_OSMO_BRIDGE_USDC = _safe_float(os.getenv("MIN_OSMO_BRIDGE_USDC") or 0.0, 0.0)
@@ -5530,6 +5534,28 @@ def _set_top_service_status(listener_id: str | None, provider_pubkey: str | None
         _update_listeners_atomic(_mut)
     except Exception:
         pass
+    try:
+        with _LISTENER_LOCK:
+            for entry in _LISTENER_SERVERS.values():
+                if str(entry.get("listener_id")) != str(listener_id):
+                    continue
+                srv = entry.get("server")
+                cfg = getattr(srv, "cfg", None) if srv is not None else None
+                if not isinstance(cfg, dict):
+                    continue
+                top = cfg.get("top_services")
+                if not isinstance(top, list):
+                    continue
+                for ts in top:
+                    if not isinstance(ts, dict):
+                        continue
+                    if str(ts.get("provider_pubkey")) != str(provider_pubkey):
+                        continue
+                    ts["status"] = status
+                    ts["status_updated_at"] = _timestamp()
+                    break
+    except Exception:
+        pass
 
 
 def _update_top_service_metrics(
@@ -5915,45 +5941,109 @@ def _get_height_with_source(node: str) -> tuple[int, bool]:
     return _get_current_height(node), False
 
 
-def _fetch_contracts(node: str, timeout: int | None = None, active_only: bool = True, limit: int | None = None, client_filter: str | None = None) -> list:
+def _contracts_list_cmd(node: str, page_key: str | None = None, page: int | None = None, limit: int | None = None) -> list[str]:
     cmd = ["arkeod", "--home", ARKEOD_HOME]
     if node:
         cmd.extend(["--node", node])
     cmd.extend(["query", "arkeo", "list-contracts", "-o", "json"])
-    use_limit = limit if limit is not None else PROXY_CONTRACT_LIMIT
-    if use_limit:
+    if limit:
         try:
-            cmd.extend(["--limit", str(use_limit)])
+            cmd.extend(["--limit", str(limit)])
         except Exception:
             pass
-    try:
-        completed = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
-        if completed.returncode != 0:
+    if page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    elif page:
+        cmd.extend(["--page", str(page)])
+    return cmd
+
+
+def _fetch_contracts(
+    node: str,
+    timeout: int | None = None,
+    active_only: bool = True,
+    limit: int | None = None,
+    client_filter: str | None = None,
+) -> list:
+    global _CONTRACTS_PAGE_MODE
+    use_limit = limit if limit is not None else PROXY_CONTRACT_LIMIT
+    max_total = use_limit if use_limit and use_limit > 0 else None
+    page_mode = _CONTRACTS_PAGE_MODE or "page-key"
+    page_key = None
+    page = 1
+    seen_keys: set[str] = set()
+    raw_seen = 0
+    filtered: list = []
+
+    while True:
+        cmd = _contracts_list_cmd(
+            node,
+            page_key=page_key if page_mode == "page-key" else None,
+            page=page if page_mode == "page" else None,
+            limit=use_limit,
+        )
+        try:
+            completed = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            stdout = completed.stdout or ""
+            stderr = completed.stderr or ""
+            if completed.returncode != 0:
+                err_out = stdout + stderr
+                if page_mode == "page-key" and "unknown flag" in err_out and "page-key" in err_out:
+                    page_mode = "page"
+                    _CONTRACTS_PAGE_MODE = "page"
+                    page_key = None
+                    page = 1
+                    seen_keys.clear()
+                    raw_seen = 0
+                    filtered = []
+                    continue
+                return []
+        except subprocess.TimeoutExpired:
             return []
-        out = completed.stdout
-    except subprocess.TimeoutExpired:
-        return []
-    except Exception:
-        return []
-    try:
-        data = json.loads(out)
-    except Exception:
-        return []
-    contracts = data.get("contract") or data.get("contracts")
-    if not isinstance(contracts, list):
-        return []
-    filtered = []
-    for c in contracts:
-        if not isinstance(c, dict):
-            continue
-        if active_only:
-            sh = c.get("settlement_height")
-            # keep only active/open contracts (settlement_height == 0)
-            if not (str(sh) == "0" or sh == 0 or sh is None):
+        except Exception:
+            return []
+
+        try:
+            data = json.loads(stdout)
+        except Exception:
+            return []
+        contracts = data.get("contract") or data.get("contracts") or []
+        if not isinstance(contracts, list):
+            contracts = []
+
+        raw_seen += len(contracts)
+        for c in contracts:
+            if not isinstance(c, dict):
                 continue
-        if client_filter and str(c.get("client")) != str(client_filter):
-            continue
-        filtered.append(c)
+            if active_only:
+                sh = c.get("settlement_height")
+                # keep only active/open contracts (settlement_height == 0)
+                if not (str(sh) == "0" or sh == 0 or sh is None):
+                    continue
+            if client_filter and str(c.get("client")) != str(client_filter):
+                continue
+            filtered.append(c)
+
+        if max_total and raw_seen >= max_total:
+            break
+
+        if page_mode == "page-key":
+            pagination = data.get("pagination") if isinstance(data, dict) else {}
+            next_key = None
+            if isinstance(pagination, dict):
+                next_key = pagination.get("next_key") or pagination.get("nextKey")
+            if not next_key:
+                break
+            next_key = str(next_key)
+            if next_key in seen_keys:
+                break
+            seen_keys.add(next_key)
+            page_key = next_key
+        else:
+            if not contracts:
+                break
+            page += 1
+
     return filtered
 
 
@@ -6234,6 +6324,15 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 _log("info", f"bypass timings total_ms={total_ms} queue_wait_ms={queue_wait_ms}")
             except Exception:
                 pass
+            if int(code or 0) >= 400:
+                try:
+                    _log(
+                        "warning",
+                        f"bypass upstream error code={code} url={_redact_url_userinfo(fwd_url)} "
+                        f"body={_preview_log_body(resp_body)}",
+                    )
+                except Exception:
+                    pass
             _log("info", f"bypass ok code={code} url={_redact_url_userinfo(fwd_url)}")
             return {"status": code or 502, "body": resp_body or b"", "headers": resp_hdrs}
         except BypassError as e:
@@ -6724,6 +6823,16 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 )
             sentinel_forward_ms = int((time.time() - fwd_start) * 1000)
 
+        if int(code or 0) >= 400:
+            try:
+                _log(
+                    "warning",
+                    f"upstream error code={code} provider={provider_filter} "
+                    f"sentinel={_redact_url_userinfo(fwd_url)} body={_preview_log_body(resp_body)}",
+                )
+            except Exception:
+                pass
+
         try:
             if _is_proxy_upstream_error(code, resp_body) and server_ref is not None and PROXY_PROVIDER_COOLDOWN > 0:
                 server_ref.cooldowns[provider_filter] = time.time() + float(PROXY_PROVIDER_COOLDOWN)
@@ -6775,10 +6884,20 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 hdrs["X-Arkeo-Sentinel"] = sentinel
         except Exception:
             pass
+        req_headers = getattr(work, "headers", None)
+        ignore_metrics = False
+        if isinstance(req_headers, dict):
+            val = req_headers.get("X-Arkeo-Ignore-Metrics")
+            if val is None:
+                for hk, hv in req_headers.items():
+                    if str(hk).lower() == "x-arkeo-ignore-metrics":
+                        val = hv
+                        break
+            if val is not None and str(val).strip().lower() not in ("", "0", "false", "no", "off", "null"):
+                ignore_metrics = True
         # Opt-in: include per-request timings in the response headers (used by /api/listeners/<id>/test to avoid races).
         try:
             want_timings = False
-            req_headers = getattr(work, "headers", None)
             if isinstance(req_headers, dict):
                 val = req_headers.get("X-Arkeo-Return-Timings")
                 if val is None:
@@ -6828,12 +6947,12 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             # Record response-time fields for successful requests.
             # Always record last timing; update avg/count only when config succeeded.
             # Poll warm-up skipping is handled per provider via rt_ignore_next (set by /reset-metrics).
-            if not auto_created:
+            if not auto_created and not ignore_metrics:
                 _update_top_service_metrics(
                     listener_id,
                     provider_filter,
                     (total_ms / 1000.0),
-                    include_in_avg=(int(code or 0) < 400 and cors_ok is not False),
+                    include_in_avg=(int(code or 0) < 400 and cors_ok is not False and not ignore_metrics),
                 )
         except Exception:
             pass
@@ -7150,6 +7269,22 @@ def _redact_url_userinfo(url: str) -> str:
     except Exception:
         return url
     return url
+
+
+def _preview_log_body(body: bytes | str | None, limit: int = 400) -> str:
+    if body is None:
+        return ""
+    if isinstance(body, (bytes, bytearray)):
+        try:
+            text = body.decode("utf-8", errors="replace")
+        except Exception:
+            text = str(body)
+    else:
+        text = str(body)
+    text = text.replace("\n", " ").replace("\r", " ").strip()
+    if len(text) > limit:
+        text = text[:limit] + "...(truncated)"
+    return text
 
 
 def _is_proxy_upstream_error(code: int | None, resp_body: bytes | str | None) -> bool:
@@ -8026,6 +8161,137 @@ def _test_listener_port(
         )
     except Exception as e:
         return False, None, str(e), {}, None
+
+
+def _down_provider_pubkeys(listener: dict) -> list[str]:
+    top = listener.get("top_services") if isinstance(listener, dict) else None
+    if not isinstance(top, list):
+        return []
+    out: list[str] = []
+    seen: set[str] = set()
+    for ts in top:
+        if not isinstance(ts, dict):
+            continue
+        status = str(ts.get("status") or "").strip().lower()
+        if status != "down":
+            continue
+        pk = ts.get("provider_pubkey") or ts.get("pubkey")
+        if pk:
+            pk_str = str(pk)
+            if pk_str in seen:
+                continue
+            seen.add(pk_str)
+            out.append(pk_str)
+    return out
+
+
+def _build_listener_health_request(listener: dict) -> tuple[str, str, bytes | None, dict]:
+    hm = (listener.get("health_method") or "POST").upper()
+    hp = listener.get("health_payload") or ""
+    hh = listener.get("health_header") or ""
+    method = "GET" if hm == "GET" else "POST"
+    headers: dict = {}
+    if hh:
+        headers["Content-Type"] = hh
+    elif method != "GET":
+        headers["Content-Type"] = "application/json"
+    payload_bytes = None
+    path = "/"
+    if method == "GET":
+        if hp.startswith("http://") or hp.startswith("https://"):
+            try:
+                parsed = urllib.parse.urlparse(hp.strip())
+                path = parsed.path or "/"
+                if parsed.query:
+                    path = f"{path}?{parsed.query}"
+            except Exception:
+                path = "/"
+        else:
+            svc_prefix = (
+                listener.get("service_name")
+                or _service_slug_for_id(listener.get("service_id"))
+                or listener.get("service_description")
+                or listener.get("service")
+                or listener.get("service_id")
+                or ""
+            ).strip("/")
+            base_path = hp.strip().lstrip("/")
+            if svc_prefix:
+                path = f"/{svc_prefix}/{base_path}" if base_path else f"/{svc_prefix}"
+            else:
+                path = f"/{base_path}" if base_path else "/"
+    else:
+        payload_bytes = hp.encode() if hp else b""
+        path = "/"
+    return method, path, payload_bytes, headers
+
+
+def _recheck_down_providers_once() -> dict:
+    data = _ensure_listeners_file()
+    listeners = data.get("listeners") if isinstance(data, dict) else []
+    if not isinstance(listeners, list) or not listeners:
+        return {"checked": 0, "ok": 0, "failed": 0}
+    checked = 0
+    ok_count = 0
+    fail_count = 0
+    for listener in listeners:
+        if DOWN_PROVIDER_RECHECK_MAX > 0 and checked >= DOWN_PROVIDER_RECHECK_MAX:
+            break
+        if not isinstance(listener, dict) or not _is_listener_active(listener):
+            continue
+        try:
+            port = int(listener.get("port"))
+        except Exception:
+            continue
+        with _LISTENER_LOCK:
+            srv_entry = _LISTENER_SERVERS.get(port)
+        if not srv_entry or not srv_entry.get("server"):
+            continue
+        down_providers = _down_provider_pubkeys(listener)
+        if not down_providers:
+            continue
+        method, path, payload_bytes, headers = _build_listener_health_request(listener)
+        headers["X-Arkeo-Ignore-Metrics"] = "1"
+        headers["X-Arkeo-Return-Timings"] = "1"
+        for pk in down_providers:
+            if DOWN_PROVIDER_RECHECK_MAX > 0 and checked >= DOWN_PROVIDER_RECHECK_MAX:
+                break
+            headers["X-Arkeo-Force-Provider"] = pk
+            ok, _body, err, _resp_headers, code = _test_listener_port(
+                port,
+                payload_bytes if method != "GET" else None,
+                headers,
+                method=method,
+                path=path,
+            )
+            checked += 1
+            if ok and (code is None or int(code) < 400):
+                ok_count += 1
+                print(f"[recheck] up listener={listener.get('id')} provider={pk} code={code}", flush=True)
+            else:
+                fail_count += 1
+    if checked:
+        print(f"[recheck] checked={checked} ok={ok_count} failed={fail_count}", flush=True)
+    return {"checked": checked, "ok": ok_count, "failed": fail_count}
+
+
+def _down_provider_recheck_loop() -> None:
+    interval = float(DOWN_PROVIDER_RECHECK_INTERVAL or 0.0)
+    if interval <= 0:
+        print("[recheck] down-provider recheck disabled (interval<=0)", flush=True)
+        return
+    interval = max(30.0, interval)
+    print(f"[recheck] starting down-provider recheck loop every {int(interval)}s", flush=True)
+    time.sleep(min(5.0, interval))
+    while True:
+        start = time.time()
+        try:
+            _recheck_down_providers_once()
+        except Exception as e:
+            print(f"[recheck] loop error: {e}", flush=True)
+        elapsed = time.time() - start
+        sleep_s = max(1.0, interval - elapsed)
+        time.sleep(sleep_s)
 
 
 def _min_payg_rate(raw: dict) -> tuple[int | None, str | None]:
@@ -9959,6 +10225,8 @@ def subscriber_totals():
 
 _bootstrap_thread = threading.Thread(target=_bootstrap_listeners_from_cache, daemon=True)
 _bootstrap_thread.start()
+_recheck_thread = threading.Thread(target=_down_provider_recheck_loop, daemon=True)
+_recheck_thread.start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=API_PORT)

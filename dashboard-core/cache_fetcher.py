@@ -135,15 +135,342 @@ def _parse_service_types_text(raw: str) -> Dict[str, Any] | None:
     return {"services": services}
 
 
+def _extract_pagination(data: Any) -> Dict[str, Any]:
+    if isinstance(data, dict):
+        pag = data.get("pagination")
+        if isinstance(pag, dict):
+            return pag
+        inner = data.get("data")
+        if isinstance(inner, dict):
+            pag = inner.get("pagination")
+            if isinstance(pag, dict):
+                return pag
+    return {}
+
+
+def _extract_contracts_list(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return [c for c in data if isinstance(c, dict)]
+    if isinstance(data, dict):
+        inner = data.get("data") if "data" in data else None
+        if inner is not None:
+            return _extract_contracts_list(inner)
+        contracts = data.get("contracts") or data.get("contract") or data.get("result") or []
+        if isinstance(contracts, list):
+            return [c for c in contracts if isinstance(c, dict)]
+    return []
+
+
+def _extract_providers_list(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        inner = data.get("data") if "data" in data else None
+        if inner is not None:
+            return _extract_providers_list(inner)
+        prov = data.get("providers") or data.get("provider") or data.get("result") or []
+        if isinstance(prov, list):
+            return prov
+    return []
+
+
+def _extract_service_types_list(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, list):
+        return data
+    if isinstance(data, dict):
+        inner = data.get("data") if "data" in data else None
+        if inner is not None:
+            return _extract_service_types_list(inner)
+        svc = data.get("services") or data.get("service") or data.get("result") or []
+        if isinstance(svc, list):
+            return svc
+    return []
+
+
+def _service_types_cmd(page_key: str | None = None, limit: int | None = None) -> list[str]:
+    cmd = ["arkeod", "--home", ARKEOD_HOME]
+    if ARKEOD_NODE:
+        cmd.extend(["--node", ARKEOD_NODE])
+    cmd.extend(["query", "arkeo", "all-services", "-o", "json"])
+    if limit:
+        cmd.extend(["--page-limit", str(limit)])
+    cmd.append("--page-count-total")
+    if page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    return cmd
+
+
+def _contracts_list_cmd(page_key: str | None = None, limit: int | None = None) -> list[str]:
+    cmd = ["arkeod", "--home", ARKEOD_HOME]
+    if ARKEOD_NODE:
+        cmd.extend(["--node", ARKEOD_NODE])
+    cmd.extend(["query", "arkeo", "list-contracts", "-o", "json"])
+    if limit:
+        cmd.extend(["--page-limit", str(limit)])
+    cmd.append("--page-count-total")
+    if page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    return cmd
+
+
+def _providers_list_cmd(page_key: str | None = None, limit: int | None = None) -> list[str]:
+    cmd = ["arkeod", "--home", ARKEOD_HOME]
+    if ARKEOD_NODE:
+        cmd.extend(["--node", ARKEOD_NODE])
+    cmd.extend(["query", "arkeo", "list-providers", "-o", "json"])
+    if limit:
+        cmd.extend(["--page-limit", str(limit)])
+    cmd.append("--page-count-total")
+    if page_key:
+        cmd.extend(["--page-key", str(page_key)])
+    return cmd
+
+
+def fetch_contracts_paginated() -> Dict[str, Any]:
+    """Fetch all contracts across pages, honoring pagination next_key when present."""
+    page_key = None
+    pages = 0
+    seen_keys: set[str] = set()
+    contracts: list[dict[str, Any]] = []
+    raw_seen = 0
+    total_cap = _env_int("CONTRACTS_PAGE_LIMIT", 0)
+    per_page_limit = _page_limit("CONTRACTS_PAGE_SIZE")
+    last_pagination: Dict[str, Any] = {}
+
+    while True:
+        cmd = _contracts_list_cmd(page_key=page_key, limit=per_page_limit or None)
+        code, out = run_list(cmd)
+        if code != 0:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": code,
+                "cmd": cmd,
+                "error": out,
+            }
+        try:
+            data = json.loads(out)
+        except json.JSONDecodeError:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": "invalid JSON from list-contracts",
+            }
+        page_contracts = _extract_contracts_list(data)
+        if page_contracts:
+            contracts.extend(page_contracts)
+            raw_seen += len(page_contracts)
+        pages += 1
+        last_pagination = _extract_pagination(data)
+
+        if total_cap and raw_seen >= total_cap:
+            break
+
+        next_key = None
+        if isinstance(last_pagination, dict):
+            next_key = last_pagination.get("next_key") or last_pagination.get("nextKey")
+        if not next_key:
+            break
+        next_key = str(next_key)
+        if next_key in seen_keys:
+            break
+        seen_keys.add(next_key)
+        page_key = next_key
+
+    return {
+        "fetched_at": timestamp(),
+        "exit_code": 0,
+        "cmd": _contracts_list_cmd(limit=per_page_limit or None),
+        "data": {"contracts": contracts, "pagination": last_pagination},
+        "pages": pages,
+    }
+
+
+def fetch_provider_services_paginated() -> Dict[str, Any]:
+    """Fetch all providers across pages, honoring pagination next_key when present."""
+    page_key = None
+    pages = 0
+    seen_keys: set[str] = set()
+    providers: list[dict[str, Any]] = []
+    raw_seen = 0
+    total_cap = _env_int("PROVIDER_SERVICES_PAGE_LIMIT", 0)
+    per_page_limit = _page_limit("PROVIDER_SERVICES_PAGE_SIZE")
+    last_pagination: Dict[str, Any] = {}
+
+    while True:
+        cmd = _providers_list_cmd(page_key=page_key, limit=per_page_limit or None)
+        code, out = run_list(cmd)
+        if code != 0:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": code,
+                "cmd": cmd,
+                "error": out,
+            }
+        try:
+            data = json.loads(out)
+        except json.JSONDecodeError:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": "invalid JSON from list-providers",
+            }
+        page_providers = _extract_providers_list(data)
+        if page_providers:
+            providers.extend(page_providers)
+            raw_seen += len(page_providers)
+        pages += 1
+        last_pagination = _extract_pagination(data)
+
+        if total_cap and raw_seen >= total_cap:
+            break
+
+        next_key = None
+        if isinstance(last_pagination, dict):
+            next_key = last_pagination.get("next_key") or last_pagination.get("nextKey")
+        if not next_key:
+            break
+        next_key = str(next_key)
+        if next_key in seen_keys:
+            break
+        seen_keys.add(next_key)
+        page_key = next_key
+
+    return {
+        "fetched_at": timestamp(),
+        "exit_code": 0,
+        "cmd": _providers_list_cmd(limit=per_page_limit or None),
+        "data": {"providers": providers, "pagination": last_pagination},
+        "pages": pages,
+    }
+
+
+def fetch_service_types_paginated() -> Dict[str, Any]:
+    """Fetch service types across pages, honoring pagination next_key when present."""
+    page_key = None
+    pages = 0
+    seen_keys: set[str] = set()
+    services: list[dict[str, Any]] = []
+    raw_seen = 0
+    total_cap = _env_int("SERVICE_TYPES_PAGE_LIMIT", 0)
+    per_page_limit = _page_limit("SERVICE_TYPES_PAGE_SIZE")
+    last_pagination: Dict[str, Any] = {}
+
+    while True:
+        cmd = _service_types_cmd(page_key=page_key, limit=per_page_limit or None)
+        code, out = run_list(cmd)
+        if code != 0:
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": code,
+                "cmd": cmd,
+                "error": out,
+            }
+        try:
+            data = json.loads(out)
+        except json.JSONDecodeError:
+            parsed = _parse_service_types_text(out)
+            if parsed:
+                return {
+                    "fetched_at": timestamp(),
+                    "exit_code": 0,
+                    "cmd": cmd,
+                    "data": parsed,
+                    "parsed_from": "arkeod all-services",
+                }
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": "invalid JSON from all-services",
+            }
+        if isinstance(data, str):
+            parsed = _parse_service_types_text(data)
+            if parsed:
+                return {
+                    "fetched_at": timestamp(),
+                    "exit_code": 0,
+                    "cmd": cmd,
+                    "data": parsed,
+                    "parsed_from": "arkeod all-services",
+                }
+            return {
+                "fetched_at": timestamp(),
+                "exit_code": 1,
+                "cmd": cmd,
+                "error": "invalid JSON from all-services",
+            }
+
+        page_services = _extract_service_types_list(data)
+        if page_services:
+            services.extend(page_services)
+            raw_seen += len(page_services)
+        pages += 1
+        last_pagination = _extract_pagination(data)
+
+        if total_cap and raw_seen >= total_cap:
+            break
+
+        next_key = None
+        if isinstance(last_pagination, dict):
+            next_key = last_pagination.get("next_key") or last_pagination.get("nextKey")
+        if not next_key:
+            break
+        next_key = str(next_key)
+        if next_key in seen_keys:
+            break
+        seen_keys.add(next_key)
+        page_key = next_key
+
+    return {
+        "fetched_at": timestamp(),
+        "exit_code": 0,
+        "cmd": _service_types_cmd(limit=per_page_limit or None),
+        "data": {"services": services, "pagination": last_pagination},
+        "pages": pages,
+    }
+
+
 def build_commands() -> Dict[str, List[str]]:
     base = ["arkeod", "--home", ARKEOD_HOME]
     if ARKEOD_NODE:
         base.extend(["--node", ARKEOD_NODE])
     return {
-        "provider-services": [*base, "query", "arkeo", "list-providers", "-o", "json"],
-        "provider-contracts": [*base, "query", "arkeo", "list-contracts", "-o", "json"],
+        "provider-services": [
+            *base,
+            "query",
+            "arkeo",
+            "list-providers",
+            "--page-limit",
+            str(PAGE_LIMIT),
+            "--page-count-total",
+            "-o",
+            "json",
+        ],
+        "provider-contracts": [
+            *base,
+            "query",
+            "arkeo",
+            "list-contracts",
+            "--page-limit",
+            str(PAGE_LIMIT),
+            "--page-count-total",
+            "-o",
+            "json",
+        ],
         "validators": [*base, "query", "staking", "validators", "--page-limit", "1000", "--page-count-total", "--status", "BOND_STATUS_BONDED", "-o", "json"],
-        "service-types": [*base, "query", "arkeo", "all-services", "-o", "json"],
+        "service-types": [
+            *base,
+            "query",
+            "arkeo",
+            "all-services",
+            "--page-limit",
+            str(PAGE_LIMIT),
+            "--page-count-total",
+            "-o",
+            "json",
+        ],
     }
 
 
@@ -430,11 +757,21 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _page_limit(override_env: str) -> int | None:
+    per_resource = _env_int(override_env, 0)
+    if per_resource and per_resource > 0:
+        return per_resource
+    if PAGE_LIMIT and PAGE_LIMIT > 0:
+        return PAGE_LIMIT
+    return None
+
+
 # Resolve env-derived knobs after helpers are defined
 CACHE_FETCH_INTERVAL = _env_int("CACHE_FETCH_INTERVAL", 300)
 METADATA_TTL_SECONDS = _env_int("METADATA_TTL_SECONDS", 3600)
 SERVICE_TYPES_TTL_SECONDS = _env_int("SERVICE_TYPES_TTL_SECONDS", 3600)
 MIN_SERVICE_BOND = _env_int("MIN_SERVICE_BOND", 100_000_000)
+PAGE_LIMIT = _env_int("PAGE_LIMIT", 1000)
 
 
 def _load_metadata_cache() -> dict[str, dict[str, Any]]:
@@ -958,11 +1295,19 @@ def fetch_once(commands: Dict[str, List[str]] | None = None, record_status: bool
                         payload = merge_service_types_with_resources(payload)
                     results[name] = payload
                     continue
-            code, out = run_list(cmd)
-            payload = normalize_result(name, code, out, cmd)
-            if code != 0:
+                payload = fetch_service_types_paginated()
+            elif name == "provider-services":
+                payload = fetch_provider_services_paginated()
+            elif name == "provider-contracts":
+                payload = fetch_contracts_paginated()
+            else:
+                code, out = run_list(cmd)
+                payload = normalize_result(name, code, out, cmd)
+
+            if payload.get("exit_code") != 0:
                 ok = False
-                error_msg = f"{name} exit={code}"
+                error_msg = f"{name} exit={payload.get('exit_code')}"
+
             if name == "service-types" and payload.get("exit_code") == 0:
                 # If the output was plaintext, parse into structured services list
                 if isinstance(payload.get("data"), str):

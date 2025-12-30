@@ -1626,6 +1626,14 @@
         return coins.map(fmtCoin).join(", ");
     }
 
+    function formatArkeoTick(value) {
+        const num = Number(value);
+        if (!Number.isFinite(num)) return String(value);
+        const abs = Math.abs(num);
+        const maxDigits = abs > 0 && abs < 1 ? 8 : 2;
+        return num.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: maxDigits });
+    }
+
     function formatBlockHeight(resp) {
         if (!resp || resp.error || !resp.height) return "(unavailable)";
         return resp.height.toString();
@@ -1762,7 +1770,10 @@
                     y: {
                         beginAtZero: true,
                         grid: { color: "rgba(255,255,255,0.08)" },
-                        ticks: { color: "#cbd5e1" },
+                        ticks: {
+                            color: "#cbd5e1",
+                            callback: (value) => formatArkeoTick(value),
+                        },
                     },
                     x: {
                         grid: { display: false },

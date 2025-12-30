@@ -292,6 +292,14 @@ docker run -d --name subscriber-core --restart=unless-stopped \\
       return decimals > 0 ? fixed.replace(/\.?0+$/, '') : fixed;
     };
 
+    const CHART_DECIMALS = 8;
+    const formatChartNumber = (value) => {
+      const num = Number(value);
+      if (!Number.isFinite(num)) return '0';
+      const fixed = num.toFixed(CHART_DECIMALS);
+      return fixed.replace(/\.?0+$/, '') || '0';
+    };
+
     const blocksForRange = (range, blockTimeSeconds) => {
       const secs = TIME_WINDOWS[range];
       if (!secs) return null;
@@ -1460,7 +1468,7 @@ docker run -d --name subscriber-core --restart=unless-stopped \\
           legend: { display: false },
           tooltip: {
             callbacks: {
-              label: (context) => `${context.parsed.y.toFixed(6)} ARKEO`,
+              label: (context) => `${formatChartNumber(context.parsed.y)} ARKEO`,
             },
           },
         },
@@ -1468,7 +1476,7 @@ docker run -d --name subscriber-core --restart=unless-stopped \\
           y: {
             beginAtZero: true,
             ticks: {
-              callback: (val) => `${val}`,
+              callback: (val) => formatChartNumber(val),
             },
             grid: { color: 'rgba(255,255,255,0.05)' },
           },
