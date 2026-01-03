@@ -991,6 +991,19 @@ let earningsChartCache = {};
         refreshHotwalletLogBox("convertUsdcLog");
     }
 
+    function sendHotwalletTelemetry(payload) {
+        if (!payload) return;
+        try {
+            fetch(apiUrl("/api/hotwallet/telemetry"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            }).catch(() => {});
+        } catch (e) {
+            // ignore
+        }
+    }
+
     async function keplrSwapExactAmountIn({
         amountInBase,
         tokenInDenom,
@@ -1650,6 +1663,13 @@ let earningsChartCache = {};
         convertArkeoNativeWaitTimer = setInterval(() => {
             appendConvertArkeoNativeLog("Waiting for IBC... still working.");
         }, 10000);
+        let telemetryStage = "config";
+        sendHotwalletTelemetry({
+            direction: "osmosis_to_arkeo",
+            status: "start",
+            amount: amt,
+            source: "ui",
+        });
         try {
             const cfgRes = await fetch(apiUrl("/api/osmosis-arkeo-config"), { cache: "no-store" });
             const cfgText = await cfgRes.text();
@@ -1671,8 +1691,10 @@ let earningsChartCache = {};
             if (!rpc) throw new Error("Osmosis RPC missing");
             if (!receiver) throw new Error("Arkeo address missing");
             const { signAndBroadcastIbcTransfer, connectKeplr } = getCosmosBundle();
+            telemetryStage = "keplr";
             const addr = await connectKeplr({ chainId: "osmosis-1", rpcEndpoint: rpc });
             if (!keplrOsmoAddress) keplrOsmoAddress = addr;
+            telemetryStage = "broadcast";
             const res = await signAndBroadcastIbcTransfer({
                 chainId: "osmosis-1",
                 rpcEndpoint: rpc,
@@ -1688,11 +1710,26 @@ let earningsChartCache = {};
                 clearInterval(convertArkeoNativeWaitTimer);
                 convertArkeoNativeWaitTimer = null;
             }
+            sendHotwalletTelemetry({
+                direction: "osmosis_to_arkeo",
+                status: "submitted",
+                amount: amt,
+                txhash: res.transactionHash,
+                source: "ui",
+            });
             appendConvertArkeoNativeLog(`IBC submitted: tx ${res.transactionHash}`);
             appendConvertArkeoNativeLog("Transfer submitted. Arrival pending on Arkeo chain.");
             setTimeout(() => closeConvertArkeoNativeModal(), 3000);
             refreshHotwallets();
         } catch (err) {
+            sendHotwalletTelemetry({
+                direction: "osmosis_to_arkeo",
+                status: "failed",
+                stage: telemetryStage,
+                error: String(err),
+                amount: amt,
+                source: "ui",
+            });
             appendConvertArkeoNativeLog(`Error: ${err}`);
             setConvertArkeoNativeButtonEnabled(true);
             if (btn) btn.disabled = false;

@@ -25,6 +25,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 from flask import Flask, jsonify, request
+import uuid
 
 from cache_fetcher import (
     build_commands as cache_build_commands,
@@ -63,6 +64,11 @@ TX_LOCK = threading.Lock()
 _PORT_FLOOR = None
 HOTWALLET_LOG = os.path.join(CACHE_DIR, "logs", "hotwallet-tx.log")
 AXELAR_CONFIG_CACHE = os.path.join(CONFIG_DIR, "axelar", "eth-mainnet.json")
+TELEMETRY_PATH = os.path.join(CONFIG_DIR, "telemetry.json")
+POSTHOG_API_KEY = (os.getenv("POSTHOG_API_KEY") or "phc_HkXCuAWRwKeBUvLYjMqHflaXEC5Xh0oGqLUTAsNI33R").strip()
+POSTHOG_HOST = "https://app.posthog.com"
+POSTHOG_ENABLED = os.getenv("POSTHOG_ENABLED")
+TELEMETRY_ERROR_THROTTLE_SECONDS = 300.0
 
 
 @contextmanager
@@ -578,6 +584,58 @@ def hotwallet_log_note():
     # cap length to avoid abuse
     msg = msg[:500]
     _append_hotwallet_log({"action": "client_note", "msg": msg, "source": "ui"})
+    return jsonify({"ok": True})
+
+
+def _handle_hotwallet_telemetry(payload: dict) -> tuple[bool, str]:
+    direction_raw = str(payload.get("direction") or "").strip()
+    kind = str(payload.get("kind") or "").strip()
+    if not direction_raw:
+        return False, "direction required"
+    direction = _telemetry_hotwallet_direction(direction_raw, kind)
+    status = str(payload.get("status") or "").strip().lower()
+    stage = str(payload.get("stage") or "").strip().lower()
+    error_summary = str(payload.get("error_summary") or payload.get("error") or "").strip()
+    source = str(payload.get("source") or "ui")
+    amount = None
+    if "amount" in payload:
+        try:
+            amount = float(payload.get("amount"))
+        except Exception:
+            amount = None
+    txhash = payload.get("txhash") or payload.get("tx_hash") or payload.get("txHash")
+    if status:
+        if status not in ("start", "submitted"):
+            return False, "invalid status"
+        _emit_hotwallet_transfer(direction, status, amount, txhash, source)
+        return True, ""
+    if not stage and not error_summary:
+        return False, "missing status or error"
+    if not stage:
+        stage = "error"
+    if not error_summary:
+        error_summary = stage
+    _emit_hotwallet_transfer_failed(direction, stage, error_summary, amount, txhash, source)
+    return True, ""
+
+
+@app.post("/api/hotwallet/telemetry")
+def hotwallet_telemetry():
+    """Record hotwallet telemetry for client-only actions (best effort)."""
+    payload = request.get_json(silent=True) or {}
+    ok, err = _handle_hotwallet_telemetry(payload)
+    if not ok:
+        return jsonify({"error": err}), 400
+    return jsonify({"ok": True})
+
+
+@app.post("/api/telemetry/hotwallet")
+def telemetry_hotwallet():
+    """Backward-compatible alias for /api/hotwallet/telemetry."""
+    payload = request.get_json(silent=True) or {}
+    ok, err = _handle_hotwallet_telemetry(payload)
+    if not ok:
+        return jsonify({"error": err}), 400
     return jsonify({"ok": True})
 
 
@@ -1562,18 +1620,24 @@ def hotwallet_convert_usdc_to_arkeo():
     try:
         amt_float = float(amount)
     except Exception:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "amount_invalid")
         return jsonify({"error": "invalid amount"}), 400
     if amt_float <= 0:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "amount_invalid")
         return jsonify({"error": "amount must be > 0"}), 400
     amt_base = int(round(amt_float * 1_000_000))
 
+    _telemetry_hotwallet_event("in", "usdc_to_arkeo", amt_float)
+
     if not OSMOSIS_RPC:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "osmosis_rpc_missing", amt_float)
         return jsonify({"error": "OSMOSIS_RPC not configured"}), 400
 
     # Ensure wallets
     settings = _merge_subscriber_settings()
     settings, osmo_err = _ensure_osmo_wallet(settings)
     if osmo_err:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", f"osmo_wallet:{osmo_err}", amt_float)
         return jsonify({"error": f"osmo wallet: {osmo_err}"}), 400
     osmo_addr = settings.get("OSMOSIS_ADDRESS")
 
@@ -1581,6 +1645,7 @@ def hotwallet_convert_usdc_to_arkeo():
     try:
         balances = _osmosis_balances_raw(osmo_addr)
     except Exception as e:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", f"osmosis_balances:{e}", amt_float)
         return jsonify({"error": f"osmosis balances: {e}"}), 500
 
     # Log start
@@ -1602,6 +1667,7 @@ def hotwallet_convert_usdc_to_arkeo():
                 osmo_gas = 0
             break
     if osmo_gas < int(MIN_OSMO_GAS * 1_000_000):
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "insufficient_osmo_gas", amt_float)
         return jsonify({"error": f"insufficient OSMO for gas (need >= {MIN_OSMO_GAS} OSMO)"}), 400
 
     # USDC denom discovery
@@ -1619,13 +1685,16 @@ def hotwallet_convert_usdc_to_arkeo():
     if not usdc_denom:
         usdc_denom, usdc_avail = _pick_usdc_osmo_denom(balances)
     if not usdc_denom:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "usdc_denom_missing", amt_float)
         return jsonify({"error": "USDC denom not found on Osmosis"}), 400
     if usdc_avail < amt_base:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "insufficient_usdc", amt_float)
         return jsonify({"error": f"insufficient USDC (have {usdc_avail/1e6:.6f}, need {amt_float:.6f})"}), 400
 
     # ARKEO denom discovery (may still be None; we'll try pool lookup)
     arkeo_denom = _discover_arkeo_osmo_denom(balances)
     if not arkeo_denom:
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "arkeo_denom_missing", amt_float)
         return jsonify({"error": "ARKEO denom on Osmosis not found; ensure pool 2977 available"}), 400
 
     # Track pre-swap ARKEO balance for delta reporting
@@ -1691,6 +1760,7 @@ def hotwallet_convert_usdc_to_arkeo():
                 "detail": swap_out,
             }
         )
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "swap_failed", amt_float)
         return jsonify(
             {
                 "error": "swap failed",
@@ -1710,6 +1780,7 @@ def hotwallet_convert_usdc_to_arkeo():
                 "raw_log": tx_log,
             }
         )
+        _telemetry_hotwallet_error("in", "usdc_to_arkeo", "swap_not_included", amt_float)
         return jsonify(
             {
                 "error": "swap failed on-chain or not included",
@@ -1751,6 +1822,12 @@ def hotwallet_convert_usdc_to_arkeo():
             "arkeo_delta": arkeo_delta,
         }
     )
+    _telemetry_hotwallet_success(
+        "in",
+        "usdc_to_arkeo",
+        amt_float,
+        {"swap_tx": swap_tx, "arkeo_delta": arkeo_delta},
+    )
 
     return jsonify(
         {
@@ -1777,18 +1854,24 @@ def hotwallet_convert_arkeo_to_usdc():
     try:
         amt_float = float(amount)
     except Exception:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "amount_invalid")
         return jsonify({"error": "invalid amount"}), 400
     if amt_float <= 0:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "amount_invalid")
         return jsonify({"error": "amount must be > 0"}), 400
     amt_base = int(round(amt_float * 100_000_000))  # ARKEO on Osmosis uses 8 decimals
 
+    _telemetry_hotwallet_event("out", "arkeo_to_usdc", amt_float)
+
     if not OSMOSIS_RPC:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "osmosis_rpc_missing", amt_float)
         return jsonify({"error": "OSMOSIS_RPC not configured"}), 400
 
     # Ensure wallet
     settings = _merge_subscriber_settings()
     settings, osmo_err = _ensure_osmo_wallet(settings)
     if osmo_err:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", f"osmo_wallet:{osmo_err}", amt_float)
         return jsonify({"error": f"osmo wallet: {osmo_err}"}), 400
     osmo_addr = settings.get("OSMOSIS_ADDRESS")
 
@@ -1796,6 +1879,7 @@ def hotwallet_convert_arkeo_to_usdc():
     try:
         balances = _osmosis_balances_raw(osmo_addr)
     except Exception as e:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", f"osmosis_balances:{e}", amt_float)
         return jsonify({"error": f"osmosis balances: {e}"}), 500
 
     # Gas check
@@ -1808,11 +1892,13 @@ def hotwallet_convert_arkeo_to_usdc():
                 osmo_gas = 0
             break
     if osmo_gas < int(MIN_OSMO_GAS * 1_000_000):
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "insufficient_osmo_gas", amt_float)
         return jsonify({"error": f"insufficient OSMO for gas (need >= {MIN_OSMO_GAS} OSMO)"}), 400
 
     # Denoms
     arkeo_denom = _discover_arkeo_osmo_denom(balances)
     if not arkeo_denom:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "arkeo_denom_missing", amt_float)
         return jsonify({"error": "ARKEO denom on Osmosis not found; ensure pool 2977 available"}), 400
     usdc_denom_override = settings.get("USDC_OSMO_DENOM") or os.getenv("USDC_OSMO_DENOM") or ""
     usdc_denom = usdc_denom_override or ""
@@ -1828,6 +1914,7 @@ def hotwallet_convert_arkeo_to_usdc():
     if not usdc_denom:
         usdc_denom, usdc_avail = _pick_usdc_osmo_denom(balances)
     if not usdc_denom:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "usdc_denom_missing", amt_float)
         return jsonify({"error": "USDC denom not found on Osmosis"}), 400
 
     # ARKEO available
@@ -1840,6 +1927,7 @@ def hotwallet_convert_arkeo_to_usdc():
                 arkeo_avail = 0
             break
     if arkeo_avail < amt_base:
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "insufficient_arkeo", amt_float)
         return jsonify({"error": f"insufficient ARKEO (have {arkeo_avail/1e8:.8f}, need {amt_float:.8f})"}), 400
 
     # Slippage: derive min out from quote (best-effort)
@@ -1892,11 +1980,13 @@ def hotwallet_convert_arkeo_to_usdc():
             swap_tx = m.group(1)
     if not swap_tx:
         _append_hotwallet_log({"action": "convert_arkeo_to_usdc", "stage": "swap_failed", "detail": swap_out})
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "swap_failed", amt_float)
         return jsonify({"error": "swap failed", "detail": swap_out, "swap_cmd": swap_cmd, "swap_exit": swap_code}), 500
 
     ok, tx_log = _wait_for_osmo_tx_success(swap_tx, attempts=10, sleep_s=3)
     if not ok:
         _append_hotwallet_log({"action": "convert_arkeo_to_usdc", "stage": "swap_not_included", "swap_tx": swap_tx, "raw_log": tx_log})
+        _telemetry_hotwallet_error("out", "arkeo_to_usdc", "swap_not_included", amt_float)
         return jsonify({"error": "swap failed on-chain or not included", "swap_tx": swap_tx, "swap_out": swap_out, "raw_log": tx_log}), 500
 
     # Refresh balances and report USDC gained
@@ -1926,6 +2016,12 @@ def hotwallet_convert_arkeo_to_usdc():
             "usdc_delta": usdc_delta,
         }
     )
+    _telemetry_hotwallet_success(
+        "out",
+        "arkeo_to_usdc",
+        amt_float,
+        {"swap_tx": swap_tx, "usdc_delta": usdc_delta},
+    )
 
     return jsonify(
         {
@@ -1952,43 +2048,56 @@ def hotwallet_arkeo_to_osmosis():
     try:
         amt_float = float(amount)
     except Exception:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "amount_invalid")
         return jsonify({"error": "invalid amount"}), 400
     if amt_float <= 0:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "amount_invalid")
         return jsonify({"error": "amount must be > 0"}), 400
     # Treat ARKEO as 8-decimal for this flow to match wrapped ARKEO on Osmosis.
     amt_base = int(round(amt_float * 100_000_000))
 
+    _telemetry_hotwallet_event("out", "arkeo_to_osmosis", amt_float)
+
     if not ARKEO_TO_OSMO_CHANNEL:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "ibc_channel_missing", amt_float)
         return jsonify({"error": "ARKEO_TO_OSMO_CHANNEL not configured"}), 400
 
     settings = _merge_subscriber_settings()
     # Osmosis hot wallet not required; rely on provided Osmosis address (e.g., Keplr) or stored address.
     settings, arkeo_err = _ensure_arkeo_mnemonic(settings)
     if arkeo_err:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", f"arkeo_wallet:{arkeo_err}", amt_float)
         return jsonify({"error": f"arkeo wallet: {arkeo_err}"}), 400
     osmo_addr = payload.get("osmosis_address") or settings.get("OSMOSIS_ADDRESS")
     if not osmo_addr:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "osmosis_address_missing", amt_float)
         return jsonify({"error": "osmosis address required (connect Keplr or set OSMOSIS_ADDRESS)"}), 400
     arkeo_addr, addr_err = derive_address(KEY_NAME, KEYRING)
     if addr_err:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", f"arkeo_address:{addr_err}", amt_float)
         return jsonify({"error": f"arkeo address: {addr_err}"}), 400
 
     # Arkeo balance check
     arkeo_bal, bal_err = _arkeo_balance(arkeo_addr)
     if bal_err:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", f"arkeo_balance:{bal_err}", amt_float)
         return jsonify({"error": f"arkeo balance: {bal_err}"}), 500
     if arkeo_bal < amt_base:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "insufficient_arkeo", amt_float)
         return jsonify({"error": f"insufficient ARKEO (have {arkeo_bal/1e6:.6f}, need {amt_float:.6f})"}), 400
 
     # Osmosis ARKEO denom
     try:
         denoms_res, denom_err = _resolve_osmo_denoms(osmo_addr)
     except Exception as e:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", f"osmosis_denoms:{e}", amt_float)
         return jsonify({"error": f"osmosis denoms: {e}"}), 500
     if denom_err:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", denom_err, amt_float)
         return jsonify({"error": denom_err}), 500
     arkeo_denom = denoms_res.get("arkeo_denom")
     if not arkeo_denom:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "arkeo_denom_missing", amt_float)
         return jsonify({"error": "ARKEO denom on Osmosis not found"}), 400
 
     # Snapshot Osmosis wrapped ARKEO balance
@@ -2114,6 +2223,7 @@ def hotwallet_arkeo_to_osmosis():
                         break
                     time.sleep(0.8)
     except TimeoutError:
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "tx_lock_busy", amt_float)
         return jsonify({"error": "tx lock busy, try again shortly"}), 409
     # Fallback: query Arkeo tx to pull packet info and tx code
     if ibc_tx and not packet_info:
@@ -2141,6 +2251,7 @@ def hotwallet_arkeo_to_osmosis():
 
     if ibc_code != 0 or not ibc_tx:
         _append_hotwallet_log({"action": "arkeo_to_osmosis", "stage": "ibc_failed", "detail": ibc_out})
+        _telemetry_hotwallet_error("out", "arkeo_to_osmosis", "ibc_failed", amt_float)
         return (
             jsonify(
                 {
@@ -2196,6 +2307,12 @@ def hotwallet_arkeo_to_osmosis():
             "tx_code": tx_code,
             "tx_raw_log": tx_raw_log,
         }
+    )
+    _telemetry_hotwallet_success(
+        "out",
+        "arkeo_to_osmosis",
+        amt_float,
+        {"ibc_tx": ibc_tx, "arrival_confirmed": arrived},
     )
 
     return jsonify(
@@ -2914,6 +3031,365 @@ def _require_auth():
 def _timestamp() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+def _telemetry_log(msg: str) -> None:
+    try:
+        if _safe_bool(os.getenv("POSTHOG_DEBUG"), False):
+            print(f"[telemetry] {msg}", flush=True)
+    except Exception:
+        pass
+
+
+def _telemetry_enabled() -> bool:
+    if not POSTHOG_API_KEY:
+        return False
+    if POSTHOG_ENABLED is None:
+        return True
+    return _safe_bool(POSTHOG_ENABLED, True)
+
+
+def _telemetry_timeout() -> float:
+    return _safe_float(os.getenv("POSTHOG_TIMEOUT", "2.0"), 2.0)
+
+
+def _telemetry_host() -> str:
+    host = POSTHOG_HOST or "https://app.posthog.com"
+    if not host.startswith(("http://", "https://")):
+        host = f"https://{host}"
+    return host.rstrip("/")
+
+
+def _telemetry_load_state() -> dict:
+    if not TELEMETRY_PATH or not os.path.isfile(TELEMETRY_PATH):
+        return {}
+    try:
+        with open(TELEMETRY_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _telemetry_save_state(state: dict) -> None:
+    if not TELEMETRY_PATH:
+        return
+    try:
+        os.makedirs(os.path.dirname(TELEMETRY_PATH), exist_ok=True)
+        with open(TELEMETRY_PATH, "w", encoding="utf-8") as f:
+            json.dump(state, f, indent=2)
+    except Exception:
+        pass
+
+
+def _telemetry_wallet_address() -> str:
+    addr = ""
+    try:
+        settings = _load_subscriber_settings_file()
+        if isinstance(settings, dict):
+            addr = (
+                settings.get("KEY_ADDRESS")
+                or settings.get("key_address")
+                or settings.get("address")
+                or ""
+            )
+    except Exception:
+        addr = ""
+    if not addr:
+        try:
+            addr, err = derive_address(KEY_NAME, KEYRING)
+            if err:
+                addr = ""
+        except Exception:
+            addr = ""
+    return addr
+
+
+def _telemetry_app_version() -> str:
+    return (os.getenv("APP_VERSION") or "").strip() or "dev"
+
+
+def _telemetry_base_props() -> dict:
+    state = _telemetry_load_state()
+    install_id = state.get("install_id") or _telemetry_get_install_id()
+    wallet_addr = state.get("wallet_address") or state.get("arkeo_address") or ""
+    if not wallet_addr:
+        wallet_addr = _telemetry_wallet_address()
+        if wallet_addr:
+            state["wallet_address"] = wallet_addr
+            _telemetry_save_state(state)
+    props = {
+        "install_id": install_id,
+        "app_version": _telemetry_app_version(),
+        "chain_id": CHAIN_ID,
+    }
+    if wallet_addr:
+        props["wallet_address"] = wallet_addr
+        props["arkeo_address"] = wallet_addr
+    return props
+
+
+def _telemetry_capture(event: str, distinct_id: str, properties: dict | None = None) -> bool:
+    if not _telemetry_enabled():
+        return False
+    props = dict(properties) if isinstance(properties, dict) else {}
+    base_props = _telemetry_base_props()
+    for key, value in base_props.items():
+        if key not in props:
+            props[key] = value
+    payload = {
+        "api_key": POSTHOG_API_KEY,
+        "event": event,
+        "distinct_id": distinct_id,
+        "properties": props,
+    }
+    data = json.dumps(payload).encode("utf-8")
+    url = f"{_telemetry_host()}/capture"
+
+    def _send() -> None:
+        try:
+            req = urllib.request.Request(
+                url,
+                data=data,
+                headers={"Content-Type": "application/json"},
+            )
+            with urllib.request.urlopen(req, timeout=_telemetry_timeout()) as resp:
+                resp.read()
+            _telemetry_log(f"sent {event} distinct_id={distinct_id}")
+        except Exception as e:
+            _telemetry_log(f"send failed {event}: {e}")
+
+    threading.Thread(target=_send, daemon=True).start()
+    return True
+
+
+def _telemetry_get_install_id() -> str:
+    state = _telemetry_load_state()
+    install_id = state.get("install_id")
+    if not install_id:
+        install_id = str(uuid.uuid4())
+        state["install_id"] = install_id
+        state.setdefault("first_seen_at", _timestamp())
+        _telemetry_save_state(state)
+    return install_id
+
+
+def _telemetry_distinct_id() -> str:
+    return f"subscriber:{_telemetry_get_install_id()}"
+
+
+def _telemetry_error_key(event: str, detail: str | None, scope: str | None = None) -> str:
+    base = f"{event}:{scope or ''}:{detail or ''}"
+    base = re.sub(r"\s+", " ", base).strip()
+    if len(base) > 200:
+        base = base[:200]
+    return base
+
+
+def _telemetry_should_send_error(key: str) -> bool:
+    if not key:
+        return False
+    state = _telemetry_load_state()
+    throttles = state.get("error_throttle")
+    if not isinstance(throttles, dict):
+        throttles = {}
+    now = time.time()
+    try:
+        last = float(throttles.get(key) or 0)
+    except Exception:
+        last = 0.0
+    if last and (now - last) < TELEMETRY_ERROR_THROTTLE_SECONDS:
+        return False
+    throttles[key] = now
+    state["error_throttle"] = throttles
+    _telemetry_save_state(state)
+    return True
+
+
+def _telemetry_error(event: str, detail: str, properties: dict | None = None, scope: str | None = None) -> bool:
+    if not _telemetry_enabled():
+        return False
+    key = _telemetry_error_key(event, detail, scope)
+    if not _telemetry_should_send_error(key):
+        return False
+    props = dict(properties) if isinstance(properties, dict) else {}
+    props["error"] = detail
+    return _telemetry_capture(event, _telemetry_distinct_id(), props)
+
+
+def _telemetry_hotwallet_log(event: str, props: dict) -> None:
+    entry = {"action": "telemetry", "stage": "queued", "event": event}
+    for key in ("direction", "status", "stage", "error_summary", "amount", "txhash", "source"):
+        if key in props:
+            entry[key] = props[key]
+    _append_hotwallet_log(entry)
+
+
+def _telemetry_hotwallet_direction(direction: str, kind: str | None = None) -> str:
+    dir_val = str(direction or "").strip().lower()
+    if dir_val in ("arkeo_to_osmosis", "osmosis_to_arkeo"):
+        return dir_val
+    kind_val = str(kind or "").strip().lower()
+    if kind_val in ("usdc_to_arkeo", "arkeo_from_osmosis"):
+        return "osmosis_to_arkeo"
+    if kind_val in ("arkeo_to_usdc", "arkeo_to_osmosis"):
+        return "arkeo_to_osmosis"
+    if dir_val == "in":
+        return "osmosis_to_arkeo"
+    if dir_val == "out":
+        return "arkeo_to_osmosis"
+    return dir_val or "unknown"
+
+
+def _emit_hotwallet_transfer(
+    direction: str,
+    status: str,
+    amount: float | None = None,
+    txhash: str | None = None,
+    source: str = "backend",
+) -> None:
+    if not _telemetry_enabled():
+        return
+    event = "hotwallet_transfer"
+    props = {"direction": direction, "status": status, "source": source}
+    if amount is not None:
+        props["amount"] = amount
+    if txhash:
+        props["txhash"] = txhash
+    _telemetry_hotwallet_log(event, props)
+    _telemetry_capture(event, _telemetry_distinct_id(), props)
+
+def _emit_hotwallet_transfer_failed(
+    direction: str,
+    stage: str,
+    error_summary: str,
+    amount: float | None = None,
+    txhash: str | None = None,
+    source: str = "backend",
+) -> None:
+    if not _telemetry_enabled():
+        return
+    event = "hotwallet_transfer_failed"
+    key = _telemetry_error_key(
+        "hotwallet_transfer_failed",
+        f"{stage}:{error_summary}",
+        scope=direction,
+    )
+    if not _telemetry_should_send_error(key):
+        return
+    props = {
+        "direction": direction,
+        "stage": stage,
+        "error_summary": error_summary,
+        "source": source,
+    }
+    if amount is not None:
+        props["amount"] = amount
+    if txhash:
+        props["txhash"] = txhash
+    _telemetry_hotwallet_log(event, props)
+    _telemetry_capture(event, _telemetry_distinct_id(), props)
+
+
+def _telemetry_hotwallet_event(direction: str, kind: str, amount: float | None = None, extra: dict | None = None) -> None:
+    if not _telemetry_enabled():
+        return
+    dir_val = _telemetry_hotwallet_direction(direction, kind)
+    source = "backend"
+    txhash = None
+    if isinstance(extra, dict):
+        source = str(extra.get("source") or source)
+        txhash = extra.get("txhash") or extra.get("tx_hash")
+    _emit_hotwallet_transfer(dir_val, "start", amount, txhash, source)
+
+
+def _telemetry_hotwallet_success(direction: str, kind: str, amount: float | None = None, extra: dict | None = None) -> None:
+    if not _telemetry_enabled():
+        return
+    dir_val = _telemetry_hotwallet_direction(direction, kind)
+    source = "backend"
+    txhash = None
+    if isinstance(extra, dict):
+        source = str(extra.get("source") or source)
+        txhash = extra.get("txhash") or extra.get("tx_hash") or extra.get("swap_tx") or extra.get("ibc_tx")
+    _emit_hotwallet_transfer(dir_val, "submitted", amount, txhash, source)
+
+
+def _telemetry_hotwallet_error(direction: str, kind: str, detail: str, amount: float | None = None, extra: dict | None = None) -> None:
+    if not _telemetry_enabled():
+        return
+    dir_val = _telemetry_hotwallet_direction(direction, kind)
+    source = "backend"
+    txhash = None
+    stage = ""
+    error_summary = ""
+    if isinstance(extra, dict):
+        source = str(extra.get("source") or source)
+        txhash = extra.get("txhash") or extra.get("tx_hash") or extra.get("swap_tx") or extra.get("ibc_tx")
+        stage = str(extra.get("stage") or "").strip()
+        error_summary = str(extra.get("error_summary") or "").strip()
+    detail_str = str(detail or "").strip() or "unknown"
+    if not stage or not error_summary:
+        if ":" in detail_str:
+            head, tail = detail_str.split(":", 1)
+            if not stage:
+                stage = head.strip() or detail_str
+            if not error_summary:
+                error_summary = tail.strip() or detail_str
+        else:
+            stage = stage or detail_str
+            error_summary = error_summary or detail_str
+    _emit_hotwallet_transfer_failed(dir_val, stage, error_summary, amount, txhash, source)
+
+
+def _telemetry_bootstrap() -> None:
+    if not _telemetry_enabled():
+        return
+    state = _telemetry_load_state()
+    now = _timestamp()
+    install_id = state.get("install_id")
+    if not install_id:
+        install_id = _telemetry_get_install_id()
+        state = _telemetry_load_state()
+    first_seen = state.get("first_seen_at") or now
+    last_version = state.get("last_version") or ""
+    app_version = (os.getenv("APP_VERSION") or "").strip() or "dev"
+    wallet_addr = _telemetry_wallet_address()
+    distinct_id = f"subscriber:{install_id}"
+
+    base_props = {
+        "app_version": app_version,
+        "install_id": install_id,
+        "arkeo_address": wallet_addr or "",
+        "chain_id": CHAIN_ID,
+        "arkeo_node": ARKEOD_NODE,
+        "event_source": "subscriber-core",
+    }
+    if wallet_addr:
+        base_props["$set_once"] = {"arkeo_address": wallet_addr}
+
+    if not state.get("install_id"):
+        _telemetry_capture(
+            "subscriber_install",
+            distinct_id,
+            {**base_props, "first_seen_at": first_seen},
+        )
+
+    if last_version and last_version != app_version:
+        _telemetry_capture(
+            "subscriber_upgrade",
+            distinct_id,
+            {**base_props, "from_version": last_version, "to_version": app_version},
+        )
+
+    _telemetry_capture("subscriber_start", distinct_id, base_props)
+
+    state["install_id"] = install_id
+    state["first_seen_at"] = first_seen
+    state["last_seen_at"] = now
+    state["last_version"] = app_version
+    if wallet_addr:
+        state["wallet_address"] = wallet_addr
+    _telemetry_save_state(state)
+
 
 def derive_pubkeys(user: str, keyring_backend: str) -> tuple[str, str, str | None]:
     """Return (raw_pubkey, bech32_pubkey, error)."""
@@ -3288,6 +3764,16 @@ def osmosis_quote_usdc_to_arkeo():
         return jsonify({"error": "invalid amount"}), 400
     quote, err = _osmosis_quote_usdc_to_arkeo(amt_f)
     if err:
+        if custom_top is not None:
+            _telemetry_error(
+                "provider_service_add_failed",
+                err,
+                {
+                    "listener_id": listener_id,
+                    "service_id": payload.get("service_id") or payload.get("service") or "",
+                },
+                scope=str(listener_id),
+            )
         return jsonify({"error": err}), 400
     return jsonify(quote or {})
 
@@ -8878,6 +9364,19 @@ def create_listener():
     data["listeners"] = listeners
     data["fetched_at"] = now
     _write_listeners(data)
+    if _telemetry_enabled():
+        _telemetry_capture(
+            "listener_added",
+            _telemetry_distinct_id(),
+            {
+                "listener_id": raw_entry.get("id"),
+                "listener_port": port,
+                "service_id": raw_entry.get("service_id") or "",
+                "location": raw_entry.get("location") or "",
+                "status": raw_entry.get("status") or "",
+                "top_services_count": len(raw_entry.get("top_services") or []),
+            },
+        )
     return jsonify({"listener": _enrich_listener_for_response(raw_entry), "next_port": _next_available_port(used_ports | {port})})
 
 
@@ -8886,6 +9385,8 @@ def update_listener(listener_id: str):
     payload = request.get_json(silent=True) or {}
     payload_top_services = payload.get("top_services") if isinstance(payload, dict) else None
     custom_top = payload_top_services if isinstance(payload_top_services, list) else None
+    added_provider_services: list[dict] = []
+    removed_provider_services: list[dict] = []
     data = _ensure_listeners_file()
     listeners = data.get("listeners") if isinstance(data, dict) else []
     if not isinstance(listeners, list):
@@ -8969,7 +9470,40 @@ def update_listener(listener_id: str):
         updated = l
         break
     if updated is None:
+        if custom_top is not None:
+            _telemetry_error(
+                "provider_service_add_failed",
+                "listener_not_found",
+                {"listener_id": listener_id},
+                scope=str(listener_id),
+            )
         return jsonify({"error": "listener not found"}), 404
+    if custom_top is not None and old_snapshot:
+        def _top_service_key(item: dict, fallback_sid: str | None) -> str | None:
+            if not isinstance(item, dict):
+                return None
+            pk = item.get("provider_pubkey") or item.get("pubkey") or ""
+            sid = item.get("service_id") or item.get("service") or fallback_sid or ""
+            if not pk:
+                return None
+            return f"{pk}::{sid}"
+
+        old_top = old_snapshot.get("top_services") if isinstance(old_snapshot.get("top_services"), list) else []
+        new_top = updated.get("top_services") if isinstance(updated.get("top_services"), list) else []
+        old_map: dict[str, dict] = {}
+        new_map: dict[str, dict] = {}
+        for ts in old_top:
+            key = _top_service_key(ts, old_snapshot.get("service_id"))
+            if key:
+                old_map[key] = ts
+        for ts in new_top:
+            key = _top_service_key(ts, updated.get("service_id"))
+            if key:
+                new_map[key] = ts
+        added_keys = set(new_map.keys()) - set(old_map.keys())
+        removed_keys = set(old_map.keys()) - set(new_map.keys())
+        added_provider_services = [new_map[k] for k in added_keys]
+        removed_provider_services = [old_map[k] for k in removed_keys]
     old_port = None
     old_status = None
     if old_snapshot:
@@ -8980,6 +9514,13 @@ def update_listener(listener_id: str):
         old_status = old_snapshot.get("status")
     ok, err = _ensure_listener_runtime(updated, previous_port=old_port, previous_status=old_status, previous_entry=old_snapshot)
     if not ok:
+        if custom_top is not None:
+            _telemetry_error(
+                "provider_service_add_failed",
+                err or "listener_runtime_failed",
+                {"listener_id": listener_id, "service_id": updated.get("service_id") or ""},
+                scope=str(listener_id),
+            )
         if old_snapshot is not None:
             # revert the in-memory entry to its previous state to avoid persisting a broken change
             updated.clear()
@@ -9034,11 +9575,58 @@ def update_listener(listener_id: str):
             persisted = l
             break
         if persisted is None:
+            if custom_top is not None:
+                _telemetry_error(
+                    "provider_service_add_failed",
+                    "listener_not_found",
+                    {"listener_id": listener_id},
+                    scope=str(listener_id),
+                )
             return jsonify({"error": "listener not found"}), 404
         fresh_listeners.sort(key=lambda x: x.get("port") if isinstance(x, dict) else 0)
         fresh["listeners"] = fresh_listeners
         _write_listeners(fresh)
         used_ports = _collect_used_ports(fresh_listeners)
+        if (added_provider_services or removed_provider_services) and _telemetry_enabled():
+            distinct_id = _telemetry_distinct_id()
+            for ts in added_provider_services:
+                if not isinstance(ts, dict):
+                    continue
+                pk = ts.get("provider_pubkey") or ts.get("pubkey") or ""
+                if not pk:
+                    continue
+                sid = ts.get("service_id") or ts.get("service") or persisted.get("service_id") or ""
+                mon = ts.get("provider_moniker") or ""
+                _telemetry_capture(
+                    "provider_service_added",
+                    distinct_id,
+                    {
+                        "listener_id": listener_id,
+                        "listener_port": persisted.get("port"),
+                        "service_id": sid,
+                        "provider_pubkey": pk,
+                        "provider_moniker": mon,
+                    },
+                )
+            for ts in removed_provider_services:
+                if not isinstance(ts, dict):
+                    continue
+                pk = ts.get("provider_pubkey") or ts.get("pubkey") or ""
+                if not pk:
+                    continue
+                sid = ts.get("service_id") or ts.get("service") or persisted.get("service_id") or ""
+                mon = ts.get("provider_moniker") or ""
+                _telemetry_capture(
+                    "provider_service_removed",
+                    distinct_id,
+                    {
+                        "listener_id": listener_id,
+                        "listener_port": persisted.get("port"),
+                        "service_id": sid,
+                        "provider_pubkey": pk,
+                        "provider_moniker": mon,
+                    },
+                )
         return jsonify({"listener": _enrich_listener_for_response(persisted), "next_port": _next_available_port(used_ports)})
 
 
@@ -9075,6 +9663,18 @@ def delete_listener(listener_id: str):
     data["listeners"] = new_list
     data["fetched_at"] = _timestamp()
     _write_listeners(data)
+    if removed_entry and _telemetry_enabled():
+        _telemetry_capture(
+            "listener_removed",
+            _telemetry_distinct_id(),
+            {
+                "listener_id": removed_entry.get("id"),
+                "listener_port": removed_entry.get("port"),
+                "service_id": removed_entry.get("service_id") or "",
+                "location": removed_entry.get("location") or "",
+                "status": removed_entry.get("status") or "",
+            },
+        )
     used_ports = _collect_used_ports(new_list)
     return jsonify({"status": "ok", "next_port": _next_available_port(used_ports)})
 
@@ -10233,6 +10833,8 @@ _bootstrap_thread = threading.Thread(target=_bootstrap_listeners_from_cache, dae
 _bootstrap_thread.start()
 _recheck_thread = threading.Thread(target=_down_provider_recheck_loop, daemon=True)
 _recheck_thread.start()
+_telemetry_thread = threading.Thread(target=_telemetry_bootstrap, daemon=True)
+_telemetry_thread.start()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=API_PORT)

@@ -2,6 +2,7 @@
 import json
 import logging
 import os
+import hashlib
 import re
 import shutil
 import shlex
@@ -15,6 +16,7 @@ import urllib.parse
 import yaml
 import datetime
 import threading
+import uuid
 from contextlib import contextmanager
 from flask import Flask, jsonify, request
 
@@ -53,6 +55,7 @@ DEFAULT_SENTINEL_PORT = "3636"
 DEFAULT_ADMIN_PORT = "8080"
 DEFAULT_ADMIN_API_PORT = "9999"
 DEFAULT_MNEMONIC = ""
+APP_VERSION = (os.getenv("APP_VERSION") or "").strip() or "dev"
 
 ARKEOD_HOME = os.path.expanduser(os.getenv("ARKEOD_HOME", DEFAULT_ARKEOD_HOME))
 KEY_NAME = os.getenv("KEY_NAME", DEFAULT_KEY_NAME)
@@ -129,6 +132,12 @@ PROVIDER_SETTINGS_PATH = os.getenv("PROVIDER_SETTINGS_PATH") or (
 )
 ADMIN_PASSWORD_PATH = os.getenv("ADMIN_PASSWORD_PATH") or (
     os.path.join(CACHE_DIR or "/app/cache", "admin_password.txt")
+)
+TELEMETRY_ENABLED = os.getenv("TELEMETRY_ENABLED", "true").strip().lower() not in ("0", "false", "no", "off")
+POSTHOG_API_KEY = "phc_HkXCuAWRwKeBUvLYjMqHflaXEC5Xh0oGqLUTAsNI33R"
+POSTHOG_HOST = "https://app.posthog.com"
+TELEMETRY_PATH = os.getenv("TELEMETRY_PATH") or (
+    os.path.join(CONFIG_DIR or "/app/config", "telemetry.json")
 )
 ADMIN_SESSION_SECRET = os.getenv("ADMIN_SESSION_SECRET") or secrets.token_hex(16)
 ADMIN_SESSION_NAME = os.getenv("ADMIN_SESSION_NAME") or "admin_session"
@@ -875,6 +884,10 @@ def _summarize_output(out: str, limit: int = 1200) -> str:
     return text.replace("\n", "\\n")
 
 
+def _error_summary(value: str, limit: int = 600) -> str:
+    return _summarize_output(str(value or ""), limit)
+
+
 def _log_tx_result(label: str, exit_code: int, out: str) -> str | None:
     txhash = _extract_txhash(out or "")
     summary = _summarize_output(out)
@@ -916,6 +929,358 @@ def _log_tx_height_async(label: str, txhash: str | None, attempts: int = 12, del
             app.logger.info("%s height=pending txhash=%s", label, txhash)
 
     threading.Thread(target=_worker, daemon=True).start()
+
+
+def _telemetry_active() -> bool:
+    return bool(TELEMETRY_ENABLED and POSTHOG_API_KEY and POSTHOG_HOST)
+
+
+def _load_telemetry_state() -> dict:
+    try:
+        with open(TELEMETRY_PATH, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def _write_telemetry_state(state: dict) -> None:
+    try:
+        dir_path = os.path.dirname(TELEMETRY_PATH)
+        if dir_path:
+            os.makedirs(dir_path, exist_ok=True)
+        with open(TELEMETRY_PATH, "w", encoding="utf-8") as f:
+            json.dump(state, f)
+    except Exception:
+        pass
+
+
+def _telemetry_wallet_address() -> str | None:
+    try:
+        addr, err = derive_address(KEY_NAME, KEYRING)
+        if err:
+            return None
+        return addr.strip() or None
+    except Exception:
+        return None
+
+
+def _posthog_capture(event: str, distinct_id: str, properties: dict | None = None) -> None:
+    if not _telemetry_active():
+        return
+    props = dict(properties or {})
+    props["distinct_id"] = distinct_id
+    payload = json.dumps(
+        {"api_key": POSTHOG_API_KEY, "event": event, "properties": props},
+        separators=(",", ":"),
+    ).encode("utf-8")
+    url = f"{POSTHOG_HOST}/capture/"
+    try:
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=2).read()
+    except Exception:
+        pass
+
+
+def _posthog_capture_async(event: str, distinct_id: str, properties: dict | None = None) -> None:
+    threading.Thread(
+        target=_posthog_capture,
+        args=(event, distinct_id, properties),
+        daemon=True,
+    ).start()
+
+
+def _emit_startup_telemetry() -> None:
+    if not _telemetry_active():
+        return
+    state = _load_telemetry_state()
+    install_id = state.get("install_id") or str(uuid.uuid4())
+    distinct_id = f"provider:{install_id}"
+    wallet_address = _telemetry_wallet_address()
+    base_props = {
+        "install_id": install_id,
+        "app_version": APP_VERSION,
+        "chain_id": CHAIN_ID,
+    }
+    if wallet_address:
+        base_props["wallet_address"] = wallet_address
+
+    first_seen = state.get("first_seen_version")
+    last_seen = state.get("last_seen_version")
+
+    if not first_seen:
+        _posthog_capture_async("provider_install", distinct_id, base_props)
+        state["first_seen_version"] = APP_VERSION
+
+    if last_seen and last_seen != APP_VERSION:
+        upgrade_props = dict(base_props)
+        upgrade_props["from_version"] = last_seen
+        upgrade_props["to_version"] = APP_VERSION
+        _posthog_capture_async("provider_upgrade", distinct_id, upgrade_props)
+
+    _posthog_capture_async("provider_start", distinct_id, base_props)
+
+    state["install_id"] = install_id
+    state["last_seen_version"] = APP_VERSION
+    if wallet_address:
+        state["wallet_address"] = wallet_address
+    _write_telemetry_state(state)
+
+
+def _emit_wallet_telemetry_if_needed() -> None:
+    if not _telemetry_active():
+        return
+    state = _load_telemetry_state()
+    install_id = state.get("install_id") or str(uuid.uuid4())
+    wallet_address = _telemetry_wallet_address()
+    if not wallet_address:
+        if state.get("install_id") != install_id:
+            state["install_id"] = install_id
+            _write_telemetry_state(state)
+        return
+    if state.get("wallet_address") == wallet_address:
+        if state.get("install_id") != install_id:
+            state["install_id"] = install_id
+            _write_telemetry_state(state)
+        return
+    props = {
+        "install_id": install_id,
+        "app_version": APP_VERSION,
+        "chain_id": CHAIN_ID,
+        "wallet_address": wallet_address,
+    }
+    _posthog_capture_async("provider_wallet_bound", f"provider:{install_id}", props)
+    state["install_id"] = install_id
+    state["wallet_address"] = wallet_address
+    _write_telemetry_state(state)
+
+
+def _telemetry_install_id() -> str | None:
+    if not _telemetry_active():
+        return None
+    state = _load_telemetry_state()
+    install_id = state.get("install_id") or str(uuid.uuid4())
+    if state.get("install_id") != install_id:
+        state["install_id"] = install_id
+        _write_telemetry_state(state)
+    return install_id
+
+
+def _telemetry_hash(text: str) -> str:
+    raw = (text or "").encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()[:12]
+
+
+def _telemetry_throttle_allow(key: str, cooldown_s: int = 300) -> bool:
+    state = _load_telemetry_state()
+    last_events = state.get("last_events")
+    if not isinstance(last_events, dict):
+        last_events = {}
+    now = int(time.time())
+    last_ts = last_events.get(key)
+    if isinstance(last_ts, (int, float)) and now - int(last_ts) < cooldown_s:
+        return False
+    last_events[key] = now
+    if len(last_events) > 200:
+        items = sorted(last_events.items(), key=lambda x: x[1], reverse=True)
+        last_events = dict(items[:200])
+    state["last_events"] = last_events
+    _write_telemetry_state(state)
+    return True
+
+
+def _emit_provider_service_failed(
+    stage: str,
+    service: str | None,
+    resolved_service: str | None,
+    error: str,
+    exit_code: int | None = None,
+    txhash: str | None = None,
+    extra: dict | None = None,
+) -> None:
+    install_id = _telemetry_install_id()
+    if not install_id:
+        return
+    err_summary = _error_summary(error)
+    key = "|".join(
+        [
+            "provider_service_failed",
+            stage or "",
+            service or "",
+            resolved_service or "",
+            _telemetry_hash(err_summary),
+        ]
+    )
+    if not _telemetry_throttle_allow(key):
+        return
+    props = {
+        "install_id": install_id,
+        "app_version": APP_VERSION,
+        "chain_id": CHAIN_ID,
+        "stage": stage,
+        "error_summary": err_summary,
+    }
+    if service:
+        props["service"] = service
+    if resolved_service:
+        props["resolved_service"] = resolved_service
+    if exit_code is not None:
+        props["exit_code"] = exit_code
+    if txhash:
+        props["txhash"] = txhash
+    wallet_address = _telemetry_wallet_address()
+    if wallet_address:
+        props["wallet_address"] = wallet_address
+    if extra:
+        props.update(extra)
+    _posthog_capture_async("provider_service_failed", f"provider:{install_id}", props)
+
+
+def _emit_sentinel_rebuild_failed(error: str, target: dict | None = None, extra: dict | None = None) -> None:
+    install_id = _telemetry_install_id()
+    if not install_id:
+        return
+    err_summary = _error_summary(error)
+    name = ""
+    sid = ""
+    if isinstance(target, dict):
+        name = str(target.get("name") or target.get("service") or target.get("type") or "")
+        sid = str(target.get("id") or target.get("service_id") or target.get("service") or "")
+    key = "|".join(
+        [
+            "sentinel_rebuild_failed",
+            name,
+            sid,
+            _telemetry_hash(err_summary),
+        ]
+    )
+    if not _telemetry_throttle_allow(key):
+        return
+    props = {
+        "install_id": install_id,
+        "app_version": APP_VERSION,
+        "chain_id": CHAIN_ID,
+        "error_summary": err_summary,
+    }
+    if isinstance(target, dict):
+        status = target.get("status")
+        if name:
+            props["service"] = str(name)
+        if sid is not None:
+            props["service_id"] = str(sid)
+        if status is not None:
+            props["status"] = str(status)
+    wallet_address = _telemetry_wallet_address()
+    if wallet_address:
+        props["wallet_address"] = wallet_address
+    if extra:
+        props.update(extra)
+    _posthog_capture_async("sentinel_rebuild_failed", f"provider:{install_id}", props)
+
+
+def _emit_provider_settings_failed(stage: str, error: str) -> None:
+    install_id = _telemetry_install_id()
+    if not install_id:
+        return
+    err_summary = _error_summary(error)
+    key = "|".join(
+        [
+            "provider_settings_failed",
+            stage or "",
+            _telemetry_hash(err_summary),
+        ]
+    )
+    if not _telemetry_throttle_allow(key):
+        return
+    props = {
+        "install_id": install_id,
+        "app_version": APP_VERSION,
+        "chain_id": CHAIN_ID,
+        "stage": stage,
+        "error_summary": err_summary,
+    }
+    wallet_address = _telemetry_wallet_address()
+    if wallet_address:
+        props["wallet_address"] = wallet_address
+    _posthog_capture_async("provider_settings_failed", f"provider:{install_id}", props)
+
+
+def _emit_hotwallet_transfer(
+    direction: str,
+    status: str,
+    amount: float | None = None,
+    txhash: str | None = None,
+    extra: dict | None = None,
+) -> None:
+    install_id = _telemetry_install_id()
+    if not install_id or not direction or not status:
+        return
+    props = {
+        "install_id": install_id,
+        "app_version": APP_VERSION,
+        "chain_id": CHAIN_ID,
+        "direction": direction,
+        "status": status,
+    }
+    if amount is not None:
+        try:
+            props["amount"] = float(amount)
+        except Exception:
+            pass
+    if txhash:
+        props["txhash"] = txhash
+    wallet_address = _telemetry_wallet_address()
+    if wallet_address:
+        props["wallet_address"] = wallet_address
+    if extra:
+        props.update(extra)
+    _posthog_capture_async("hotwallet_transfer", f"provider:{install_id}", props)
+
+
+def _emit_hotwallet_transfer_failed(
+    direction: str,
+    stage: str,
+    error: str,
+    amount: float | None = None,
+    txhash: str | None = None,
+    extra: dict | None = None,
+) -> None:
+    install_id = _telemetry_install_id()
+    if not install_id or not direction:
+        return
+    err_summary = _error_summary(error)
+    key = "|".join(
+        [
+            "hotwallet_transfer_failed",
+            direction or "",
+            stage or "",
+            _telemetry_hash(err_summary),
+        ]
+    )
+    if not _telemetry_throttle_allow(key):
+        return
+    props = {
+        "install_id": install_id,
+        "app_version": APP_VERSION,
+        "chain_id": CHAIN_ID,
+        "direction": direction,
+        "error_summary": err_summary,
+    }
+    if stage:
+        props["stage"] = stage
+    if amount is not None:
+        try:
+            props["amount"] = float(amount)
+        except Exception:
+            pass
+    if txhash:
+        props["txhash"] = txhash
+    wallet_address = _telemetry_wallet_address()
+    if wallet_address:
+        props["wallet_address"] = wallet_address
+    if extra:
+        props.update(extra)
+    _posthog_capture_async("hotwallet_transfer_failed", f"provider:{install_id}", props)
 
 
 def _parse_send_packet(data: dict) -> dict | None:
@@ -1834,9 +2199,8 @@ def ping():
 
 @app.get("/api/version")
 def version():
-    app_version = (os.getenv("APP_VERSION") or "").strip() or "dev"
     code, out = run("arkeod version")
-    response = {"app_version": app_version}
+    response = {"app_version": APP_VERSION}
     if code != 0:
         detail = out.strip()
         response["arkeod_error"] = detail or "failed to get arkeod version"
@@ -2014,6 +2378,48 @@ def hotwallet_log_note():
     return jsonify({"ok": True})
 
 
+@app.post("/api/hotwallet/telemetry")
+def hotwallet_telemetry():
+    """Lightweight UI -> API telemetry for hotwallet actions."""
+    payload = request.get_json(silent=True) or {}
+    direction = (payload.get("direction") or "").strip()
+    status = (payload.get("status") or "").strip()
+    stage = (payload.get("stage") or "").strip()
+    error = payload.get("error") or payload.get("detail") or ""
+    amount = payload.get("amount")
+    txhash = (payload.get("txhash") or payload.get("tx_hash") or "").strip()
+    source = (payload.get("source") or "ui").strip() or "ui"
+    if direction not in ("arkeo_to_osmosis", "osmosis_to_arkeo"):
+        return jsonify({"error": "invalid direction"}), 400
+    if status not in ("start", "submitted", "failed"):
+        return jsonify({"error": "invalid status"}), 400
+    amount_f = None
+    if amount is not None:
+        try:
+            amount_f = float(amount)
+        except Exception:
+            amount_f = None
+    extra = {"source": source}
+    if status == "failed":
+        _emit_hotwallet_transfer_failed(
+            direction,
+            stage or "ui",
+            error or "unknown error",
+            amount=amount_f,
+            txhash=txhash or None,
+            extra=extra,
+        )
+    else:
+        _emit_hotwallet_transfer(
+            direction,
+            status,
+            amount=amount_f,
+            txhash=txhash or None,
+            extra=extra,
+        )
+    return jsonify({"ok": True})
+
+
 @app.post("/api/hotwallet/arkeo-to-osmosis")
 def hotwallet_arkeo_to_osmosis():
     """
@@ -2021,39 +2427,100 @@ def hotwallet_arkeo_to_osmosis():
     """
     payload = request.get_json(silent=True) or {}
     amount = payload.get("amount")
+    direction = "arkeo_to_osmosis"
+    telemetry_extra = {"source": "backend"}
+    amt_float: float | None = None
     try:
         amt_float = float(amount)
     except Exception:
+        _emit_hotwallet_transfer_failed(direction, "validation", "invalid amount", extra=telemetry_extra)
         return jsonify({"error": "invalid amount"}), 400
     if amt_float <= 0:
+        _emit_hotwallet_transfer_failed(direction, "validation", "amount must be > 0", amount=amt_float, extra=telemetry_extra)
         return jsonify({"error": "amount must be > 0"}), 400
     amt_base = int(round(amt_float * 100_000_000))
 
     if not ARKEO_TO_OSMO_CHANNEL:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "config",
+            "ARKEO_TO_OSMO_CHANNEL not configured",
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": "ARKEO_TO_OSMO_CHANNEL not configured"}), 400
 
     settings = _merge_provider_settings()
     osmo_addr = payload.get("osmosis_address") or settings.get("OSMOSIS_ADDRESS")
     if not osmo_addr:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "validation",
+            "osmosis address required",
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": "osmosis address required (connect Keplr or set OSMOSIS_ADDRESS)"}), 400
     arkeo_addr, addr_err = derive_address(KEY_NAME, KEYRING)
     if addr_err:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "arkeo_address",
+            f"arkeo address: {addr_err}",
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": f"arkeo address: {addr_err}"}), 400
 
     arkeo_bal, bal_err = _arkeo_balance(arkeo_addr)
     if bal_err:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "balance",
+            f"arkeo balance: {bal_err}",
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": f"arkeo balance: {bal_err}"}), 500
     if arkeo_bal < amt_base:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "balance",
+            "insufficient ARKEO",
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": f"insufficient ARKEO (have {arkeo_bal/1e6:.6f}, need {amt_float:.6f})"}), 400
 
     try:
         denoms_res, denom_err = _resolve_osmo_denoms(osmo_addr)
     except Exception as e:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "osmosis_denoms",
+            str(e),
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": f"osmosis denoms: {e}"}), 500
     if denom_err:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "osmosis_denoms",
+            denom_err,
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": denom_err}), 500
     arkeo_denom = denoms_res.get("arkeo_denom")
     if not arkeo_denom:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "osmosis_denoms",
+            "ARKEO denom on Osmosis not found",
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": "ARKEO denom on Osmosis not found"}), 400
 
     osmo_balances = _osmosis_balances_raw(osmo_addr)
@@ -2066,6 +2533,7 @@ def hotwallet_arkeo_to_osmosis():
                 osmo_start = 0
             break
 
+    _emit_hotwallet_transfer(direction, "start", amount=amt_float, extra=telemetry_extra)
     _append_hotwallet_log({"action": "arkeo_to_osmosis", "stage": "start", "amount": amt_float})
 
     retry_sequence = None
@@ -2201,9 +2669,29 @@ def hotwallet_arkeo_to_osmosis():
                         break
                     time.sleep(0.8)
     except TimeoutError:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "tx_lock",
+            "tx lock busy",
+            amount=amt_float,
+            extra=telemetry_extra,
+        )
         return jsonify({"error": "tx lock busy, try again shortly"}), 409
 
     if ibc_code != 0 or not ibc_tx:
+        _emit_hotwallet_transfer_failed(
+            direction,
+            "ibc_submit",
+            ibc_out,
+            amount=amt_float,
+            txhash=ibc_tx,
+            extra={
+                **telemetry_extra,
+                "ibc_exit": ibc_code,
+                "retry_attempted": retry_attempted,
+                "retry_sequence": retry_sequence,
+            },
+        )
         _append_hotwallet_log({"action": "arkeo_to_osmosis", "stage": "ibc_failed", "detail": ibc_out})
         return (
             jsonify(
@@ -2255,6 +2743,21 @@ def hotwallet_arkeo_to_osmosis():
             "tx_code": tx_code,
             "tx_raw_log": tx_raw_log,
         }
+    )
+
+    success_extra = {"source": "backend", "arrival_confirmed": arrived}
+    if packet_info:
+        success_extra["packet_sequence"] = packet_info.get("packet_sequence")
+        success_extra["osmo_src_channel"] = packet_info.get("src_channel")
+        success_extra["arkeo_dst_channel"] = packet_info.get("dst_channel")
+    if tx_code is not None:
+        success_extra["tx_code"] = tx_code
+    _emit_hotwallet_transfer(
+        direction,
+        "submitted",
+        amount=amt_float,
+        txhash=ibc_tx,
+        extra=success_extra,
     )
 
     return jsonify(
@@ -2343,6 +2846,7 @@ def bond_provider():
     fees = FEES_DEFAULT
 
     if not service:
+        _emit_provider_service_failed("validation", None, None, "service is required")
         return jsonify({"error": "service is required"}), 400
 
     app.logger.info(
@@ -2356,6 +2860,7 @@ def bond_provider():
     # Step 1: get raw pubkey for the user
     raw_pubkey, bech32_pubkey, pubkey_err = derive_pubkeys(user, keyring_backend)
     if pubkey_err:
+        _emit_provider_service_failed("pubkey", service, None, pubkey_err)
         return jsonify(
             {
                 "error": pubkey_err,
@@ -2396,6 +2901,15 @@ def bond_provider():
     bond_txhash = _log_tx_result(f"bond-provider service={service}", code, bond_out)
     _log_tx_height_async("bond-provider", bond_txhash)
     if code != 0:
+        _emit_provider_service_failed(
+            "bond",
+            service,
+            None,
+            bond_out,
+            exit_code=code,
+            txhash=bond_txhash,
+            extra={"bond": bond},
+        )
         return jsonify(
             {
                 "error": "failed to bond provider",
@@ -2449,6 +2963,7 @@ def bond_and_mod_provider():
     location = payload.get("location")
 
     if not service:
+        _emit_provider_service_failed("validation", None, None, "service is required")
         return jsonify({"error": "service is required"}), 400
 
     app.logger.info(
@@ -2488,6 +3003,7 @@ def bond_and_mod_provider():
 
     raw_pubkey, bech32_pubkey, pubkey_err = derive_pubkeys(user, keyring_backend)
     if pubkey_err:
+        _emit_provider_service_failed("pubkey", service, resolved_service, pubkey_err)
         return jsonify(
             {
                 "error": pubkey_err,
@@ -2585,6 +3101,15 @@ def bond_and_mod_provider():
         bond_txhash = _log_tx_result(f"bond-mod-provider bond service={resolved_service}", bond_code, bond_out)
         _log_tx_height_async("bond-mod-provider bond", bond_txhash)
         if bond_code != 0:
+            _emit_provider_service_failed(
+                "bond",
+                service,
+                resolved_service,
+                bond_out,
+                exit_code=bond_code,
+                txhash=bond_txhash,
+                extra={"bond": bond},
+            )
             return jsonify(
                 {
                     "error": "failed to bond provider",
@@ -2693,6 +3218,15 @@ def bond_and_mod_provider():
         _log_tx_height_async("bond-mod-provider mod-retry", mod_txhash)
 
     if mod_code != 0:
+        _emit_provider_service_failed(
+            "mod",
+            service,
+            resolved_service,
+            mod_out,
+            exit_code=mod_code,
+            txhash=mod_txhash,
+            extra={"bond": bond},
+        )
         return jsonify(
             {
                 "error": "failed to mod provider",
@@ -2718,6 +3252,26 @@ def bond_and_mod_provider():
                 "bond_tx": {"exit_code": bond_code, "output": bond_out},
             }
         ), 500
+
+    install_id = _telemetry_install_id()
+    if install_id:
+        action = "add" if not skip_bond else "mod"
+        props = {
+            "install_id": install_id,
+            "app_version": APP_VERSION,
+            "chain_id": CHAIN_ID,
+            "action": action,
+            "service": service,
+            "resolved_service": resolved_service,
+            "bond": bond,
+            "status": status,
+        }
+        if isinstance(service, str) and service.strip().isdigit():
+            props["service_id"] = service.strip()
+        wallet_address = _telemetry_wallet_address()
+        if wallet_address:
+            props["wallet_address"] = wallet_address
+        _posthog_capture_async("provider_service_saved", f"provider:{install_id}", props)
 
     # Sync provider name/moniker to sentinel env so they stay aligned
     try:
@@ -3441,6 +3995,7 @@ def _apply_provider_settings(settings: dict) -> None:
 
 # Apply persisted provider settings at import time (if present)
 _apply_provider_settings(_merge_provider_settings())
+threading.Thread(target=_emit_startup_telemetry, daemon=True).start()
 
 
 def _mnemonic_file_path(settings: dict | None = None) -> str:
@@ -3773,12 +4328,14 @@ def sentinel_rebuild():
     if isinstance(overrides, list) and overrides:
         target = overrides[0] if isinstance(overrides[0], dict) else None
     if not target:
+        _emit_sentinel_rebuild_failed("no service override provided")
         return jsonify({"error": "no service override provided"}), 400
     target_name = str(target.get("name") or target.get("service") or target.get("type") or "").strip()
     target_id = str(target.get("id") or target.get("service_id") or target.get("service") or "").strip()
     target_type = str(target.get("service_type") or target.get("type") or target_name).strip()
     target_name_lower = target_name.lower()
     if not target_name and not target_id:
+        _emit_sentinel_rebuild_failed("service name or id required", target)
         return jsonify({"error": "service name or id required"}), 400
     if not target_name and target_id:
         lookup = _all_services_lookup()
@@ -3805,6 +4362,7 @@ def sentinel_rebuild():
 
     raw_pubkey, bech32_pubkey, pub_err = derive_pubkeys(KEY_NAME, KEYRING)
     if pub_err:
+        _emit_sentinel_rebuild_failed(pub_err, target)
         return jsonify({"error": pub_err}), 500
 
     parsed, raw = _load_sentinel_config()
@@ -3940,6 +4498,7 @@ def sentinel_rebuild():
         with open(SENTINEL_CONFIG_PATH, "w", encoding="utf-8") as f:
             yaml.safe_dump(parsed, f, sort_keys=False)
     except OSError as e:
+        _emit_sentinel_rebuild_failed(f"failed to write sentinel config: {e}", target)
         return jsonify({"error": "failed to write sentinel config", "detail": str(e)}), 500
 
     # Skip automatic restart here; caller can restart if needed.
@@ -3997,6 +4556,7 @@ def provider_settings_get():
             settings.get("ARKEOD_HOME") or ARKEOD_HOME,
         )
         if code != 0 or not gen_mnemonic:
+            _emit_provider_settings_failed("create_hotwallet", out)
             return jsonify({"error": "failed to create hotwallet", "detail": out}), 500
         settings["KEY_MNEMONIC"] = gen_mnemonic
         _apply_provider_settings(settings)
@@ -4007,6 +4567,7 @@ def provider_settings_get():
     raw_pk, bech32_pk, pub_err = derive_pubkeys(
         settings.get("KEY_NAME") or KEY_NAME, settings.get("KEY_KEYRING_BACKEND") or KEYRING
     )
+    _emit_wallet_telemetry_if_needed()
     return jsonify(
         {
             "settings": settings,
@@ -4048,6 +4609,7 @@ def provider_settings_save():
         )
         delete_code, delete_out = delete_result
         if delete_code not in (0, 1) and "not found" not in delete_out.lower():
+            _emit_provider_settings_failed("delete_hotwallet", delete_out)
             return jsonify({"error": "failed to delete existing hotwallet", "detail": delete_out}), 500
 
         import_result = _import_hotwallet_from_mnemonic(
@@ -4058,6 +4620,7 @@ def provider_settings_save():
         )
         import_code, import_out = import_result
         if import_code != 0:
+            _emit_provider_settings_failed("import_mnemonic", import_out)
             return jsonify({"error": "failed to import mnemonic", "detail": import_out}), 500
         merged["KEY_MNEMONIC"] = target_mnemonic
         mnemonic_source = "uploaded"
@@ -4075,6 +4638,7 @@ def provider_settings_save():
         )
         generated_result = (gen_code, gen_out, gen_mnemonic)
         if gen_code != 0 or not gen_mnemonic:
+            _emit_provider_settings_failed("generate_hotwallet", gen_out)
             return jsonify({"error": "failed to generate new mnemonic", "detail": gen_out}), 500
         merged["KEY_MNEMONIC"] = gen_mnemonic
         mnemonic_source = "generated"
@@ -4082,6 +4646,7 @@ def provider_settings_save():
 
     _apply_provider_settings(merged)
     _write_provider_settings_file(merged)
+    _emit_wallet_telemetry_if_needed()
     # Keep sentinel env in sync for PROVIDER_HUB_URI
     try:
         rest_val = merged.get("PROVIDER_HUB_URI") or ""

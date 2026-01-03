@@ -603,6 +603,29 @@
         refreshHotwalletLogBox("convertArkeoToOsmosisLog");
     }
 
+    function sendHotwalletTelemetry(payload) {
+        try {
+            fetch(apiUrl("/api/hotwallet/telemetry"), {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ source: "ui", ...(payload || {}) }),
+            });
+        } catch (e) { /* noop */ }
+    }
+
+    function hotwalletErrorCode(err) {
+        const msg = String(err || "");
+        const lower = msg.toLowerCase();
+        if (lower.includes("config parse failed")) return "config_parse_failed";
+        if (lower.includes("config fetch failed")) return "config_fetch_failed";
+        if (lower.includes("osmosis rpc")) return "osmosis_rpc_missing";
+        if (lower.includes("arkeo address")) return "arkeo_address_missing";
+        if (lower.includes("keplr")) return "keplr_failed";
+        if (lower.includes("rejected") || lower.includes("denied")) return "user_rejected";
+        if (lower.includes("ibc")) return "ibc_failed";
+        return "client_error";
+    }
+
     function formatAddressShort(addr) {
         if (!addr || addr.length < 12) return addr || "";
         return `${addr.slice(0, 6)}...${addr.slice(-8)}`;
@@ -1426,8 +1449,15 @@
         if (!isNaN(avail) && avail >= 0 && amt > avail) errs.push(`Amount exceeds available ARKEO (${avail.toFixed(8)}).`);
         if (errs.length) {
             appendConvertArkeoNativeLog(errs.join(" "));
+            sendHotwalletTelemetry({
+                direction: "osmosis_to_arkeo",
+                stage: "validation",
+                error_summary: "validation_failed",
+                amount: amt,
+            });
             return;
         }
+        sendHotwalletTelemetry({ direction: "osmosis_to_arkeo", status: "start", amount: amt });
         setConvertArkeoNativeButtonEnabled(false);
         const btn = document.getElementById("convertArkeoNativeSubmitBtn");
         if (btn) btn.disabled = true;
@@ -1477,11 +1507,24 @@
                 clearInterval(convertArkeoNativeWaitTimer);
                 convertArkeoNativeWaitTimer = null;
             }
+            sendHotwalletTelemetry({
+                direction: "osmosis_to_arkeo",
+                status: "submitted",
+                amount: amt,
+                txhash: res.transactionHash,
+            });
             appendConvertArkeoNativeLog(`IBC submitted: tx ${res.transactionHash}`);
             appendConvertArkeoNativeLog("Transfer submitted. Arrival pending on Arkeo chain.");
             setTimeout(() => closeConvertArkeoNativeModal(), 3000);
             refreshHeader();
         } catch (err) {
+            const msg = String(err || "");
+            sendHotwalletTelemetry({
+                direction: "osmosis_to_arkeo",
+                stage: "client",
+                error_summary: hotwalletErrorCode(err),
+                amount: amt,
+            });
             appendConvertArkeoNativeLog(`Error: ${err}`);
             setConvertArkeoNativeButtonEnabled(true);
             if (btn) btn.disabled = false;

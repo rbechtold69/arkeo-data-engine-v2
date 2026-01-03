@@ -18,6 +18,10 @@ TLS_CERT_CN=${TLS_CERT_CN:-localhost}
 TLS_SELF_SIGNED=${TLS_SELF_SIGNED:-1}
 CANONICAL_HOST=${CANONICAL_HOST:-marketplace.builtonarkeo.com}
 GA_MEASUREMENT_ID=${GA_MEASUREMENT_ID:-}
+POSTHOG_ENABLED=1
+POSTHOG_HOST="https://app.posthog.com"
+POSTHOG_API_KEY="phc_HkXCuAWRwKeBUvLYjMqHflaXEC5Xh0oGqLUTAsNI33R"
+APP_VERSION=${APP_VERSION:-dev}
 CACHE_DIR=${CACHE_DIR:-/app/cache}
 CACHE_INIT_ON_START=${CACHE_INIT_ON_START:-1}
 CACHE_INIT_TIMEOUT=${CACHE_INIT_TIMEOUT:-120}
@@ -40,6 +44,14 @@ echo "  TLS_CERT_CN          = $TLS_CERT_CN"
 echo "  TLS_SELF_SIGNED      = $TLS_SELF_SIGNED"
 echo "  CANONICAL_HOST       = $CANONICAL_HOST"
 echo "  GA_MEASUREMENT_ID    = $GA_MEASUREMENT_ID"
+echo "  POSTHOG_ENABLED      = $POSTHOG_ENABLED"
+echo "  POSTHOG_HOST         = $POSTHOG_HOST"
+if [ -n "$POSTHOG_API_KEY" ]; then
+  echo "  POSTHOG_API_KEY      = set"
+else
+  echo "  POSTHOG_API_KEY      = (empty)"
+fi
+echo "  APP_VERSION          = $APP_VERSION"
 echo "  CACHE_DIR            = $CACHE_DIR"
 echo "  CACHE_INIT_ON_START  = $CACHE_INIT_ON_START"
 echo "  CACHE_INIT_TIMEOUT   = ${CACHE_INIT_TIMEOUT}s"
@@ -71,6 +83,104 @@ else
   cat > /app/admin/config.js <<'EOF'
 window.DASHBOARD_CONFIG = {};
 EOF
+fi
+
+if [ "$POSTHOG_ENABLED" = "1" ] && [ -n "$POSTHOG_API_KEY" ]; then
+  export POSTHOG_HOST POSTHOG_API_KEY APP_VERSION CHAIN_ID
+  python3 - <<'PY' || true
+import json
+import os
+import uuid
+import urllib.request
+
+posthog_host = os.getenv("POSTHOG_HOST", "https://app.posthog.com").rstrip("/")
+api_key = os.getenv("POSTHOG_API_KEY") or ""
+app_version = os.getenv("APP_VERSION", "dev")
+chain_id = os.getenv("CHAIN_ID", "")
+telemetry_file = "/app/config/telemetry.json"
+legacy_install_file = "/app/config/install_id"
+legacy_version_file = "/app/config/app_version"
+
+def read_text(path: str) -> str:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read().strip()
+    except Exception:
+        return ""
+
+def load_telemetry(path: str) -> dict:
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+def save_telemetry(path: str, data: dict) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+    except Exception:
+        pass
+
+telemetry = load_telemetry(telemetry_file)
+install_id = telemetry.get("install_id") if isinstance(telemetry, dict) else None
+legacy_install = read_text(legacy_install_file)
+new_install = False
+if not install_id:
+    if legacy_install:
+        install_id = legacy_install
+        new_install = False
+    else:
+        install_id = str(uuid.uuid4())
+        new_install = True
+    telemetry["install_id"] = install_id
+
+previous_version = telemetry.get("app_version") if isinstance(telemetry, dict) else ""
+if not previous_version:
+    previous_version = read_text(legacy_version_file)
+if previous_version != app_version:
+    telemetry["app_version"] = app_version
+save_telemetry(telemetry_file, telemetry)
+
+distinct_id = f"dashboard:{install_id}"
+
+def capture(event: str, props: dict) -> None:
+    payload = {
+        "api_key": api_key,
+        "event": event,
+        "distinct_id": distinct_id,
+        "properties": props,
+    }
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(
+        f"{posthog_host}/capture/",
+        data=data,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        urllib.request.urlopen(req, timeout=3).read()
+    except Exception:
+        pass
+
+base_props = {
+    "app": "dashboard-core",
+    "version": app_version,
+    "install_id": install_id,
+}
+if chain_id:
+    base_props["chain_id"] = chain_id
+
+if new_install:
+    capture("install", base_props)
+elif previous_version and previous_version != app_version:
+    props = dict(base_props)
+    props["previous_version"] = previous_version
+    capture("upgrade", props)
+
+capture("dashboard_start", base_props)
+PY
 fi
 
 TLS_ACTIVE=0
