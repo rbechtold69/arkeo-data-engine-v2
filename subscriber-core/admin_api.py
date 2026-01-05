@@ -9743,6 +9743,24 @@ def get_active_service_types():
     return jsonify(data)
 
 
+@app.get("/api/active-services")
+def get_active_services():
+    """Return active services cache."""
+    data = _load_cached("active_services")
+    if not isinstance(data, dict) or "active_services" not in data:
+        data = {"active_services": []}
+    return jsonify(data)
+
+
+@app.get("/api/active-providers")
+def get_active_providers():
+    """Return active providers cache."""
+    data = _load_cached("active_providers")
+    if not isinstance(data, dict) or "providers" not in data:
+        data = {"providers": []}
+    return jsonify(data)
+
+
 @app.post("/api/listeners/<listener_id>/refresh-top-services")
 def refresh_listener_top_services(listener_id: str):
     """Recompute top_services for a single listener."""
