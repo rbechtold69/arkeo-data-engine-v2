@@ -231,7 +231,7 @@
 
     async function loadRuntimePorts() {
         try {
-            const res = await fetch("/runtime-ports.json", { cache: "no-store" });
+            const res = await timedFetch("runtime-ports", "/runtime-ports.json");
             if (res.ok) {
                 const data = await res.json();
                 if (data && data.ADMIN_API_PORT) DEFAULT_ADMIN_API_PORT = String(data.ADMIN_API_PORT);
@@ -271,6 +271,23 @@
         return `${adminApiBase}${path}`;
     }
 
+    const perfNow = () => (window.performance && performance.now ? performance.now() : Date.now());
+    function logLoadStep(label, started, extra = "") {
+        const elapsed = Math.round(perfNow() - started);
+        console.info(`[admin-load] ${label} ${elapsed}ms${extra ? ` ${extra}` : ""}`);
+    }
+    async function timedFetch(label, url, options = {}) {
+        const started = perfNow();
+        try {
+            const res = await fetch(url, { cache: "no-store", ...options });
+            logLoadStep(label, started, `${url} status=${res.status}`);
+            return res;
+        } catch (err) {
+            logLoadStep(label, started, `${url} failed`);
+            throw err;
+        }
+    }
+
     async function detectAdminApiBase() {
         const tried = new Set();
         let apiHostOverride = null;
@@ -284,6 +301,7 @@
         // If api_port explicitly provided, honor it and stop.
         if (apiPortOverride) {
             adminApiBase = buildBaseUrl(apiHostOverride || adminHost, apiPortOverride);
+            console.info(`[admin-load] api-probe override ${adminApiBase}`);
             return;
         }
 
@@ -295,9 +313,10 @@
             if (tried.has(base)) continue;
             tried.add(base);
             try {
-                const res = await fetch(`${base}/api/ping`, { cache: "no-store" });
+                const res = await timedFetch("api-probe", `${base}/api/ping`);
                 if (res.ok) {
                     adminApiBase = base;
+                    console.info(`[admin-load] api-probe selected ${adminApiBase}`);
                     return;
                 }
             } catch (e) {
@@ -308,12 +327,15 @@
     }
 
     async function fetchProviderSettingsWithFallback() {
+        const started = perfNow();
         await loadRuntimePorts();
         await detectAdminApiBase();
         try {
-            const res = await fetch(`${adminApiBase}/api/provider-settings`, { cache: "no-store" });
+            const res = await timedFetch("provider-settings", `${adminApiBase}/api/provider-settings`);
+            logLoadStep("provider-settings total", started);
             return res;
         } catch (e) {
+            logLoadStep("provider-settings total", started, "failed");
             throw e;
         }
     }
@@ -401,7 +423,8 @@
                 const gate = document.getElementById("adminPasswordGate");
                 if (gate) gate.classList.add("hidden");
                 if (statusEl) statusEl.textContent = "";
-                window.location.href = "index.html";
+                await loadAdminInfo();
+                await loadProviderSettings(false);
             } else {
                 if (statusEl) statusEl.textContent = "Incorrect password.";
             }
@@ -411,8 +434,9 @@
     }
 
     async function loadAdminInfo() {
+        const loadStarted = perfNow();
         setBadge("warn", "Refreshing…");
-        const fetchNoStore = (url) => fetch(url, { cache: "no-store" });
+        const fetchNoStore = (label, url) => timedFetch(`admin-info ${label}`, url);
         const parseSafe = async (settled) => {
             if (settled.status !== "fulfilled" || !settled.value) return { error: String(settled.reason || "request failed") };
             try {
@@ -427,10 +451,10 @@
         };
         try {
             const [verRes, heightRes, balRes, keyRes] = await Promise.allSettled([
-                fetchNoStore(resolveApi("/api/version")),
-                fetchNoStore(resolveApi("/api/block-height")),
-                fetchNoStore(resolveApi("/api/balance")),
-                fetchNoStore(resolveApi("/api/key")),
+                fetchNoStore("version", resolveApi("/api/version")),
+                fetchNoStore("block-height", resolveApi("/api/block-height")),
+                fetchNoStore("balance", resolveApi("/api/balance")),
+                fetchNoStore("key", resolveApi("/api/key")),
             ]);
             const version = await parseSafe(verRes);
             const height = await parseSafe(heightRes);
@@ -476,6 +500,8 @@
             setBadge(hasErrors ? "warn" : "ok", hasErrors ? "Partial data" : "Up to date");
         } catch (e) {
             setBadge("err", "Failed to refresh");
+        } finally {
+            logLoadStep("admin-info total", loadStarted);
         }
     }
 
@@ -509,6 +535,7 @@
     }
 
     async function loadProviderSettings(showStatus = true) {
+        const loadStarted = perfNow();
         const resultEl = document.getElementById("providerSettingsResult");
         if (showStatus && resultEl) {
             setStatusMessage("Loading provider settings...", false);
@@ -554,6 +581,8 @@
             }
         } catch (e) {
             if (resultEl) resultEl.textContent = `Failed to load provider settings: ${e}`;
+        } finally {
+            logLoadStep("provider-settings render", loadStarted);
         }
     }
 
@@ -643,9 +672,10 @@
             await loadProviderSettings(false);
             markStage("refreshing password status");
             await fetchAdminPasswordStatus(false);
-            console.info(`[save-settings] redirecting (+${Date.now() - saveStarted}ms)`);
-            // Redirect to dashboard after successful save
-            window.location.href = "index.html";
+            setTimeout(() => {
+                window.location.href = "index.html";
+            }, 2000);
+            console.info(`[save-settings] save complete (+${Date.now() - saveStarted}ms)`);
         } catch (e) {
             finalMessage = `Failed to save provider settings: ${e}`;
             isError = true;

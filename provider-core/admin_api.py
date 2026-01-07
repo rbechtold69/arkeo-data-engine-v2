@@ -58,6 +58,12 @@ DEFAULT_MNEMONIC = ""
 DEFAULT_OSMOSIS_RPC = "https://rpc.osmosis.zone"
 KEY_OP_TIMEOUT_S = 20.0
 APP_VERSION = (os.getenv("APP_VERSION") or "").strip() or "dev"
+try:
+    PROVIDER_TOTALS_CACHE_TTL = int(os.getenv("PROVIDER_TOTALS_CACHE_TTL", "300"))
+except ValueError:
+    PROVIDER_TOTALS_CACHE_TTL = 300
+if PROVIDER_TOTALS_CACHE_TTL < 0:
+    PROVIDER_TOTALS_CACHE_TTL = 0
 
 ARKEOD_HOME = os.path.expanduser(os.getenv("ARKEOD_HOME", DEFAULT_ARKEOD_HOME))
 KEY_NAME = os.getenv("KEY_NAME", DEFAULT_KEY_NAME)
@@ -4652,9 +4658,9 @@ def provider_settings_save():
         sorted(list(data.keys())),
         bool((data.get("KEY_MNEMONIC") or data.get("mnemonic") or "").strip()),
     )
+    current_mnemonic, mnemonic_source = _read_hotwallet_mnemonic()
     merged = _merge_provider_settings(data)
     provided_mnemonic = (data.get("KEY_MNEMONIC") or data.get("mnemonic") or "").strip()
-    current_mnemonic, mnemonic_source = _read_hotwallet_mnemonic(merged)
     target_mnemonic = (provided_mnemonic or current_mnemonic or "").strip()
     mnemonic_changed = bool(provided_mnemonic) and provided_mnemonic != current_mnemonic
     rotate = False
@@ -5574,6 +5580,7 @@ def _parse_int(val, default: int = 0) -> int:
 @app.post("/api/provider-contracts-summary")
 def provider_contracts_summary():
     """Summarize contracts for this provider (optional service filter)."""
+    started = time.time()
     body = request.get_json(silent=True) or {}
 
     def empty_summary(provider_pubkey: str = "", err: str | None = None, detail=None):
@@ -5582,6 +5589,8 @@ def provider_contracts_summary():
         th = str(body.get("to_height") or body.get("to") or 999_999_999)
         service_filter = (body.get("service") or "").strip()
         heartbeat = read_heartbeat(CLAIMS_HEARTBEAT_PATH) or {}
+        elapsed_ms = int((time.time() - started) * 1000)
+        app.logger.info("provider-contracts-summary empty ms=%s error=%s", elapsed_ms, err or "")
         return jsonify(
             {
                 "provider_pubkey": provider_pubkey or None,
@@ -5636,7 +5645,15 @@ def provider_contracts_summary():
         provider_pubkey_alts = {provider_pubkey.strip(), raw_pub.strip()}
 
         node = ARKEOD_NODE
+        fetch_started = time.time()
         payload = _fetch_contracts_paginated()
+        fetch_ms = int((time.time() - fetch_started) * 1000)
+        app.logger.info(
+            "provider-contracts-summary fetch ms=%s pages=%s exit=%s",
+            fetch_ms,
+            payload.get("pages"),
+            payload.get("exit_code"),
+        )
         if payload.get("exit_code") != 0:
             return empty_summary(
                 provider_pubkey,
@@ -5662,6 +5679,7 @@ def provider_contracts_summary():
                     break
         if not isinstance(contracts, list):
             contracts = []
+        total_contracts = len(contracts)
 
         filtered = []
         for c in contracts:
@@ -5796,6 +5814,16 @@ def provider_contracts_summary():
             st["contracts"].sort(key=lambda x: int(x["contract_id"]) if str(x["contract_id"]).isdigit() else str(x["contract_id"]))
 
         service_totals = sorted(service_totals_map.values(), key=lambda x: x["service"])
+        elapsed_ms = int((time.time() - started) * 1000)
+        app.logger.info(
+            "provider-contracts-summary done ms=%s contracts=%s filtered=%s service_totals=%s range=%s-%s",
+            elapsed_ms,
+            total_contracts,
+            len(filtered),
+            len(service_totals),
+            from_h,
+            to_h,
+        )
 
         return jsonify(
             {
@@ -5821,12 +5849,17 @@ def provider_contracts_summary():
 @app.post("/api/provider-totals")
 def provider_totals():
     """Summarize PAYG claim spending for this provider (and optional service) over a height range."""
+    started = time.time()
     body = request.get_json(silent=True) or {}
     service_filter = body.get("service") or ""
-    from_h = str(body.get("from_height") or body.get("from") or 0)
-    to_h = str(body.get("to_height") or body.get("to") or 999_999_999)
+    req_from = body.get("from_height") or body.get("from") or 0
+    req_to = body.get("to_height") or body.get("to") or 999_999_999
+    from_h = str(req_from)
+    to_h = str(req_to)
 
     def empty_totals(provider_pubkey: str = "", err: str | None = None, detail=None):
+        elapsed_ms = int((time.time() - started) * 1000)
+        app.logger.info("provider-totals empty ms=%s error=%s", elapsed_ms, err or "")
         return jsonify(
             {
                 "provider_pubkey": provider_pubkey,
@@ -5866,11 +5899,91 @@ def provider_totals():
     if not provider_pubkey:
         return empty_totals("", "failed to derive provider pubkey", out), 200
     provider_pubkey_alts = {provider_pubkey.strip(), raw_pub.strip()}
+    cache_key = f"{provider_pubkey}|{service_filter}|{from_h}|{to_h}"
+    cache_name = f"provider-totals-{hashlib.sha256(cache_key.encode('utf-8')).hexdigest()}"
+    cached_entry = read_cache_json(cache_name)
+    cached_payload = None
+    cached_age = None
+    if isinstance(cached_entry, dict):
+        cached_payload = cached_entry.get("payload") if isinstance(cached_entry.get("payload"), dict) else None
+        cached_ts = cached_entry.get("ts")
+        if cached_payload and cached_payload.get("provider_pubkey") != provider_pubkey:
+            cached_payload = None
+        if cached_payload and isinstance(cached_ts, (int, float)):
+            cached_age = time.time() - float(cached_ts)
+    if PROVIDER_TOTALS_CACHE_TTL > 0 and cached_payload and cached_age is not None and cached_age < PROVIDER_TOTALS_CACHE_TTL:
+        payload = dict(cached_payload)
+        payload["cached"] = True
+        payload["cache_age_s"] = int(cached_age)
+        app.logger.info("provider-totals cache hit age_s=%s", int(cached_age))
+        return jsonify(payload)
 
     node = ARKEOD_NODE
-    query = f"message.action='/arkeo.arkeo.MsgClaimContractIncome' AND tx.height>={from_h} AND tx.height<={to_h}"
+    from_i = _parse_int(from_h, 0)
+    to_i = _parse_int(to_h, 999_999_999)
+
+    def _latest_height() -> int | None:
+        cmd = ["arkeod", "--home", ARKEOD_HOME]
+        if node:
+            cmd.extend(["--node", node])
+        cmd.append("status")
+        code, out = run_list(cmd)
+        if code != 0:
+            app.logger.warning("provider-totals status failed exit=%s out=%s", code, (out or "")[:4000])
+            return None
+        try:
+            data = json.loads(out)
+            sync_info = data.get("SyncInfo") or data.get("sync_info") or {}
+            height = sync_info.get("latest_block_height") or sync_info.get("latest_block")
+            parsed = _parse_int(height, 0)
+            return parsed if parsed > 0 else None
+        except Exception:
+            return None
+
+    effective_to_i = to_i
+    effective_to_h = to_h
+    if to_i >= 999_999_999:
+        latest = _latest_height()
+        if latest:
+            effective_to_i = latest
+            effective_to_h = str(latest)
+
+    base_payload = None
+    cached_to_i = None
+    cached_from_i = None
+    if cached_payload:
+        cached_to_i = _parse_int(cached_payload.get("to_height"), 0)
+        cached_from_i = _parse_int(cached_payload.get("from_height"), 0)
+        if cached_from_i <= from_i and cached_to_i >= from_i:
+            base_payload = cached_payload
+
+    query_from_i = from_i
+    query_to_i = effective_to_i
+    if base_payload and cached_to_i is not None and cached_to_i >= from_i:
+        query_from_i = cached_to_i + 1
+
+    if base_payload and cached_to_i is not None and cached_to_i >= query_to_i and query_to_i > 0:
+        payload = dict(base_payload)
+        payload["cached"] = True
+        if cached_age is not None:
+            payload["cache_age_s"] = int(cached_age)
+        payload["up_to_date"] = True
+        return jsonify(payload)
+
+    if base_payload and query_from_i > query_to_i:
+        payload = dict(base_payload)
+        payload["cached"] = True
+        if cached_age is not None:
+            payload["cache_age_s"] = int(cached_age)
+        payload["up_to_date"] = True
+        return jsonify(payload)
+
+    query_from_h = str(query_from_i)
+    query_to_h = str(query_to_i)
+    query = f"message.action='/arkeo.arkeo.MsgClaimContractIncome' AND tx.height>={query_from_h} AND tx.height<={query_to_h}"
     all_rows = []
     page = 1
+    pages = 0
     while True:
         tx_cmd = [
             "arkeod",
@@ -5891,6 +6004,31 @@ def provider_totals():
             tx_cmd.extend(["--node", node])
         code, out = run_list(tx_cmd)
         if code != 0:
+            out = out or ""
+            if "page should be within" in out and "range" in out:
+                app.logger.info("provider-totals reached last page pages=%s", pages)
+                break
+            app.logger.warning(
+                "provider-totals txs failed exit=%s pages=%s cmd=%s out_len=%s out=%s",
+                code,
+                pages,
+                tx_cmd,
+                len(out),
+                out[:4000],
+            )
+            if cached_payload and cached_age is not None:
+                payload = dict(cached_payload)
+                payload["cached"] = True
+                payload["stale"] = True
+                payload["cache_age_s"] = int(cached_age)
+                payload["error"] = "failed to query txs"
+                payload["detail"] = {
+                    "cmd": tx_cmd,
+                    "exit_code": code,
+                    "detail": out,
+                }
+                app.logger.warning("provider-totals serving stale cache age_s=%s", int(cached_age))
+                return jsonify(payload)
             return empty_totals(
                 provider_pubkey,
                 "failed to query txs",
@@ -5904,6 +6042,7 @@ def provider_totals():
             data = json.loads(out)
         except Exception:
             break
+        pages += 1
         txs = data.get("txs") or []
         if not txs:
             break
@@ -5941,6 +6080,119 @@ def provider_totals():
                 )
         page += 1
 
+    def _min_nonzero(a: int, b: int) -> int:
+        if a <= 0:
+            return b
+        if b <= 0:
+            return a
+        return min(a, b)
+
+    def _normalize_contract(entry: dict) -> dict:
+        return {
+            "contract_id": str(entry.get("contract_id") or ""),
+            "tx_count": _parse_int(entry.get("tx_count"), 0),
+            "total": _parse_int(entry.get("total"), 0),
+            "first_nonce": _parse_int(entry.get("first_nonce"), 0),
+            "last_nonce": _parse_int(entry.get("last_nonce"), 0),
+            "first_height": _parse_int(entry.get("first_height"), 0),
+            "last_height": _parse_int(entry.get("last_height"), 0),
+        }
+
+    def _merge_contracts(base_list, new_list):
+        merged = {}
+        for src in base_list or []:
+            if not isinstance(src, dict):
+                continue
+            entry = _normalize_contract(src)
+            if not entry["contract_id"]:
+                continue
+            merged[entry["contract_id"]] = entry
+        for src in new_list or []:
+            if not isinstance(src, dict):
+                continue
+            entry = _normalize_contract(src)
+            if not entry["contract_id"]:
+                continue
+            if entry["contract_id"] in merged:
+                cur = merged[entry["contract_id"]]
+                cur["tx_count"] += entry["tx_count"]
+                cur["total"] += entry["total"]
+                cur["first_nonce"] = _min_nonzero(cur["first_nonce"], entry["first_nonce"])
+                cur["last_nonce"] = max(cur["last_nonce"], entry["last_nonce"])
+                cur["first_height"] = _min_nonzero(cur["first_height"], entry["first_height"])
+                cur["last_height"] = max(cur["last_height"], entry["last_height"])
+            else:
+                merged[entry["contract_id"]] = entry
+        return sorted(
+            merged.values(),
+            key=lambda x: (int(x["contract_id"]) if str(x["contract_id"]).isdigit() else x["contract_id"]),
+        )
+
+    def _normalize_service(entry: dict) -> dict:
+        total_val = entry.get("total")
+        if total_val is None:
+            total_val = entry.get("total_paid_uarkeo") or entry.get("total_paid") or 0
+        contracts = entry.get("contracts") or []
+        if isinstance(contracts, set):
+            contract_set = {str(c) for c in contracts}
+        elif isinstance(contracts, list):
+            contract_set = {str(c) for c in contracts}
+        else:
+            contract_set = set()
+        return {
+            "service": str(entry.get("service") or ""),
+            "tx_count": _parse_int(entry.get("tx_count"), 0),
+            "total": _parse_int(total_val, 0),
+            "first_height": _parse_int(entry.get("first_height"), 0),
+            "last_height": _parse_int(entry.get("last_height"), 0),
+            "contracts": contract_set,
+        }
+
+    def _merge_services(base_list, new_list):
+        merged = {}
+        for src in base_list or []:
+            if not isinstance(src, dict):
+                continue
+            entry = _normalize_service(src)
+            if not entry["service"]:
+                continue
+            merged[entry["service"]] = entry
+        for src in new_list or []:
+            if not isinstance(src, dict):
+                continue
+            entry = _normalize_service(src)
+            if not entry["service"]:
+                continue
+            if entry["service"] in merged:
+                cur = merged[entry["service"]]
+                cur["tx_count"] += entry["tx_count"]
+                cur["total"] += entry["total"]
+                cur["first_height"] = _min_nonzero(cur["first_height"], entry["first_height"])
+                cur["last_height"] = max(cur["last_height"], entry["last_height"])
+                cur["contracts"].update(entry["contracts"])
+            else:
+                merged[entry["service"]] = entry
+        out = []
+        for svc, st in merged.items():
+            contracts_sorted = sorted(
+                st["contracts"],
+                key=lambda x: int(x) if str(x).isdigit() else str(x),
+            )
+            out.append(
+                {
+                    "service": svc,
+                    "tx_count": st["tx_count"],
+                    "total": st["total"],
+                    "first_height": st["first_height"],
+                    "last_height": st["last_height"],
+                    "contracts": contracts_sorted,
+                    "total_paid_uarkeo": st["total"],
+                    "total_paid_arkeo": st["total"] / 1_000_000,
+                }
+            )
+        out.sort(key=lambda x: x["service"])
+        return out
+
     # Summaries
     totals = {}
     for r in all_rows:
@@ -5966,8 +6218,10 @@ def provider_totals():
         t["first_height"] = min(t["first_height"], r["height"])
         t["last_height"] = max(t["last_height"], r["height"])
 
-    totals_list = sorted(totals.values(), key=lambda x: (int(x["contract_id"]) if str(x["contract_id"]).isdigit() else x["contract_id"]))
-    grand_total = sum(t["total"] for t in totals_list)
+    totals_list = sorted(
+        totals.values(),
+        key=lambda x: (int(x["contract_id"]) if str(x["contract_id"]).isdigit() else x["contract_id"]),
+    )
 
     # Per-service summary
     service_totals = {}
@@ -6002,21 +6256,55 @@ def provider_totals():
         st["total_paid_arkeo"] = st["total"] / 1_000_000
         service_totals_list.append(st)
     service_totals_list.sort(key=lambda x: x["service"])
+    max_height_seen = max((r.get("height", 0) for r in all_rows), default=0)
+    if effective_to_i >= 999_999_999 and max_height_seen:
+        effective_to_i = max_height_seen
+        effective_to_h = str(max_height_seen)
 
-    return jsonify(
-        {
-            "provider_pubkey": provider_pubkey,
-            "service_filter": service_filter or None,
-            "node": node,
-            "from_height": from_h,
-            "to_height": to_h,
-            "tx_count": len(all_rows),
-            "contracts": totals_list,
-            "total_paid_uarkeo": grand_total,
-            "total_paid_arkeo": grand_total / 1_000_000,
-            "service_totals": service_totals_list,
-        }
+    merged_from_cache = False
+    cache_base_age_s = int(cached_age) if cached_age is not None else None
+    if base_payload:
+        merged_from_cache = True
+        totals_list = _merge_contracts(base_payload.get("contracts"), totals_list)
+        service_totals_list = _merge_services(base_payload.get("service_totals"), service_totals_list)
+
+    tx_count_total = sum(t["tx_count"] for t in totals_list)
+    grand_total = sum(t["total"] for t in totals_list)
+    elapsed_ms = int((time.time() - started) * 1000)
+    app.logger.info(
+        "provider-totals done ms=%s pages=%s rows=%s service_totals=%s range=%s-%s query=%s-%s merged=%s",
+        elapsed_ms,
+        pages,
+        len(all_rows),
+        len(service_totals_list),
+        from_h,
+        effective_to_h,
+        query_from_h,
+        query_to_h,
+        merged_from_cache,
     )
+
+    payload = {
+        "provider_pubkey": provider_pubkey,
+        "service_filter": service_filter or None,
+        "node": node,
+        "from_height": from_h,
+        "to_height": effective_to_h,
+        "query_from_height": query_from_h,
+        "query_to_height": query_to_h,
+        "tx_count": tx_count_total,
+        "contracts": totals_list,
+        "total_paid_uarkeo": grand_total,
+        "total_paid_arkeo": grand_total / 1_000_000,
+        "service_totals": service_totals_list,
+        "cached": False,
+        "merged_from_cache": merged_from_cache,
+    }
+    if merged_from_cache and cache_base_age_s is not None:
+        payload["cache_base_age_s"] = cache_base_age_s
+    if PROVIDER_TOTALS_CACHE_TTL > 0:
+        write_cache_json(cache_name, {"ts": time.time(), "payload": payload})
+    return jsonify(payload)
 
 
 if __name__ == "__main__":

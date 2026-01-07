@@ -671,6 +671,12 @@
 
     const apiUrl = (path) => resolveApi(path);
 
+    const perfNow = () => (window.performance && performance.now ? performance.now() : Date.now());
+    function logDashStep(label, started, extra = "") {
+        const elapsed = Math.round(perfNow() - started);
+        console.info(`[dashboard-load] ${label} ${elapsed}ms${extra ? ` ${extra}` : ""}`);
+    }
+
     function isLocalHost(host) {
         const h = (host || "").toLowerCase();
         return h === "localhost" || h === "127.0.0.1" || h === "";
@@ -717,6 +723,9 @@ let lastClaimsHeartbeat = null;
 let earningsRange = "all_time";
 let earningsChartInstance = null;
 let earningsChartCache = {};
+let earningsFetchInFlight = false;
+let contractsSummaryInFlight = false;
+let earningsPendingAfterContracts = false;
     let currentPubkey = "";
     let currentAddress = "";
     const OSMOSIS_CHAIN_ID = "osmosis-1";
@@ -2451,6 +2460,12 @@ function renderProviderServices() {
 }
 
     async function refreshContractTotals() {
+        const started = perfNow();
+        if (contractsSummaryInFlight) {
+            logDashStep("contracts-summary skipped", started, "in-flight");
+            return;
+        }
+        contractsSummaryInFlight = true;
         const el = document.getElementById("claimTotals");
         const hasContent = el && el.dataset.hasContent === "1";
         if (el && !hasContent) {
@@ -2460,15 +2475,35 @@ function renderProviderServices() {
         const body = rangeToHeightBody(earningsRange);
         if (body === null) {
             if (el && !hasContent) el.textContent = "Waiting for latest block height...";
+            contractsSummaryInFlight = false;
+            logDashStep("contracts-summary total", started, "waiting for height");
             return;
         }
         try {
+            const fetchStarted = perfNow();
             const res = await fetch(resolveApi("/api/provider-contracts-summary"), {
                 method: "POST",
                 headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
                 body: JSON.stringify(body || {}),
             });
-            const data = await res.json();
+            const text = await res.text();
+            logDashStep("contracts-summary fetch", fetchStarted, `status=${res.status} bytes=${text.length}`);
+            const parseStarted = perfNow();
+            let data = {};
+            let parseErr = "";
+            try {
+                data = text ? JSON.parse(text) : {};
+            } catch (err) {
+                parseErr = String(err);
+                data = {};
+            }
+            const contractCount = Array.isArray(data.contracts) ? data.contracts.length : 0;
+            const serviceTotalsCount = Array.isArray(data.service_totals) ? data.service_totals.length : 0;
+            logDashStep(
+                "contracts-summary parse",
+                parseStarted,
+                `contracts=${contractCount} service_totals=${serviceTotalsCount}${parseErr ? ` error=${parseErr}` : ""}`
+            );
             if (res.ok) {
                 lastContractsSummary = data;
                 providerServiceTotals = Array.isArray(data.service_totals) ? data.service_totals : [];
@@ -2477,6 +2512,13 @@ function renderProviderServices() {
             }
         } catch (e) {
             // leave previous totals in place on error to avoid UI jump
+        } finally {
+            contractsSummaryInFlight = false;
+            logDashStep("contracts-summary total", started);
+            if (earningsPendingAfterContracts && !earningsFetchInFlight) {
+                earningsPendingAfterContracts = false;
+                loadEarningsByService(earningsRange, true);
+            }
         }
         renderClaimTotals();
         updateDashboardMetrics();
@@ -2770,6 +2812,7 @@ function renderProviderServices() {
     }
 
     async function loadEarningsByService(range = earningsRange, force = false) {
+        const started = perfNow();
         earningsRange = range;
         updateEarningsRangeButtons(range);
         const statusEl = document.getElementById("earningsChartStatus");
@@ -2777,58 +2820,115 @@ function renderProviderServices() {
         const gateAuthed = sessionStorage.getItem("adminAuthed") === "1" || adminSessionAuthed || !adminPasswordEnabled;
         if (adminPasswordEnabled && !gateAuthed) {
             if (statusEl) statusEl.textContent = "Enter the admin password to view earnings.";
+            logDashStep("earnings blocked", started, `range=${range}`);
             return;
         }
-        const now = Date.now();
-        const cacheEntry = earningsChartCache[range];
-        if (!force && cacheEntry && now - cacheEntry.fetched < EARNINGS_CACHE_MS) {
-            renderEarningsChart(cacheEntry.data);
-            if (statusEl) statusEl.textContent = "";
+        if (earningsFetchInFlight) {
+            logDashStep("earnings skipped", started, "in-flight");
             return;
         }
-        const { from, to } = estimateHeightsForRange(range);
-        const body = {};
-        if (range !== "all_time" && (from === null || to === null)) {
-            if (statusEl) statusEl.textContent = "Waiting for latest block height...";
-            return;
-        }
-        if (range !== "all_time" && from !== null && to !== null) {
-            body.from_height = from;
-            body.to_height = to;
-        }
-        if (statusEl) statusEl.textContent = "";
+        earningsFetchInFlight = true;
         try {
-            const res = await fetch(resolveApi("/api/provider-totals"), {
-                method: "POST",
-                headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-                body: JSON.stringify(body),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                if (statusEl) statusEl.textContent = data && data.error ? `Error: ${data.error}` : `Error ${res.status}`;
-                renderEarningsChart([]);
+            const now = Date.now();
+            const cacheEntry = earningsChartCache[range];
+            if (!force && cacheEntry && now - cacheEntry.fetched < EARNINGS_CACHE_MS) {
+                renderEarningsChart(cacheEntry.data);
+                if (statusEl) statusEl.textContent = "";
+                logDashStep("earnings cache", started, `range=${range} items=${cacheEntry.data.length}`);
                 return;
             }
-            let services = Array.isArray(data.service_totals) ? data.service_totals : [];
-            if ((!services || !services.length) && providerServiceTotals && providerServiceTotals.length) {
-                services = providerServiceTotals;
-                if (statusEl && !(data && data.error)) {
-                    statusEl.textContent = "";
-                }
-            } else if (data && data.error && statusEl) {
-                statusEl.textContent = data.error;
+            const wantsAllTime = range === "all_time";
+            const body = rangeToHeightBody(range);
+            if (!wantsAllTime && body === null) {
+                if (statusEl) statusEl.textContent = "Waiting for latest block height...";
+                logDashStep("earnings waiting-height", started, `range=${range}`);
+                return;
             }
+            const expectedFrom = !wantsAllTime ? Number(body.from_height) : null;
+            const expectedTo = !wantsAllTime ? Number(body.to_height) : null;
+            const summaryMatches = (summary) => {
+                if (!summary || typeof summary !== "object") return false;
+                const sumFrom = Number(summary.from_height ?? summary.from ?? 0);
+                const sumTo = Number(summary.to_height ?? summary.to ?? 0);
+                if (wantsAllTime) {
+                    return Number.isFinite(sumFrom) && Number.isFinite(sumTo) && sumFrom <= 0 && sumTo >= 999999999;
+                }
+                if (!Number.isFinite(expectedFrom) || !Number.isFinite(expectedTo)) return false;
+                return sumFrom === expectedFrom && sumTo === expectedTo;
+            };
+
+            let services = [];
+            let usedSummary = false;
+            if (summaryMatches(lastContractsSummary) && providerServiceTotals && providerServiceTotals.length) {
+                services = providerServiceTotals;
+                usedSummary = true;
+                logDashStep("earnings contracts reuse", started, `services=${services.length} range=${range}`);
+            } else {
+                if (contractsSummaryInFlight) {
+                    if (statusEl) statusEl.textContent = "Waiting for contract summary...";
+                    logDashStep("earnings skipped", started, "contracts in-flight");
+                    earningsPendingAfterContracts = true;
+                    return;
+                }
+                if (statusEl) statusEl.textContent = "";
+                const fetchStarted = perfNow();
+                const res = await fetch(resolveApi("/api/provider-contracts-summary"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+                    body: JSON.stringify(body || {}),
+                });
+                const text = await res.text();
+                logDashStep("earnings contracts fetch", fetchStarted, `status=${res.status} bytes=${text.length} range=${range}`);
+                const parseStarted = perfNow();
+                let data = {};
+                let parseErr = "";
+                try {
+                    data = text ? JSON.parse(text) : {};
+                } catch (err) {
+                    parseErr = String(err);
+                    data = {};
+                }
+                const serviceTotalsCount = Array.isArray(data.service_totals) ? data.service_totals.length : 0;
+                const contractsCount = Array.isArray(data.contracts) ? data.contracts.length : 0;
+                logDashStep(
+                    "earnings contracts parse",
+                    parseStarted,
+                    `contracts=${contractsCount} service_totals=${serviceTotalsCount}${parseErr ? ` error=${parseErr}` : ""}`
+                );
+                if (!res.ok) {
+                    if (statusEl) statusEl.textContent = data && data.error ? `Error: ${data.error}` : `Error ${res.status}`;
+                    renderEarningsChart([]);
+                    return;
+                }
+                lastContractsSummary = data;
+                const fetchedServices = Array.isArray(data.service_totals) ? data.service_totals : [];
+                if (fetchedServices.length) {
+                    providerServiceTotals = fetchedServices;
+                }
+                services = fetchedServices;
+                usedSummary = true;
+            }
+            if ((!services || !services.length) && usedSummary && summaryMatches(lastContractsSummary) && providerServiceTotals && providerServiceTotals.length) {
+                services = providerServiceTotals;
+            }
+            const buildStarted = perfNow();
             const chartData = buildServiceChartEntries(services);
             chartData.sort((a, b) => b.value - a.value);
             const top = chartData.slice(0, 10);
             earningsChartCache[range] = { data: top, fetched: now };
+            logDashStep("earnings build", buildStarted, `items=${chartData.length} top=${top.length}`);
+            const renderStarted = perfNow();
             renderEarningsChart(top);
+            logDashStep("earnings render", renderStarted, `labels=${top.length}`);
             if (statusEl && !top.length) {
                 statusEl.textContent = "";
             }
         } catch (e) {
             renderEarningsChart([]);
             if (statusEl) statusEl.textContent = `Failed to load earnings: ${e}`;
+        } finally {
+            earningsFetchInFlight = false;
+            logDashStep("earnings total", started, `range=${range}`);
         }
     }
 
@@ -3071,6 +3171,7 @@ function renderProviderServices() {
             if (res.ok) {
                 showResultModal("Sentinel Control", `${action} ok: ${JSON.stringify(data)}`);
                 refreshInfo();
+                refreshServices();
             } else {
                 showResultModal("Sentinel Control", `${action} failed: ${JSON.stringify(data)}`);
             }

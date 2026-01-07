@@ -5454,11 +5454,18 @@ def _listener_logger(port: int):
     if getattr(logger, "_initialized", False):
         return logger
     logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("%(asctime)s %(levelname)s [port=%(port)s] %(message)s")
     log_path = os.path.join(LOG_DIR, f"listener-{port}.log")
     handler = RotatingFileHandler(log_path, maxBytes=1_000_000, backupCount=3)
-    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [port=%(port)s] %(message)s"))
+    handler.setFormatter(formatter)
     handler.addFilter(lambda record: setattr(record, "port", port) or True)
     logger.addHandler(handler)
+    err_path = os.path.join(LOG_DIR, f"listener-{port}-error.log")
+    err_handler = RotatingFileHandler(err_path, maxBytes=1_000_000, backupCount=3)
+    err_handler.setLevel(logging.ERROR)
+    err_handler.setFormatter(formatter)
+    err_handler.addFilter(lambda record: setattr(record, "port", port) or True)
+    logger.addHandler(err_handler)
     logger.propagate = False
     logger._initialized = True  # type: ignore
     return logger
@@ -6646,6 +6653,9 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
     raw_query = getattr(work, "raw_query", None)
     if raw_query is None:
         raw_query = query_string
+    req_path = raw_path
+    if raw_query:
+        req_path = f"{raw_path}?{raw_query}"
     client_ip = work.client_ip or ""
     queue_wait_ms = 0
     try:
@@ -6840,6 +6850,16 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                     )
                 except Exception:
                     pass
+                try:
+                    _log(
+                        "error",
+                        f"request failed code={code} listener={listener_id} method={method} path={req_path} "
+                        f"service={service} service_id={svc_id} ip={client_ip} bypass=1 "
+                        f"url={_redact_url_userinfo(fwd_url)} total_ms={total_ms} "
+                        f"body={_preview_log_body(resp_body)}",
+                    )
+                except Exception:
+                    pass
             _log("info", f"bypass ok code={code} url={_redact_url_userinfo(fwd_url)}")
             return {"status": code or 502, "body": resp_body or b"", "headers": resp_hdrs}
         except BypassError as e:
@@ -6856,6 +6876,14 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             if server_ref is not None:
                 server_ref.client_pubkey = bech
     if not client_pub:
+        try:
+            _log(
+                "error",
+                f"request failed code=500 error=client_pubkey_unavailable listener={listener_id} "
+                f"method={method} path={req_path} service={service} service_id={svc_id} ip={client_ip}",
+            )
+        except Exception:
+            pass
         return {
             "status": 500,
             "body": json.dumps({"error": "client_pubkey_unavailable"}),
@@ -6911,11 +6939,28 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
         candidates = [c for c in candidates if isinstance(c, dict) and str(c.get("provider_pubkey") or "") == str(forced_provider)]
     if not candidates:
         if forced_provider:
+            try:
+                _log(
+                    "error",
+                    f"request failed code=503 error=forced_provider_not_found listener={listener_id} "
+                    f"method={method} path={req_path} service={service} service_id={svc_id} "
+                    f"provider={forced_provider} ip={client_ip}",
+                )
+            except Exception:
+                pass
             return {
                 "status": 503,
                 "body": json.dumps({"error": "forced_provider_not_found", "provider_pubkey": forced_provider}),
                 "headers": {"Content-Type": "application/json"},
             }
+        try:
+            _log(
+                "error",
+                f"request failed code=503 error=no_providers listener={listener_id} "
+                f"method={method} path={req_path} service={service} service_id={svc_id} ip={client_ip}",
+            )
+        except Exception:
+            pass
         return {"status": 503, "body": json.dumps({"error": "no_providers"}), "headers": {"Content-Type": "application/json"}}
     try:
         ordered = ", ".join(
@@ -7378,6 +7423,17 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             "other_ms": other_ms,
             "auto_create": bool(auto_created),
         }
+        if int(code or 0) >= 400:
+            try:
+                _log(
+                    "error",
+                    f"request failed code={code} listener={listener_id} method={method} path={req_path} "
+                    f"service={service} service_id={svc_id} provider={provider_filter} "
+                    f"cid={cid} nonce={nonce} ip={client_ip} total_ms={total_ms} "
+                    f"sentinel={_redact_url_userinfo(fwd_url)} body={_preview_log_body(resp_body)}",
+                )
+            except Exception:
+                pass
 
         hdrs = {"Content-Type": resp_hdrs.get("Content-Type", "application/json")}
         # Decorate response headers with Arkeo metadata.
@@ -7477,6 +7533,22 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
 
         return {"status": code or 502, "body": resp_body or b"", "headers": hdrs}
 
+    try:
+        provider_list = []
+        for c in candidates:
+            if isinstance(c, dict) and c.get("provider_pubkey"):
+                provider_list.append(str(c.get("provider_pubkey")))
+        preview = ",".join(provider_list[:5])
+        if len(provider_list) > 5:
+            preview = f"{preview},..."
+        _log(
+            "error",
+            f"request failed code=503 error={last_err or 'no_active_contract'} listener={listener_id} "
+            f"method={method} path={req_path} service={service} service_id={svc_id} "
+            f"ip={client_ip} providers={preview or '-'}",
+        )
+    except Exception:
+        pass
     return {"status": 503, "body": json.dumps({"error": last_err or "no_active_contract"}), "headers": {"Content-Type": "application/json"}}
 
 
@@ -8353,6 +8425,9 @@ def _do_post_inner_core(self, method: str = "POST"):
     svc_id = _safe_int(cfg.get("service_id"), 0)
     service_path = service
     orig_query = parsed_path.query or ""
+    req_path = incoming_path
+    if orig_query:
+        req_path = f"{incoming_path}?{orig_query}"
 
     path_no_slash = incoming_path[1:] if incoming_path.startswith("/") else incoming_path
     if service and path_no_slash.startswith(service):
@@ -8383,11 +8458,27 @@ def _do_post_inner_core(self, method: str = "POST"):
                 self._log("warning", f"whitelist block ip={client_ip} wl={wl}")
             except Exception:
                 pass
+            try:
+                self._log(
+                    "error",
+                    f"request failed code=403 error=ip_not_whitelisted listener={cfg.get('listener_id')} "
+                    f"method={method} path={req_path} service={service} service_id={svc_id} ip={client_ip}",
+                )
+            except Exception:
+                pass
             return self._send_json(403, {"error": "ip not whitelisted", "ip": client_ip})
 
     lane = getattr(self.server, "lane_exec", None)
     lane_timeout = getattr(self.server, "lane_timeout", PROXY_TIMEOUT_SECS)
     if not lane:
+        try:
+            self._log(
+                "error",
+                f"request failed code=500 error=lane_not_initialized listener={cfg.get('listener_id')} "
+                f"method={method} path={req_path} service={service} service_id={svc_id} ip={client_ip}",
+            )
+        except Exception:
+            pass
         return self._send_json(500, {"error": "lane_not_initialized"})
 
     work = WorkItem(
@@ -8402,16 +8493,27 @@ def _do_post_inner_core(self, method: str = "POST"):
         raw_query=orig_query,
     )
     if not lane.submit(work):
+        qsz_val = None
         try:
             qsz = None
             try:
                 qsz = lane.q.qsize()
             except Exception:
                 qsz = None
+            qsz_val = qsz
             if qsz is not None:
                 self._log("warning", f"lane queue full qsize={qsz}")
             else:
                 self._log("warning", "lane queue full")
+        except Exception:
+            pass
+        try:
+            self._log(
+                "error",
+                f"request failed code=503 error=lane_queue_full listener={cfg.get('listener_id')} "
+                f"method={method} path={req_path} service={service} service_id={svc_id} "
+                f"ip={client_ip} qsize={qsz_val if qsz_val is not None else 'unknown'}",
+            )
         except Exception:
             pass
         return self._send_json(503, {"error": "listener busy"})
@@ -8440,6 +8542,14 @@ def _do_post_inner_core(self, method: str = "POST"):
                 self._log("warning", f"lane timeout waiting for worker response qsize={qsz}")
             else:
                 self._log("warning", "lane timeout waiting for worker response")
+        except Exception:
+            pass
+        try:
+            self._log(
+                "error",
+                f"request failed code=503 error=lane_timeout listener={cfg.get('listener_id')} "
+                f"method={method} path={req_path} service={service} service_id={svc_id} ip={client_ip}",
+            )
         except Exception:
             pass
         return self._send_json(503, {"error": "timeout"})
@@ -10105,9 +10215,15 @@ def listener_logs(listener_id: str):
         max_lines_int = int(max_lines) if max_lines else 200
     except Exception:
         max_lines_int = 200
-    log_path = os.path.join(LOG_DIR, f"listener-{port}.log")
+    level = (request.args.get("level") or "info").strip().lower()
+    if level in ("error", "err"):
+        log_path = os.path.join(LOG_DIR, f"listener-{port}-error.log")
+        level = "error"
+    else:
+        log_path = os.path.join(LOG_DIR, f"listener-{port}.log")
+        level = "info"
     text = _tail_file(log_path, max_lines_int)
-    return jsonify({"port": port, "lines": max_lines_int, "log": text})
+    return jsonify({"port": port, "lines": max_lines_int, "level": level, "log": text, "path": log_path})
 
 
 @app.post("/api/sentinel-rebuild")
