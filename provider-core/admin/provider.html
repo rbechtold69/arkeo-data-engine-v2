@@ -206,6 +206,74 @@
                     <div class="hint" id="wizardCurrentBondHint" style="margin-top: 6px;">Current bond: <span id="wizardCurrentBond">–</span></div>
                 </td>
             </tr>
+            <tr>
+                <td colspan="2" class="no-border">
+                    <div class="collapse-wrapper">
+                        <button id="wizardBondReadonlyToggle" type="button" class="collapse-toggle" aria-expanded="false" aria-controls="wizardBondReadonlyBody" onclick="toggleWizardBondReadonly()">
+                            <span id="wizardBondReadonlyIcon" class="collapse-icon">▸</span>
+                            <span>Defaults &amp; Derived</span>
+                        </button>
+                        <div id="wizardBondReadonlyBody" class="collapse-body provider-readonly-body hidden" aria-hidden="true">
+                            <table>
+                                <tr>
+                                    <td class="label">
+                                        Sentinel URI
+                                        <div class="hint">The URI for the sentinel service metadata.</div>
+                                    </td>
+                                    <td class="value">
+                                        <span id="wizardSentinelUri" class="muted">–</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label">
+                                        Hotwallet Key
+                                        <div class="hint">The hot wallet key used.</div>
+                                    </td>
+                                    <td class="value">
+                                        <span id="wizardWalletKey">–</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label">
+                                        Hotwallet Pubkey
+                                        <div class="hint">The pubkey shown on the blockchain contracts.</div>
+                                    </td>
+                                    <td class="value">
+                                        <span id="wizardBech32Pubkey" class="monospace">–</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label">
+                                        Keyring Backend
+                                        <div class="hint">The keyring backend used.</div>
+                                    </td>
+                                    <td class="value">
+                                        <span id="wizardKeyringBackend">test</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label">
+                                        Bond Fees
+                                        <div class="hint">Default transaction fees.</div>
+                                    </td>
+                                    <td class="value">
+                                        <span id="wizardBondFees">200uarkeo</span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td class="label">
+                                        Metadata Nonce
+                                        <div class="hint">Used to increment updates.</div>
+                                    </td>
+                                    <td class="value">
+                                        <span id="wizardMetadataNonce">1</span>
+                                    </td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </td>
+            </tr>
             <tr id="wizardBondResponseRow" class="hidden">
                 <td class="label">
                     Submission Response
@@ -561,6 +629,7 @@
         updateStepStatusNeutral();
         resetVerifySteps();
         setupWizardValidationListeners();
+        populateBondDefaults();
     }
 
     function renderWizardSteps() {
@@ -628,6 +697,48 @@
             if (!menu.classList.contains("hidden")) {
                 document.getElementById("wizardServiceSearchInput").focus();
             }
+        }
+    }
+
+    function toggleWizardBondReadonly() {
+        const body = document.getElementById("wizardBondReadonlyBody");
+        const icon = document.getElementById("wizardBondReadonlyIcon");
+        const toggle = document.getElementById("wizardBondReadonlyToggle");
+        if (!body || !icon || !toggle) return;
+        const isHidden = body.classList.contains("hidden");
+        body.classList.toggle("hidden");
+        icon.textContent = isHidden ? "▾" : "▸";
+        toggle.setAttribute("aria-expanded", isHidden ? "true" : "false");
+        body.setAttribute("aria-hidden", isHidden ? "false" : "true");
+    }
+
+    async function populateBondDefaults() {
+        // Fetch provider info for pubkey, key name, keyring, fees
+        try {
+            const provRes = await fetch(resolveApi("/api/provider-info"));
+            if (provRes.ok) {
+                const provData = await provRes.json();
+                const keyName = provData?.user || "provider";
+                const pubkey = provData?.pubkey?.bech32 || "–";
+                const keyring = provData?.keyring_backend || "test";
+                const fees = provData?.fees || "200uarkeo";
+                const sentinelUri = provData?.sentinel_uri || "–";
+
+                document.getElementById("wizardWalletKey").textContent = keyName;
+                document.getElementById("wizardBech32Pubkey").textContent = pubkey;
+                document.getElementById("wizardKeyringBackend").textContent = keyring;
+                document.getElementById("wizardBondFees").textContent = fees;
+                document.getElementById("wizardSentinelUri").textContent = sentinelUri;
+            }
+        } catch (e) {
+            console.warn("Failed to fetch provider info:", e);
+        }
+
+        // Set metadata nonce from service data if available
+        if (wizardServiceData) {
+            const nonce = wizardServiceData.metadata_nonce || wizardServiceData.metadataNonce || "1";
+            const nextNonce = String(Number(nonce) + 1);
+            document.getElementById("wizardMetadataNonce").textContent = nextNonce;
         }
     }
 
@@ -1166,6 +1277,10 @@
         } else if (wizardCurrentStep === 4) {
             isValid = wizardSentinelComplete;
             message = wizardSentinelComplete ? "Sentinel updated. Click Continue to finish." : "Click Update Sentinel to begin";
+        } else if (wizardCurrentStep === 5) {
+            // Verify step - always valid, Done button should be enabled
+            isValid = true;
+            message = "";
         }
 
         if (statusEl) {
@@ -1220,32 +1335,54 @@
         if (backBtn) backBtn.style.display = wizardCurrentStep > minBackStep && wizardCurrentStep < verifyStep ? "inline-block" : "none";
 
         if (wizardCurrentStep === verifyStep) {
-            nextBtn.style.display = "none";
-            cancelBtn.textContent = "Done";
+            nextBtn.style.display = "inline-block";
+            nextBtn.textContent = "Done";
+            nextBtn.disabled = false;
+            nextBtn.onclick = () => { window.location.href = "index.html"; };
+            cancelBtn.style.visibility = "hidden";
+            cancelBtn.style.display = "inline-block";
         } else if (wizardCurrentStep === sentinelStep) {
             nextBtn.style.display = "inline-block";
             nextBtn.textContent = "Continue";
             nextBtn.disabled = !wizardSentinelComplete;
+            nextBtn.onclick = wizardNext;
+            cancelBtn.style.visibility = "visible";
+            cancelBtn.style.display = "inline-block";
             cancelBtn.textContent = "Cancel";
         } else if (wizardCurrentStep === 3) {
             nextBtn.style.display = "inline-block";
             nextBtn.textContent = "Submit Mod Contract";
+            nextBtn.onclick = wizardNext;
+            cancelBtn.style.visibility = "visible";
+            cancelBtn.style.display = "inline-block";
             cancelBtn.textContent = "Cancel";
         } else if (wizardCurrentStep === 2) {
             nextBtn.style.display = "inline-block";
             nextBtn.textContent = "Submit Bond Contract";
+            nextBtn.onclick = wizardNext;
+            cancelBtn.style.visibility = "visible";
+            cancelBtn.style.display = "inline-block";
             cancelBtn.textContent = "Cancel";
         } else if (wizardCurrentStep === 1) {
             nextBtn.style.display = "inline-block";
             nextBtn.textContent = "Save Endpoint Configuration";
+            nextBtn.onclick = wizardNext;
+            cancelBtn.style.visibility = "visible";
+            cancelBtn.style.display = "inline-block";
             cancelBtn.textContent = "Cancel";
         } else if (wizardCurrentStep === 0) {
             nextBtn.style.display = "inline-block";
             nextBtn.textContent = "Select Service";
+            nextBtn.onclick = wizardNext;
+            cancelBtn.style.visibility = "visible";
+            cancelBtn.style.display = "inline-block";
             cancelBtn.textContent = "Cancel";
         } else {
             nextBtn.style.display = "inline-block";
             nextBtn.textContent = "Next";
+            nextBtn.onclick = wizardNext;
+            cancelBtn.style.visibility = "visible";
+            cancelBtn.style.display = "inline-block";
             cancelBtn.textContent = "Cancel";
         }
 

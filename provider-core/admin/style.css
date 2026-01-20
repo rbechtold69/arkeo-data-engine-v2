@@ -703,6 +703,10 @@ pre {
 #providerReadonlyToggle {
     font-size: 16px;
 }
+#wizardBondReadonlyToggle {
+    font-size: 14px;
+    margin-top: 16px;
+}
 .provider-readonly-body {
     font-size: 16px;
 }
