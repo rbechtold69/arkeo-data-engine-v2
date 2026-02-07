@@ -1035,12 +1035,12 @@
         // Aggregate providers by pubkey and fetch metadata
         await aggregateProviders();
 
-        // Filter to only verified providers (those with accessible metadata)
-        const verifiedProviders = Object.values(state.providerInfos).filter(p => p.verified);
+        // Show all ONLINE providers (verified ones highlighted, new providers auto-included)
+        const onlineProviders = Object.values(state.providerInfos).filter(p => p.status === 'ONLINE');
         
         // Update UI
         updateStats();
-        renderProviders(verifiedProviders, 5); // Show top 5 on homepage
+        renderProviders(onlineProviders, 5); // Show top 5 on homepage
         renderEarningsChart();
 
         // Show success briefly
@@ -1206,15 +1206,21 @@
     // Fetch metadata from provider's metadata_uri
     async function fetchProviderMetadata(pubkey) {
       const info = state.providerInfos[pubkey];
-      if (!info || !info.metadataUri) {
-        // Mark as unverified (will be filtered out)
-        info.verified = false;
-        return;
+      if (!info) return;
+      
+      // All ONLINE providers are now shown (not just verified ones)
+      // Set default name from pubkey if none exists
+      if (!info.name) {
+        info.name = 'Provider ' + pubkey.slice(-8);
       }
       
-      // Skip localhost URIs - mark as unverified
+      // Mark as verified if in KNOWN_PROVIDERS or has valid metadata
+      info.verified = !!KNOWN_PROVIDERS[pubkey];
+      
+      if (!info.metadataUri) return;
+      
+      // Skip localhost URIs
       if (info.metadataUri.includes('127.0.0.1') || info.metadataUri.includes('localhost')) {
-        info.verified = false;
         return;
       }
       
@@ -1227,22 +1233,15 @@
           const metadata = await response.json();
           const moniker = metadata.config?.moniker || metadata.moniker;
           
-          // Only mark as verified if we got a real name
           if (moniker && moniker.length > 0) {
             info.name = moniker;
             info.description = metadata.config?.description || metadata.description || '';
             info.website = metadata.config?.website || metadata.website || '';
             info.location = metadata.config?.location || metadata.location || '';
-            info.verified = true;
-          } else {
-            info.verified = false;
+            info.verified = true; // Metadata accessible = verified
           }
-        } else {
-          info.verified = false;
         }
       } catch (err) {
-        // Metadata fetch failed - mark as unverified
-        info.verified = false;
         if (CONFIG.DEBUG_MODE) {
           console.warn('Failed to fetch metadata for', pubkey, err.message);
         }
@@ -1263,9 +1262,9 @@
     }
 
     function updateStats() {
-      // Count verified data providers (companies with accessible metadata)
-      const verifiedProviders = Object.values(state.providerInfos).filter(p => p.verified);
-      document.getElementById('providerCount').textContent = verifiedProviders.length;
+      // Count all ONLINE providers
+      const onlineProviders = Object.values(state.providerInfos).filter(p => p.status === 'ONLINE');
+      document.getElementById('providerCount').textContent = onlineProviders.length;
 
       // Count unique chains/services offered
       const uniqueServices = new Set(state.providers.map(p => p.service)).size;
