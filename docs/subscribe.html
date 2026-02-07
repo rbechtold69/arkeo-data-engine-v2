@@ -840,6 +840,74 @@
       }
     };
 
+    // Convert pubkey bytes to bech32 format (arkeopub1...)
+    function pubkeyToBech32(pubkeyBytes, prefix) {
+      const aminoPrefix = [0xeb, 0x5a, 0xe9, 0x87, 0x21];
+      const pubkey = new Uint8Array(pubkeyBytes);
+      const combined = new Uint8Array(aminoPrefix.length + pubkey.length);
+      combined.set(aminoPrefix);
+      combined.set(pubkey, aminoPrefix.length);
+      const words = toWords(combined);
+      return bech32Encode(prefix, words);
+    }
+    
+    function toWords(bytes) {
+      const words = [];
+      let value = 0;
+      let bits = 0;
+      for (const byte of bytes) {
+        value = (value << 8) | byte;
+        bits += 8;
+        while (bits >= 5) {
+          bits -= 5;
+          words.push((value >> bits) & 0x1f);
+        }
+      }
+      if (bits > 0) {
+        words.push((value << (5 - bits)) & 0x1f);
+      }
+      return words;
+    }
+    
+    function bech32Encode(prefix, words) {
+      const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+      const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+      
+      function polymod(values) {
+        let chk = 1;
+        for (const v of values) {
+          const top = chk >> 25;
+          chk = ((chk & 0x1ffffff) << 5) ^ v;
+          for (let i = 0; i < 5; i++) {
+            if ((top >> i) & 1) chk ^= GENERATOR[i];
+          }
+        }
+        return chk;
+      }
+      
+      function hrpExpand(hrp) {
+        const result = [];
+        for (const c of hrp) result.push(c.charCodeAt(0) >> 5);
+        result.push(0);
+        for (const c of hrp) result.push(c.charCodeAt(0) & 31);
+        return result;
+      }
+      
+      function createChecksum(hrp, data) {
+        const values = hrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+        const mod = polymod(values) ^ 1;
+        const result = [];
+        for (let i = 0; i < 6; i++) result.push((mod >> (5 * (5 - i))) & 31);
+        return result;
+      }
+      
+      const checksum = createChecksum(prefix, words);
+      const combined = words.concat(checksum);
+      let result = prefix + '1';
+      for (const w of combined) result += CHARSET[w];
+      return result;
+    }
+
     // Initialize
     async function init() {
       await loadRealData();
@@ -1298,6 +1366,10 @@
         const accounts = await offlineSigner.getAccounts();
         const walletPubkeyBytes = accounts[0].pubkey;
         
+        // Convert pubkey to arkeopub bech32 format (needed for client field)
+        const clientPubkey = pubkeyToBech32(walletPubkeyBytes, 'arkeopub');
+        console.log('Client pubkey:', clientPubkey);
+        
         // Calculate rate in uarkeo (provider rate is in ARKEO, convert to uarkeo)
         const rateUarkeo = Math.max(1, Math.floor((selectedProvider.rate || 0.00000001) * CONFIG.ARKEO_DIVISOR));
         
@@ -1318,7 +1390,7 @@
             creator: walletAddress,
             provider: selectedProvider.pubkey,
             service: serviceName,
-            client: walletAddress,
+            client: clientPubkey,
             delegate: '',
             contractType: 1, // PAY_AS_YOU_GO = 1
             duration: '1000000',
