@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Arkeo Data Marketplace</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <style>
     :root {
       --bg-main: #0a0c10;
@@ -334,6 +335,121 @@
       font-size: 0.9rem;
     }
 
+    /* Momentum Section */
+    .momentum-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .momentum-section::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at top right, rgba(59, 224, 255, 0.15), transparent 50%),
+                  radial-gradient(circle at bottom left, rgba(59, 224, 255, 0.1), transparent 45%);
+      pointer-events: none;
+    }
+    .momentum-content {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: 1fr 2fr;
+      gap: 2rem;
+      align-items: stretch;
+    }
+    @media (max-width: 900px) {
+      .momentum-content {
+        grid-template-columns: 1fr;
+      }
+    }
+    .momentum-text h2 {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      line-height: 1.3;
+    }
+    .momentum-text p {
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      margin-bottom: 1rem;
+    }
+    .momentum-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--arkeo-dim);
+      color: var(--arkeo);
+      border-radius: 2rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-bottom: 1rem;
+    }
+    .momentum-buttons {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    .chart-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+    .chart-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1rem;
+    }
+    .chart-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .time-filters {
+      display: flex;
+      gap: 0.25rem;
+    }
+    .time-filter {
+      padding: 0.375rem 0.75rem;
+      border-radius: 0.375rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      background: transparent;
+      color: var(--text-dim);
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .time-filter:hover {
+      background: var(--bg-card);
+    }
+    .time-filter.active {
+      background: var(--arkeo);
+      color: #000;
+    }
+    .chart-container {
+      flex: 1;
+      min-height: 250px;
+      position: relative;
+    }
+    .no-data {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+
     /* Loading */
     .loading {
       text-align: center;
@@ -440,6 +556,39 @@
 
   <!-- Main Content -->
   <main class="main">
+    <!-- Marketplace Momentum -->
+    <section class="momentum-section">
+      <div class="momentum-content">
+        <div class="momentum-text">
+          <div class="momentum-badge">
+            📈 Marketplace Momentum
+          </div>
+          <h2>Don't Miss Out on Your Data's Full Earning Potential!</h2>
+          <p>Arkeo lets you turn your data and services into real earnings. Powered by the Arkeo chain, this open marketplace is where people come to access data and where you get paid when they choose you.</p>
+          <p>Getting started is simple: provide a service, register it on Arkeo, and watch your earnings grow as users tap into what you offer.</p>
+          <div class="momentum-buttons">
+            <a href="become-provider.html" class="btn btn-primary">💰 Start Earning</a>
+            <a href="https://docs.arkeo.network" target="_blank" class="btn btn-secondary">📖 Learn How</a>
+          </div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-header">
+            <span class="chart-title">Top Providers (by ARKEO Earnings)</span>
+            <div class="time-filters">
+              <button class="time-filter" data-range="daily" onclick="setTimeRange('daily')">Daily</button>
+              <button class="time-filter" data-range="weekly" onclick="setTimeRange('weekly')">Weekly</button>
+              <button class="time-filter" data-range="monthly" onclick="setTimeRange('monthly')">Monthly</button>
+              <button class="time-filter active" data-range="all_time" onclick="setTimeRange('all_time')">All Time</button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="earningsChart"></canvas>
+            <div class="no-data hidden" id="noChartData">No earnings data available for this range.</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- CTA Cards -->
     <section class="cta-grid">
       <div class="cta-card">
@@ -523,6 +672,8 @@
       providers: [],
       services: {},
       contracts: [],
+      timeRange: 'all_time',
+      chart: null,
     };
 
     // ============================================================
@@ -564,6 +715,9 @@
 
         // Render providers
         renderProviders(state.providers);
+        
+        // Render earnings chart
+        renderEarningsChart();
 
       } catch (err) {
         console.error('Failed to load data:', err);
@@ -703,6 +857,148 @@
       const div = document.createElement('div');
       div.textContent = text || '';
       return div.innerHTML;
+    }
+
+    // ============================================================
+    // EARNINGS CHART
+    // ============================================================
+    function calculateProviderEarnings() {
+      // Group contracts by provider pubkey and calculate earnings
+      const providerEarnings = {};
+      
+      state.contracts.forEach(contract => {
+        const pubkey = contract.provider_address || contract.provider;
+        if (!pubkey) return;
+        
+        const paid = parseInt(contract.paid || 0);
+        if (!providerEarnings[pubkey]) {
+          providerEarnings[pubkey] = {
+            pubkey: pubkey,
+            totalEarnings: 0,
+            contractCount: 0,
+          };
+        }
+        providerEarnings[pubkey].totalEarnings += paid;
+        providerEarnings[pubkey].contractCount++;
+      });
+      
+      // Also check providers for earnings from their bonds/activity
+      state.providers.forEach(provider => {
+        const pubkey = provider.pub_key;
+        if (!pubkey) return;
+        
+        // Find service name for this provider
+        const serviceName = getServiceName(provider.service);
+        
+        if (!providerEarnings[pubkey]) {
+          providerEarnings[pubkey] = {
+            pubkey: pubkey,
+            totalEarnings: 0,
+            contractCount: 0,
+          };
+        }
+        providerEarnings[pubkey].serviceName = serviceName;
+        providerEarnings[pubkey].status = provider.status;
+      });
+      
+      // Convert to array and sort by earnings
+      const sorted = Object.values(providerEarnings)
+        .filter(p => p.totalEarnings > 0)
+        .sort((a, b) => b.totalEarnings - a.totalEarnings)
+        .slice(0, 10); // Top 10
+      
+      return sorted;
+    }
+    
+    function renderEarningsChart() {
+      const canvas = document.getElementById('earningsChart');
+      const noDataDiv = document.getElementById('noChartData');
+      
+      if (!canvas) return;
+      
+      const earnings = calculateProviderEarnings();
+      
+      if (earnings.length === 0) {
+        canvas.style.display = 'none';
+        noDataDiv.classList.remove('hidden');
+        return;
+      }
+      
+      canvas.style.display = 'block';
+      noDataDiv.classList.add('hidden');
+      
+      const labels = earnings.map(e => {
+        if (e.serviceName) return e.serviceName;
+        return e.pubkey.slice(0, 12) + '...';
+      });
+      
+      const values = earnings.map(e => e.totalEarnings / CONFIG.ARKEO_DIVISOR);
+      
+      // Destroy existing chart if exists
+      if (state.chart) {
+        state.chart.destroy();
+      }
+      
+      const ctx = canvas.getContext('2d');
+      state.chart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'ARKEO Earned',
+            data: values,
+            backgroundColor: 'rgba(59, 224, 255, 0.35)',
+            borderColor: 'rgba(59, 224, 255, 0.8)',
+            borderWidth: 1.5,
+            borderRadius: 4,
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: (context) => `${context.parsed.y.toFixed(4)} ARKEO`
+              }
+            }
+          },
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: {
+                callback: (val) => val.toFixed(2),
+                color: '#8b92a5'
+              },
+              grid: { color: 'rgba(255,255,255,0.05)' }
+            },
+            x: {
+              ticks: { 
+                color: '#8b92a5',
+                maxRotation: 45,
+                minRotation: 45
+              },
+              grid: { display: false }
+            }
+          }
+        }
+      });
+    }
+    
+    function setTimeRange(range) {
+      state.timeRange = range;
+      
+      // Update button states
+      document.querySelectorAll('.time-filter').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.range === range) {
+          btn.classList.add('active');
+        }
+      });
+      
+      // Re-render chart (in future, could filter by time range)
+      renderEarningsChart();
     }
 
     // ============================================================
