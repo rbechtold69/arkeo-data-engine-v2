@@ -700,10 +700,56 @@
     let selectedProvider = null;
     let currentStep = 1;
     let paymentMethod = 'arkeo'; // Default to ARKEO for discount
+    let walletAddress = null;
+    
+    // Arkeo chain configuration for Keplr
+    const ARKEO_CHAIN_CONFIG = {
+      chainId: "arkeo-main-v1",
+      chainName: "Arkeo Network",
+      rpc: "https://rpc-seed.arkeo.network",
+      rest: "https://rest-seed.arkeo.network",
+      bip44: { coinType: 118 },
+      bech32Config: {
+        bech32PrefixAccAddr: "arkeo",
+        bech32PrefixAccPub: "arkeopub",
+        bech32PrefixValAddr: "arkeovaloper",
+        bech32PrefixValPub: "arkeovaloperpub",
+        bech32PrefixConsAddr: "arkeovalcons",
+        bech32PrefixConsPub: "arkeovalconspub"
+      },
+      currencies: [{
+        coinDenom: "ARKEO",
+        coinMinimalDenom: "uarkeo",
+        coinDecimals: 8,
+        coinGeckoId: "arkeo"
+      }],
+      feeCurrencies: [{
+        coinDenom: "ARKEO",
+        coinMinimalDenom: "uarkeo",
+        coinDecimals: 8,
+        coinGeckoId: "arkeo",
+        gasPriceStep: { low: 0.01, average: 0.025, high: 0.04 }
+      }],
+      stakeCurrency: {
+        coinDenom: "ARKEO",
+        coinMinimalDenom: "uarkeo",
+        coinDecimals: 8,
+        coinGeckoId: "arkeo"
+      }
+    };
 
     // Initialize
     function init() {
       renderChains(chains);
+      checkKeplr();
+    }
+    
+    async function checkKeplr() {
+      if (window.keplr) {
+        console.log('Keplr detected');
+      } else {
+        console.log('Keplr not installed');
+      }
     }
 
     function renderChains(chainList) {
@@ -863,9 +909,24 @@
       document.getElementById('depositEstimate').innerHTML = `≈ <strong>${requests.toLocaleString()}</strong> requests${bonusText}`;
     }
 
-    function connectWallet() {
+    async function connectWallet() {
       const walletSection = document.getElementById('walletSection');
       const openBtn = document.getElementById('openContractBtn');
+      
+      // Check if Keplr is installed
+      if (!window.keplr) {
+        walletSection.innerHTML = `
+          <div style="color: var(--error); text-align: center;">
+            <p>❌ Keplr wallet not detected</p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem;">
+              <a href="https://www.keplr.app/download" target="_blank" style="color: var(--arkeo);">
+                Install Keplr →
+              </a>
+            </p>
+          </div>
+        `;
+        return;
+      }
       
       walletSection.innerHTML = `
         <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
@@ -874,15 +935,63 @@
         </div>
       `;
       
-      // Simulate wallet connection
-      setTimeout(() => {
+      try {
+        // Add Arkeo chain to Keplr if not already added
+        try {
+          await window.keplr.experimentalSuggestChain(ARKEO_CHAIN_CONFIG);
+        } catch (e) {
+          console.log('Chain suggestion failed or already added:', e);
+        }
+        
+        // Enable the chain
+        await window.keplr.enable(ARKEO_CHAIN_CONFIG.chainId);
+        
+        // Get the offline signer
+        const offlineSigner = await window.keplr.getOfflineSigner(ARKEO_CHAIN_CONFIG.chainId);
+        const accounts = await offlineSigner.getAccounts();
+        
+        if (accounts.length > 0) {
+          walletAddress = accounts[0].address;
+          const shortAddr = walletAddress.slice(0, 10) + '...' + walletAddress.slice(-6);
+          
+          // Fetch balance
+          let balance = '0';
+          try {
+            const balRes = await fetch(`${ARKEO_CHAIN_CONFIG.rest}/cosmos/bank/v1beta1/balances/${walletAddress}`);
+            const balData = await balRes.json();
+            const arkeoBalance = balData.balances?.find(b => b.denom === 'uarkeo');
+            if (arkeoBalance) {
+              balance = (parseInt(arkeoBalance.amount) / 100000000).toFixed(2);
+            }
+          } catch (e) {
+            console.log('Balance fetch failed:', e);
+          }
+          
+          walletSection.innerHTML = `
+            <div style="color: var(--success); text-align: center;">
+              <div>✅ Wallet Connected</div>
+              <div style="font-weight: 600; margin-top: 0.25rem;">${shortAddr}</div>
+              <div style="color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem;">
+                Balance: ${balance} ARKEO
+              </div>
+            </div>
+          `;
+          openBtn.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error('Keplr connection failed:', err);
         walletSection.innerHTML = `
-          <div style="color: var(--success);">
-            ✅ Wallet Connected: <strong>arkeo1abc...xyz</strong>
+          <div style="color: var(--error); text-align: center;">
+            <p>❌ Connection failed</p>
+            <p style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-dim);">
+              ${err.message || 'Please try again'}
+            </p>
+            <button onclick="connectWallet()" class="btn btn-secondary" style="margin-top: 0.75rem;">
+              Try Again
+            </button>
           </div>
         `;
-        openBtn.classList.remove('hidden');
-      }, 1500);
+      }
     }
 
     function openContract() {
