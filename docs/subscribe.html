@@ -912,6 +912,36 @@
         
         renderChains(chains);
         
+        // Handle URL parameter - pre-select provider if specified
+        const urlParams = new URLSearchParams(window.location.search);
+        const providerPubkey = urlParams.get('provider');
+        if (providerPubkey) {
+          console.log('Pre-selecting provider:', providerPubkey);
+          // Find which chain this provider serves
+          for (const [chainId, providers] of Object.entries(providersByChain)) {
+            const provider = providers.find(p => 
+              p.pubkey === providerPubkey || 
+              providerPubkey.startsWith(p.pubkey.slice(0, 40)) ||
+              p.pubkey.startsWith(providerPubkey.slice(0, 40))
+            );
+            if (provider) {
+              // Auto-select chain
+              const chain = chains.find(c => c.id == chainId);
+              if (chain) {
+                selectChain(chain.id, chain.name);
+                // Move to step 2 and select provider
+                setTimeout(() => {
+                  goToStep(2);
+                  setTimeout(() => {
+                    selectProvider(provider.id, provider.name, provider.rate, chainId);
+                  }, 100);
+                }, 100);
+              }
+              break;
+            }
+          }
+        }
+        
       } catch (err) {
         console.error('Failed to load data:', err);
         document.getElementById('chainGrid').innerHTML = `
@@ -1000,32 +1030,40 @@
       }
       
       list.innerHTML = chainProviders.map(p => `
-        <div class="provider-card" onclick="selectProvider('${p.id}', '${p.name}', ${p.rate})">
+        <div class="provider-card" data-pubkey="${p.pubkey}" onclick="selectProvider('${p.id}', '${p.name}', ${p.rate})">
           <div class="provider-header">
-            <span class="provider-name">${p.name}</span>
+            <span class="provider-name">${p.name}${p.verified ? ' ✓' : ''}</span>
             <span class="provider-rate">${p.rate.toFixed(4)} ARKEO/req</span>
           </div>
           <div class="provider-stats">
             <span class="provider-stat"><span class="stat-good">●</span> Online</span>
             <span class="provider-stat">📊 ${p.requests} requests</span>
           </div>
-          <div class="provider-description">${p.description || 'Verified Arkeo data provider'}</div>
+          <div class="provider-description">${p.description || 'Arkeo data provider'}</div>
         </div>
       `).join('');
     }
 
-    function selectProvider(pubkey, name, rate) {
-      selectedProvider = { id: pubkey, name, rate, pubkey };
+    function selectProvider(pubkey, name, rate, serviceId = null) {
+      selectedProvider = { id: pubkey, name, rate, pubkey, serviceId: serviceId || selectedChain?.id };
       
-      document.querySelectorAll('.provider-card').forEach((el, i) => {
+      document.querySelectorAll('.provider-card').forEach((el) => {
         el.classList.remove('selected');
+        // Find and highlight the matching card
+        if (el.getAttribute('data-pubkey') === pubkey) {
+          el.classList.add('selected');
+        }
       });
-      event.currentTarget.classList.add('selected');
+      
+      // Also highlight via event if available
+      if (typeof event !== 'undefined' && event?.currentTarget) {
+        event.currentTarget.classList.add('selected');
+      }
       
       document.getElementById('nextBtn2').disabled = false;
       
       // Update summary
-      document.getElementById('summaryChain').textContent = selectedChain.name;
+      document.getElementById('summaryChain').textContent = selectedChain?.name || 'Selected Chain';
       document.getElementById('summaryProvider').textContent = name;
       document.getElementById('summaryRate').textContent = rate + ' ARKEO/request';
     }
