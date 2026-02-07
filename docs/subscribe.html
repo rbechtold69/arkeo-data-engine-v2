@@ -761,6 +761,7 @@
     };
     
     // Service ID to chain name mapping
+    // Display names for UI
     const SERVICE_NAMES = {
       1: 'Arkeo Mainnet RPC',
       2: 'Arkeo Mainnet Fullnode',
@@ -773,6 +774,12 @@
       'thorchain-mainnet-fullnode': 'THORChain Mainnet',
       'maya-mainnet-fullnode': 'Maya Protocol',
       'thorchain-v1-fullnode': 'THORChain V1',
+    };
+    
+    // Service ID to actual service name (for API calls)
+    const SERVICE_ID_TO_NAME = {
+      1: 'arkeo-mainnet-rpc',
+      2: 'arkeo-mainnet-fullnode',
     };
     
     // Real chain and provider data (loaded from API)
@@ -1294,12 +1301,14 @@
         // Calculate rate in uarkeo (provider rate is in ARKEO, convert to uarkeo)
         const rateUarkeo = Math.max(1, Math.floor((selectedProvider.rate || 0.00000001) * CONFIG.ARKEO_DIVISOR));
         
-        // Get service ID - ensure it's a valid number
+        // Get service name - the API requires the service NAME not ID
         const serviceId = selectedProvider.serviceId || selectedChain.id;
-        console.log('Service ID:', serviceId, 'Chain:', selectedChain, 'Provider:', selectedProvider);
+        // Look up the actual service name from ID, or use the ID if it's already a name
+        const serviceName = SERVICE_ID_TO_NAME[serviceId] || (isNaN(serviceId) ? serviceId : null);
+        console.log('Service ID:', serviceId, 'Service Name:', serviceName, 'Chain:', selectedChain);
         
-        if (!serviceId) {
-          throw new Error('No service ID found. Please select a provider again.');
+        if (!serviceName) {
+          throw new Error('No service name found. Please select a provider again.');
         }
         
         // Build MsgOpenContract with proper format
@@ -1308,7 +1317,7 @@
           value: {
             creator: walletAddress,
             provider: selectedProvider.pubkey,
-            service: String(serviceId),
+            service: serviceName,
             client: walletAddress,
             delegate: '',
             contractType: 1, // PAY_AS_YOU_GO = 1
