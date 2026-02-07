@@ -159,8 +159,12 @@ class ArkeoTxHelper {
   }
 
   encodeModProvider(params) {
-    const payAsYouGoRate = params.payAsYouGoRate.map(coin => 
-      this.Coin.create({ denom: coin.denom, amount: coin.amount })
+    const subscriptionRate = (params.subscriptionRate || []).map(coin => 
+      this.ArkeoCoin.create({ denom: coin.denom, amount: String(coin.amount) })
+    );
+    
+    const payAsYouGoRate = (params.payAsYouGoRate || []).map(coin => 
+      this.ArkeoCoin.create({ denom: coin.denom, amount: String(coin.amount) })
     );
     
     const message = this.MsgModProvider.create({
@@ -168,13 +172,13 @@ class ArkeoTxHelper {
       provider: params.provider,
       service: params.service,
       metadataUri: params.metadataUri || '',
-      metadataNonce: params.metadataNonce || 1,
-      status: params.status || 1,
-      minContractDuration: params.minContractDuration || 10,
-      maxContractDuration: params.maxContractDuration || 1000000,
-      subscriptionRate: [],
+      metadataNonce: parseInt(params.metadataNonce) || 1,
+      status: parseInt(params.status) || 1,
+      minContractDuration: parseInt(params.minContractDuration) || 10,
+      maxContractDuration: parseInt(params.maxContractDuration) || 1000000,
+      subscriptionRate: subscriptionRate,
       payAsYouGoRate: payAsYouGoRate,
-      settlementDuration: params.settlementDuration || 10
+      settlementDuration: parseInt(params.settlementDuration) || 10
     });
     return this.MsgModProvider.encode(message).finish();
   }

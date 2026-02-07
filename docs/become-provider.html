@@ -1454,8 +1454,8 @@
             status: 1, // ONLINE = 1
             minContractDuration: '10',
             maxContractDuration: '1000000',
-            subscriptionRate: [],
-            payAsYouGoRate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate) }],
+            subscriptionRate: [{ denom: CONFIG.ARKEO_DENOM, amount: '1' }],  // Must be positive
+            payAsYouGoRate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate || '1') }],
             settlementDuration: '10',
           }
         };
