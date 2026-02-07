@@ -16,14 +16,14 @@ message MsgModProvider {
   string creator = 1;
   string provider = 2;
   string service = 3;
-  string metadata_uri = 4;
-  uint64 metadata_nonce = 5;
+  string metadataUri = 4;
+  uint64 metadataNonce = 5;
   int32 status = 6;
-  int64 min_contract_duration = 7;
-  int64 max_contract_duration = 8;
-  repeated Coin subscription_rate = 9;
-  repeated Coin pay_as_you_go_rate = 10;
-  int64 settlement_duration = 11;
+  int64 minContractDuration = 7;
+  int64 maxContractDuration = 8;
+  repeated Coin subscriptionRate = 9;
+  repeated Coin payAsYouGoRate = 10;
+  int64 settlementDuration = 11;
 }
 
 message Coin {
@@ -159,7 +159,7 @@ class ArkeoTxHelper {
   }
 
   encodeModProvider(params) {
-    // Use snake_case to match proto field names exactly
+    // protobufjs converts snake_case to camelCase automatically
     const subscriptionRate = (params.subscriptionRate || []).map(coin => 
       this.ArkeoCoin.create({ denom: coin.denom, amount: String(coin.amount) })
     );
@@ -170,19 +170,21 @@ class ArkeoTxHelper {
     
     console.log('Encoding subscriptionRate:', subscriptionRate);
     console.log('Encoding payAsYouGoRate:', payAsYouGoRate);
+    console.log('minContractDuration input:', params.minContractDuration, '→', parseInt(params.minContractDuration) || 10);
     
+    // Use camelCase - protobufjs auto-converts from snake_case proto
     const message = this.MsgModProvider.create({
       creator: params.creator,
       provider: params.provider,
       service: params.service,
-      metadata_uri: params.metadataUri || '',
-      metadata_nonce: parseInt(params.metadataNonce) || 1,
+      metadataUri: params.metadataUri || '',
+      metadataNonce: parseInt(params.metadataNonce) || 1,
       status: parseInt(params.status) || 1,
-      min_contract_duration: parseInt(params.minContractDuration) || 10,
-      max_contract_duration: parseInt(params.maxContractDuration) || 1000000,
-      subscription_rate: subscriptionRate,
-      pay_as_you_go_rate: payAsYouGoRate,
-      settlement_duration: parseInt(params.settlementDuration) || 10
+      minContractDuration: parseInt(params.minContractDuration) || 10,
+      maxContractDuration: parseInt(params.maxContractDuration) || 1000000,
+      subscriptionRate: subscriptionRate,
+      payAsYouGoRate: payAsYouGoRate,
+      settlementDuration: parseInt(params.settlementDuration) || 10
     });
     
     console.log('MsgModProvider message:', message);
