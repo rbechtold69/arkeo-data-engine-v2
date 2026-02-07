@@ -752,11 +752,11 @@
         // Load services (chains)
         const servicesRes = await fetch(`${API_BASE}/arkeo/services`);
         const servicesData = await servicesRes.json();
-        const services = servicesData.service || [];
+        const services = servicesData.services || [];
         
         // Build service name lookup
         services.forEach(s => {
-          SERVICE_NAMES[s.service_id] = s.service;
+          SERVICE_NAMES[s.service_id] = s.name || s.service;
         });
         
         // Load providers
@@ -819,10 +819,12 @@
           });
         });
         
-        // Only show chains that have verified providers
-        chains = chains.filter(chain => 
-          providersByChain[chain.id] && providersByChain[chain.id].length > 0
-        );
+        // Only show chains that have verified providers AND proper names
+        chains = chains.filter(chain => {
+          const hasProviders = providersByChain[chain.id] && providersByChain[chain.id].length > 0;
+          const hasProperName = !chain.name.startsWith('Service ');
+          return hasProviders && hasProperName;
+        });
         
         renderChains(chains);
         
