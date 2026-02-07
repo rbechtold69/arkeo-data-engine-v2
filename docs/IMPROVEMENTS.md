@@ -88,4 +88,29 @@ This document tracks improvements made to the Arkeo marketplace compared to the 
 
 ---
 
+## 🪙 Tokenomics Roadmap
+
+### ✅ Implemented Now
+- **ARKEO Payment Discount (15%)** — Pay with ARKEO = 15% more requests vs USDC
+- **Burn Counter** — Dashboard shows total ARKEO burned (visible commitment to deflation)
+- **Provider Visibility by Bond** — Higher bond = better placement in marketplace
+
+### 🔜 Phase 2 (Next Sprint)
+- **Burn Mechanism** — 1-2% of each transaction burned
+- **Staking Rewards Display** — Show APY for staking ARKEO
+- **Fee Sharing** — Stakers earn % of marketplace fees
+
+### 🚀 Phase 3 (Future)
+- **Premium Features** — Stake ARKEO to unlock analytics, priority support
+- **Referral Program** — Earn ARKEO for onboarding providers/subscribers
+- **Governance Integration** — Stake to vote on marketplace parameters
+- **Buyback & Burn** — Marketplace takes small fee, buys ARKEO, burns it
+
+### x402 AI Agent Synergy
+- AI agents pay per-request in ARKEO (constant demand)
+- Every agent request = micro-burn
+- Agent volume scales with AI adoption = organic buy pressure
+
+---
+
 *Last updated: February 7, 2026*

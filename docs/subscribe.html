@@ -588,10 +588,26 @@
       </div>
       
       <div class="form-group">
+        <label class="form-label">Payment Method</label>
+        <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem;">
+          <button class="btn btn-primary" id="payArkeoBtn" onclick="selectPayment('arkeo')" style="flex: 1; position: relative;">
+            💎 Pay with ARKEO
+            <span style="position: absolute; top: -8px; right: -8px; background: #10b981; color: #000; font-size: 0.65rem; padding: 2px 6px; border-radius: 10px; font-weight: 700;">SAVE 15%</span>
+          </button>
+          <button class="btn btn-secondary" id="payUsdcBtn" onclick="selectPayment('usdc')" style="flex: 1;">
+            💵 Pay with USDC
+          </button>
+        </div>
+        <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 0.5rem; padding: 0.75rem; margin-bottom: 1rem; font-size: 0.85rem;" id="arkeoDiscount">
+          🔥 <strong>ARKEO holders save 15%</strong> — Plus every transaction burns a small amount, increasing token scarcity.
+        </div>
+      </div>
+      
+      <div class="form-group">
         <label class="form-label">Deposit Amount</label>
         <div class="deposit-input-group">
           <input type="number" class="deposit-input" id="depositAmount" value="10" min="1" oninput="updateEstimate()">
-          <span class="deposit-suffix">ARKEO</span>
+          <span class="deposit-suffix" id="depositSuffix">ARKEO</span>
         </div>
         <div class="deposit-estimate" id="depositEstimate">
           ≈ <strong>10,000</strong> requests
@@ -683,6 +699,7 @@
     let selectedChain = null;
     let selectedProvider = null;
     let currentStep = 1;
+    let paymentMethod = 'arkeo'; // Default to ARKEO for discount
 
     // Initialize
     function init() {
@@ -809,11 +826,41 @@
       }
     }
 
+    function selectPayment(method) {
+      paymentMethod = method;
+      const arkeoBtn = document.getElementById('payArkeoBtn');
+      const usdcBtn = document.getElementById('payUsdcBtn');
+      const suffix = document.getElementById('depositSuffix');
+      const discountBox = document.getElementById('arkeoDiscount');
+      
+      if (method === 'arkeo') {
+        arkeoBtn.classList.remove('btn-secondary');
+        arkeoBtn.classList.add('btn-primary');
+        usdcBtn.classList.remove('btn-primary');
+        usdcBtn.classList.add('btn-secondary');
+        suffix.textContent = 'ARKEO';
+        discountBox.style.display = 'block';
+      } else {
+        usdcBtn.classList.remove('btn-secondary');
+        usdcBtn.classList.add('btn-primary');
+        arkeoBtn.classList.remove('btn-primary');
+        arkeoBtn.classList.add('btn-secondary');
+        suffix.textContent = 'USDC';
+        discountBox.style.display = 'none';
+      }
+      updateEstimate();
+    }
+    
     function updateEstimate() {
       const amount = parseFloat(document.getElementById('depositAmount').value) || 0;
-      const rate = selectedProvider ? selectedProvider.rate : 0.001;
-      const requests = Math.floor(amount / rate);
-      document.getElementById('depositEstimate').innerHTML = `≈ <strong>${requests.toLocaleString()}</strong> requests`;
+      let rate = selectedProvider ? selectedProvider.rate : 0.001;
+      
+      // ARKEO gets 15% more requests (discount)
+      const discount = paymentMethod === 'arkeo' ? 1.15 : 1;
+      const requests = Math.floor((amount / rate) * discount);
+      
+      const bonusText = paymentMethod === 'arkeo' ? ' <span style="color: #10b981;">(+15% bonus!)</span>' : '';
+      document.getElementById('depositEstimate').innerHTML = `≈ <strong>${requests.toLocaleString()}</strong> requests${bonusText}`;
     }
 
     function connectWallet() {
