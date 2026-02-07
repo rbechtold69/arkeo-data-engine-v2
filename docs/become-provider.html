@@ -1,0 +1,1209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Become a Provider | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <style>
+    :root {
+      --bg-main: #0C0E14;
+      --bg-card: #151820;
+      --bg-input: #1a1f2e;
+      --border: #2a2f3c;
+      --border-focus: #3BE0FF;
+      --arkeo: #3BE0FF;
+      --arkeo-dim: rgba(59, 224, 255, 0.1);
+      --success: #10b981;
+      --success-dim: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --text: #ffffff;
+      --text-dim: #9ca3af;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background: var(--bg-main);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    
+    /* Navigation */
+    .nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .logo img { height: 36px; }
+    .logo span { color: var(--arkeo); }
+    
+    .wallet-btn {
+      background: var(--arkeo);
+      color: #000;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .wallet-btn:hover { opacity: 0.9; }
+    .wallet-btn.connected {
+      background: var(--success);
+      color: white;
+    }
+    .wallet-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    /* Main Container */
+    .container {
+      max-width: 700px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    /* Progress Bar */
+    .progress-container { margin-bottom: 2rem; }
+    .progress-steps {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      margin-bottom: 0.5rem;
+    }
+    .progress-steps::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border);
+      transform: translateY(-50%);
+      z-index: 0;
+    }
+    .progress-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      height: 2px;
+      background: var(--arkeo);
+      transform: translateY(-50%);
+      z-index: 1;
+      transition: width 0.3s ease;
+    }
+    .step-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+      position: relative;
+      z-index: 2;
+      transition: all 0.3s;
+    }
+    .step-dot.active {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+      color: var(--arkeo);
+    }
+    .step-dot.complete {
+      border-color: var(--success);
+      background: var(--success);
+      color: white;
+    }
+    .step-labels {
+      display: flex;
+      justify-content: space-between;
+    }
+    .step-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-align: center;
+      width: 80px;
+    }
+    .step-label.active { color: var(--arkeo); }
+    
+    /* Wizard Card */
+    .wizard-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+    }
+    .wizard-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .wizard-subtitle {
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+    }
+    .hidden { display: none !important; }
+    
+    /* Chain Selection */
+    .chain-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      max-height: 350px;
+      overflow-y: auto;
+    }
+    .chain-option {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .chain-option:hover {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+    }
+    .chain-option.selected {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+    }
+    .chain-option img {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      margin-bottom: 0.5rem;
+    }
+    .chain-name {
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+    .chain-id {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+    }
+    
+    /* Search */
+    .search-box {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      background: var(--bg-input);
+      color: var(--text);
+      margin-bottom: 1rem;
+    }
+    .search-box:focus {
+      outline: none;
+      border-color: var(--arkeo);
+    }
+    
+    /* Form Elements */
+    .form-group { margin-bottom: 1.5rem; }
+    .form-label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    .form-input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      background: var(--bg-input);
+      color: var(--text);
+      font-size: 1rem;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--arkeo);
+    }
+    .form-hint {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      margin-top: 0.25rem;
+    }
+    
+    /* Buttons */
+    .btn {
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-size: 1rem;
+    }
+    .btn-primary {
+      background: var(--arkeo);
+      color: #000;
+    }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-primary:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--arkeo);
+    }
+    .btn-group {
+      display: flex;
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+    
+    /* Status Box */
+    .status-box {
+      padding: 1rem;
+      border-radius: 0.5rem;
+      margin: 1rem 0;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .status-box.success {
+      background: var(--success-dim);
+      border: 1px solid var(--success);
+      color: var(--success);
+    }
+    .status-box.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid var(--error);
+      color: var(--error);
+    }
+    .status-box.testing {
+      background: var(--arkeo-dim);
+      border: 1px solid var(--arkeo);
+      color: var(--arkeo);
+    }
+    .status-box.warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid var(--warning);
+      color: var(--warning);
+    }
+    
+    /* Spinner */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid transparent;
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* Summary Card */
+    .summary-card {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin: 1rem 0;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-row:last-child { border-bottom: none; }
+    .summary-label { color: var(--text-dim); }
+    .summary-value { font-weight: 600; }
+    
+    /* TX Link */
+    .tx-link {
+      color: var(--arkeo);
+      text-decoration: none;
+      word-break: break-all;
+    }
+    .tx-link:hover { text-decoration: underline; }
+    
+    /* Success */
+    .success-container { text-align: center; padding: 2rem 0; }
+    .success-icon { font-size: 4rem; margin-bottom: 1rem; }
+    .success-title { font-size: 1.75rem; margin-bottom: 0.5rem; }
+    .success-subtitle { color: var(--text-dim); margin-bottom: 2rem; }
+    
+    /* Alerts */
+    .alert {
+      padding: 1rem;
+      border-radius: 0.5rem;
+      margin-bottom: 1rem;
+    }
+    .alert-info {
+      background: var(--arkeo-dim);
+      border: 1px solid var(--arkeo);
+      color: var(--arkeo);
+    }
+    .alert-warning {
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid var(--warning);
+      color: var(--warning);
+    }
+    
+    /* Loading overlay */
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+    .loading-text {
+      margin-top: 1rem;
+      font-size: 1.25rem;
+    }
+    .loading-subtext {
+      margin-top: 0.5rem;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <a href="index.html" class="logo">
+      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+      <span>Arkeo</span> Marketplace
+    </a>
+    <button class="wallet-btn" id="walletBtn" onclick="connectWallet()">
+      Connect Keplr
+    </button>
+  </nav>
+
+  <div class="container">
+    <!-- Progress Bar -->
+    <div class="progress-container">
+      <div class="progress-steps">
+        <div class="progress-line" id="progressLine" style="width: 0%"></div>
+        <div class="step-dot active" id="dot1">1</div>
+        <div class="step-dot" id="dot2">2</div>
+        <div class="step-dot" id="dot3">3</div>
+        <div class="step-dot" id="dot4">4</div>
+      </div>
+      <div class="step-labels">
+        <span class="step-label active" id="label1">Select Chain</span>
+        <span class="step-label" id="label2">RPC Endpoint</span>
+        <span class="step-label" id="label3">Set Rate</span>
+        <span class="step-label" id="label4">Register</span>
+      </div>
+    </div>
+
+    <!-- Step 1: Select Chain -->
+    <div class="wizard-card" id="step1">
+      <h2 class="wizard-title">Select Your Chain</h2>
+      <p class="wizard-subtitle">Choose which blockchain data you want to provide.</p>
+      
+      <input type="text" class="search-box" id="chainSearch" 
+             placeholder="Search chains..." oninput="filterChains()">
+      
+      <div id="loadingChains" class="status-box testing">
+        <div class="spinner"></div>
+        <span>Loading available chains from Arkeo network...</span>
+      </div>
+      
+      <div class="chain-grid" id="chainGrid"></div>
+      
+      <div class="btn-group">
+        <a href="index.html" class="btn btn-secondary">Cancel</a>
+        <button class="btn btn-primary" id="nextBtn1" disabled onclick="goToStep(2)">
+          Continue →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: RPC Endpoint -->
+    <div class="wizard-card hidden" id="step2">
+      <h2 class="wizard-title">Your RPC Endpoint</h2>
+      <p class="wizard-subtitle">Provide the RPC URL of your <span id="selectedChainName">blockchain</span> node.</p>
+      
+      <div class="form-group">
+        <label class="form-label">RPC URL</label>
+        <input type="url" class="form-input" id="rpcUrl" 
+               placeholder="https://your-node.com:8545" oninput="validateRpcUrl()">
+        <p class="form-hint">Your node must be accessible from the internet for users to query it.</p>
+      </div>
+      
+      <div id="rpcStatus"></div>
+      
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+        <button class="btn btn-primary" id="nextBtn2" disabled onclick="testRpcEndpoint()">
+          Test Connection →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Set Rate -->
+    <div class="wizard-card hidden" id="step3">
+      <h2 class="wizard-title">Set Your Rate</h2>
+      <p class="wizard-subtitle">How much will you charge per request?</p>
+      
+      <div class="form-group">
+        <label class="form-label">Pay-As-You-Go Rate (per 1000 requests)</label>
+        <input type="number" class="form-input" id="paygRate" 
+               value="200" min="1" step="1" oninput="updateSummary()">
+        <p class="form-hint">In uarkeo (1 ARKEO = 100,000,000 uarkeo). Suggested: 200 uarkeo.</p>
+      </div>
+      
+      <div class="summary-card">
+        <div class="summary-row">
+          <span class="summary-label">Chain</span>
+          <span class="summary-value" id="summaryChain">-</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">RPC Endpoint</span>
+          <span class="summary-value" id="summaryRpc">-</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Rate</span>
+          <span class="summary-value" id="summaryRate">200 uarkeo / 1000 req</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Bond Required</span>
+          <span class="summary-value">1 ARKEO</span>
+        </div>
+      </div>
+      
+      <div class="alert alert-info">
+        💡 You need at least <strong>1 ARKEO</strong> in your wallet for the provider bond, plus a small amount for transaction fees.
+      </div>
+      
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+        <button class="btn btn-primary" id="nextBtn3" onclick="goToStep(4)">
+          Continue →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4: Register On-Chain -->
+    <div class="wizard-card hidden" id="step4">
+      <h2 class="wizard-title">Register On-Chain</h2>
+      <p class="wizard-subtitle">Sign transactions to bond your provider and register on Arkeo.</p>
+      
+      <div id="walletRequired" class="alert alert-warning">
+        ⚠️ Please connect your Keplr wallet to continue.
+      </div>
+      
+      <div id="registrationSteps" class="hidden">
+        <div class="summary-card">
+          <h3 style="margin-bottom: 1rem;">Registration Summary</h3>
+          <div class="summary-row">
+            <span class="summary-label">Chain Service</span>
+            <span class="summary-value" id="regChain">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Your Wallet</span>
+            <span class="summary-value" id="regWallet">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Bond Amount</span>
+            <span class="summary-value">1 ARKEO</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">PAYG Rate</span>
+            <span class="summary-value" id="regRate">-</span>
+          </div>
+        </div>
+        
+        <div id="txStatus"></div>
+        
+        <div class="btn-group">
+          <button class="btn btn-secondary" onclick="goToStep(3)">← Back</button>
+          <button class="btn btn-primary" id="registerBtn" onclick="registerProvider()">
+            Sign & Register →
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5: Success -->
+    <div class="wizard-card hidden" id="step5">
+      <div class="success-container">
+        <div class="success-icon">🎉</div>
+        <h2 class="success-title">You're Live!</h2>
+        <p class="success-subtitle">Your provider is now registered on the Arkeo network.</p>
+        
+        <div class="summary-card" style="text-align: left;">
+          <div class="summary-row">
+            <span class="summary-label">Service</span>
+            <span class="summary-value" id="finalService">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Provider Pubkey</span>
+            <span class="summary-value" id="finalPubkey" style="font-size: 0.8rem;">-</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Bond TX</span>
+            <span class="summary-value" id="finalBondTx">-</span>
+          </div>
+        </div>
+        
+        <div class="alert alert-info" style="text-align: left;">
+          <strong>Next Step:</strong> Run the Arkeo Sentinel on your server to start serving requests. 
+          See the <a href="https://docs.arkeo.network/providers" target="_blank" class="tx-link">Provider Guide</a> for setup instructions.
+        </div>
+        
+        <div style="margin-top: 2rem;">
+          <a href="index.html" class="btn btn-primary">View Marketplace</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="spinner" style="width: 48px; height: 48px; border-width: 3px;"></div>
+    <div class="loading-text" id="loadingText">Processing...</div>
+    <div class="loading-subtext" id="loadingSubtext"></div>
+  </div>
+
+  <script>
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
+    const CONFIG = {
+      REST_API: 'https://rest-seed.arkeo.network',
+      RPC_API: 'https://rpc-seed.arkeo.network',
+      CHAIN_ID: 'arkeo-main-v1',
+      ARKEO_DENOM: 'uarkeo',
+      ARKEO_DIVISOR: 100_000_000,
+      MIN_BOND: '100000000', // 1 ARKEO in uarkeo
+      DEFAULT_GAS: '200000',
+      GAS_PRICE: '0.001uarkeo',
+      EXPLORER_TX: 'https://explorer.arkeo.network/arkeo/tx/',
+    };
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    let state = {
+      walletConnected: false,
+      walletAddress: null,
+      walletPubkey: null,
+      selectedService: null,
+      services: [],
+      rpcUrl: null,
+      paygRate: 200,
+      currentStep: 1,
+    };
+
+    // ============================================================
+    // KEPLR INTEGRATION
+    // ============================================================
+    async function connectWallet() {
+      const btn = document.getElementById('walletBtn');
+      
+      if (!window.keplr) {
+        alert('Keplr wallet not found. Please install the Keplr browser extension.');
+        window.open('https://www.keplr.app/', '_blank');
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.textContent = 'Connecting...';
+      
+      try {
+        // Suggest chain to Keplr if not already added
+        await suggestArkeoChain();
+        
+        // Enable the chain
+        await window.keplr.enable(CONFIG.CHAIN_ID);
+        
+        // Get account info
+        const offlineSigner = window.keplr.getOfflineSigner(CONFIG.CHAIN_ID);
+        const accounts = await offlineSigner.getAccounts();
+        
+        if (accounts.length === 0) {
+          throw new Error('No accounts found');
+        }
+        
+        state.walletAddress = accounts[0].address;
+        state.walletPubkey = Buffer.from(accounts[0].pubkey).toString('base64');
+        state.walletConnected = true;
+        
+        // Update UI
+        btn.textContent = `${state.walletAddress.slice(0, 10)}...${state.walletAddress.slice(-6)}`;
+        btn.classList.add('connected');
+        
+        // If on step 4, update the UI
+        if (state.currentStep === 4) {
+          updateStep4UI();
+        }
+        
+        console.log('Wallet connected:', state.walletAddress);
+        
+      } catch (err) {
+        console.error('Wallet connection failed:', err);
+        alert('Failed to connect wallet: ' + err.message);
+        btn.textContent = 'Connect Keplr';
+      }
+      
+      btn.disabled = false;
+    }
+    
+    async function suggestArkeoChain() {
+      try {
+        await window.keplr.experimentalSuggestChain({
+          chainId: CONFIG.CHAIN_ID,
+          chainName: 'Arkeo Network',
+          rpc: CONFIG.RPC_API,
+          rest: CONFIG.REST_API,
+          bip44: { coinType: 118 },
+          bech32Config: {
+            bech32PrefixAccAddr: 'arkeo',
+            bech32PrefixAccPub: 'arkeopub',
+            bech32PrefixValAddr: 'arkeovaloper',
+            bech32PrefixValPub: 'arkeovaloperpub',
+            bech32PrefixConsAddr: 'arkeovalcons',
+            bech32PrefixConsPub: 'arkeovalconspub',
+          },
+          currencies: [{
+            coinDenom: 'ARKEO',
+            coinMinimalDenom: 'uarkeo',
+            coinDecimals: 8,
+          }],
+          feeCurrencies: [{
+            coinDenom: 'ARKEO',
+            coinMinimalDenom: 'uarkeo',
+            coinDecimals: 8,
+            gasPriceStep: { low: 0.001, average: 0.002, high: 0.003 },
+          }],
+          stakeCurrency: {
+            coinDenom: 'ARKEO',
+            coinMinimalDenom: 'uarkeo',
+            coinDecimals: 8,
+          },
+        });
+      } catch (err) {
+        console.log('Chain suggestion failed (may already exist):', err.message);
+      }
+    }
+
+    // ============================================================
+    // LOAD SERVICES FROM BLOCKCHAIN
+    // ============================================================
+    async function loadServices() {
+      const loadingDiv = document.getElementById('loadingChains');
+      const gridDiv = document.getElementById('chainGrid');
+      
+      try {
+        // Fetch all services from Arkeo REST API
+        const response = await fetch(`${CONFIG.REST_API}/arkeo/services`);
+        
+        if (!response.ok) {
+          throw new Error(`API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        
+        // Parse services - handle different response formats
+        let services = [];
+        if (data.services) {
+          services = data.services;
+        } else if (data.service) {
+          services = data.service;
+        } else if (Array.isArray(data)) {
+          services = data;
+        }
+        
+        // Map to our format
+        state.services = services.map(s => ({
+          id: s.service_id || s.id || s.service,
+          name: s.name || `Service ${s.service_id || s.id}`,
+          description: s.description || '',
+        }));
+        
+        // If no services found, use some defaults
+        if (state.services.length === 0) {
+          state.services = getDefaultServices();
+        }
+        
+        loadingDiv.classList.add('hidden');
+        renderServices(state.services);
+        
+      } catch (err) {
+        console.error('Failed to load services:', err);
+        
+        // Fallback to default services
+        state.services = getDefaultServices();
+        loadingDiv.innerHTML = `
+          <span style="color: var(--warning);">⚠️ Using cached chain list (API unavailable)</span>
+        `;
+        setTimeout(() => {
+          loadingDiv.classList.add('hidden');
+          renderServices(state.services);
+        }, 2000);
+      }
+    }
+    
+    function getDefaultServices() {
+      return [
+        { id: 1, name: 'arkeo-mainnet-fullnode', description: 'Arkeo Mainnet Full Node' },
+        { id: 2, name: 'arkeo-mainnet-rest', description: 'Arkeo Mainnet REST API' },
+        { id: 20, name: 'eth-mainnet-fullnode', description: 'Ethereum Mainnet Full Node' },
+        { id: 21, name: 'eth-mainnet-archive', description: 'Ethereum Mainnet Archive' },
+        { id: 30, name: 'btc-mainnet-fullnode', description: 'Bitcoin Mainnet Full Node' },
+        { id: 40, name: 'cosmos-mainnet-fullnode', description: 'Cosmos Hub Full Node' },
+        { id: 50, name: 'osmosis-mainnet-fullnode', description: 'Osmosis Mainnet Full Node' },
+        { id: 74, name: 'thorchain-mainnet-fullnode', description: 'THORChain Mainnet Full Node' },
+        { id: 89, name: 'base-mainnet-fullnode', description: 'Base Mainnet Full Node' },
+      ];
+    }
+    
+    function renderServices(services) {
+      const grid = document.getElementById('chainGrid');
+      
+      grid.innerHTML = services.map(s => `
+        <div class="chain-option" onclick="selectService(${s.id}, '${escapeHtml(s.name)}')">
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔗</div>
+          <div class="chain-name">${escapeHtml(s.name)}</div>
+          <div class="chain-id">ID: ${s.id}</div>
+        </div>
+      `).join('');
+    }
+    
+    function filterChains() {
+      const search = document.getElementById('chainSearch').value.toLowerCase();
+      const filtered = state.services.filter(s => 
+        s.name.toLowerCase().includes(search) || 
+        String(s.id).includes(search)
+      );
+      renderServices(filtered);
+    }
+    
+    function selectService(id, name) {
+      state.selectedService = { id, name };
+      
+      // Update UI
+      document.querySelectorAll('.chain-option').forEach(el => {
+        el.classList.remove('selected');
+      });
+      event.currentTarget.classList.add('selected');
+      
+      document.getElementById('nextBtn1').disabled = false;
+      document.getElementById('selectedChainName').textContent = name;
+    }
+
+    // ============================================================
+    // RPC ENDPOINT TESTING
+    // ============================================================
+    function validateRpcUrl() {
+      const url = document.getElementById('rpcUrl').value;
+      const btn = document.getElementById('nextBtn2');
+      
+      try {
+        new URL(url);
+        btn.disabled = false;
+      } catch {
+        btn.disabled = true;
+      }
+    }
+    
+    async function testRpcEndpoint() {
+      const url = document.getElementById('rpcUrl').value;
+      const statusDiv = document.getElementById('rpcStatus');
+      const btn = document.getElementById('nextBtn2');
+      
+      btn.disabled = true;
+      statusDiv.innerHTML = `
+        <div class="status-box testing">
+          <div class="spinner"></div>
+          <span>Testing RPC endpoint...</span>
+        </div>
+      `;
+      
+      try {
+        // Try a simple JSON-RPC call
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'web3_clientVersion',
+            params: [],
+            id: 1
+          }),
+          signal: AbortSignal.timeout(10000), // 10 second timeout
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          statusDiv.innerHTML = `
+            <div class="status-box success">
+              <span>✅</span>
+              <span>Connection successful! ${data.result ? `(${data.result})` : ''}</span>
+            </div>
+          `;
+          state.rpcUrl = url;
+          setTimeout(() => goToStep(3), 1500);
+        } else {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+      } catch (err) {
+        // Try a simpler health check
+        try {
+          const healthResponse = await fetch(url, {
+            method: 'GET',
+            signal: AbortSignal.timeout(5000),
+          });
+          
+          if (healthResponse.ok) {
+            statusDiv.innerHTML = `
+              <div class="status-box success">
+                <span>✅</span>
+                <span>Endpoint reachable!</span>
+              </div>
+            `;
+            state.rpcUrl = url;
+            setTimeout(() => goToStep(3), 1500);
+            return;
+          }
+        } catch (e) {
+          // Ignore and show original error
+        }
+        
+        statusDiv.innerHTML = `
+          <div class="status-box error">
+            <span>❌</span>
+            <span>Connection failed: ${err.message}</span>
+          </div>
+        `;
+        btn.disabled = false;
+      }
+    }
+
+    // ============================================================
+    // STEP NAVIGATION
+    // ============================================================
+    function goToStep(step) {
+      // Hide all steps
+      for (let i = 1; i <= 5; i++) {
+        document.getElementById('step' + i).classList.add('hidden');
+        if (i <= 4) {
+          document.getElementById('dot' + i).classList.remove('active', 'complete');
+          document.getElementById('dot' + i).innerHTML = i;
+          document.getElementById('label' + i).classList.remove('active');
+        }
+      }
+      
+      // Show current step
+      document.getElementById('step' + step).classList.remove('hidden');
+      
+      // Update progress
+      for (let i = 1; i <= Math.min(step, 4); i++) {
+        const dot = document.getElementById('dot' + i);
+        const label = document.getElementById('label' + i);
+        if (i < step) {
+          dot.classList.add('complete');
+          dot.innerHTML = '✓';
+        } else if (i === step) {
+          dot.classList.add('active');
+          label.classList.add('active');
+        }
+      }
+      
+      // Progress line
+      const progressPercent = ((Math.min(step, 4) - 1) / 3) * 100;
+      document.getElementById('progressLine').style.width = progressPercent + '%';
+      
+      state.currentStep = step;
+      
+      // Step-specific updates
+      if (step === 3) {
+        updateSummary();
+      }
+      if (step === 4) {
+        updateStep4UI();
+      }
+    }
+    
+    function updateSummary() {
+      const rate = document.getElementById('paygRate').value || 200;
+      state.paygRate = parseInt(rate);
+      
+      document.getElementById('summaryChain').textContent = state.selectedService?.name || '-';
+      document.getElementById('summaryRpc').textContent = state.rpcUrl || '-';
+      document.getElementById('summaryRate').textContent = `${rate} uarkeo / 1000 req`;
+    }
+    
+    function updateStep4UI() {
+      const walletRequired = document.getElementById('walletRequired');
+      const registrationSteps = document.getElementById('registrationSteps');
+      
+      if (state.walletConnected) {
+        walletRequired.classList.add('hidden');
+        registrationSteps.classList.remove('hidden');
+        
+        document.getElementById('regChain').textContent = state.selectedService?.name || '-';
+        document.getElementById('regWallet').textContent = state.walletAddress;
+        document.getElementById('regRate').textContent = `${state.paygRate} uarkeo / 1000 req`;
+      } else {
+        walletRequired.classList.remove('hidden');
+        registrationSteps.classList.add('hidden');
+      }
+    }
+
+    // ============================================================
+    // PROVIDER REGISTRATION (ON-CHAIN)
+    // ============================================================
+    async function registerProvider() {
+      if (!state.walletConnected) {
+        alert('Please connect your wallet first.');
+        return;
+      }
+      
+      const btn = document.getElementById('registerBtn');
+      const statusDiv = document.getElementById('txStatus');
+      
+      btn.disabled = true;
+      showLoading('Preparing transaction...', 'Please approve in Keplr');
+      
+      try {
+        // Get account info for sequence
+        const accountInfo = await getAccountInfo(state.walletAddress);
+        
+        // Build the bond-provider message
+        const msg = {
+          typeUrl: '/arkeo.arkeo.MsgBondProvider',
+          value: {
+            creator: state.walletAddress,
+            service: String(state.selectedService.id),
+            bond: CONFIG.MIN_BOND,
+          }
+        };
+        
+        // Sign and broadcast
+        showLoading('Awaiting signature...', 'Approve the transaction in Keplr');
+        
+        const offlineSigner = window.keplr.getOfflineSigner(CONFIG.CHAIN_ID);
+        
+        // Use Keplr's signDirect
+        const txResult = await signAndBroadcast(offlineSigner, [msg], accountInfo);
+        
+        if (txResult.code !== 0) {
+          throw new Error(`Transaction failed: ${txResult.rawLog || 'Unknown error'}`);
+        }
+        
+        hideLoading();
+        
+        // Show success
+        statusDiv.innerHTML = `
+          <div class="status-box success">
+            <span>✅</span>
+            <span>Provider bonded successfully!</span>
+          </div>
+        `;
+        
+        // Update final screen
+        document.getElementById('finalService').textContent = state.selectedService.name;
+        document.getElementById('finalPubkey').textContent = state.walletPubkey || state.walletAddress;
+        document.getElementById('finalBondTx').innerHTML = `
+          <a href="${CONFIG.EXPLORER_TX}${txResult.transactionHash}" target="_blank" class="tx-link">
+            ${txResult.transactionHash.slice(0, 16)}...
+          </a>
+        `;
+        
+        setTimeout(() => goToStep(5), 2000);
+        
+      } catch (err) {
+        hideLoading();
+        console.error('Registration failed:', err);
+        
+        statusDiv.innerHTML = `
+          <div class="status-box error">
+            <span>❌</span>
+            <span>Registration failed: ${err.message}</span>
+          </div>
+        `;
+        
+        btn.disabled = false;
+      }
+    }
+    
+    async function getAccountInfo(address) {
+      const response = await fetch(`${CONFIG.REST_API}/cosmos/auth/v1beta1/accounts/${address}`);
+      const data = await response.json();
+      
+      const account = data.account?.base_account || data.account || {};
+      return {
+        accountNumber: account.account_number || '0',
+        sequence: account.sequence || '0',
+      };
+    }
+    
+    async function signAndBroadcast(signer, messages, accountInfo) {
+      // Get the signing client
+      const accounts = await signer.getAccounts();
+      const account = accounts[0];
+      
+      // Construct the transaction
+      const fee = {
+        amount: [{ denom: CONFIG.ARKEO_DENOM, amount: '500' }],
+        gas: CONFIG.DEFAULT_GAS,
+      };
+      
+      // Use amino signing for simplicity with Keplr
+      const signDoc = {
+        chain_id: CONFIG.CHAIN_ID,
+        account_number: accountInfo.accountNumber,
+        sequence: accountInfo.sequence,
+        fee: fee,
+        msgs: messages.map(m => ({
+          type: 'arkeo/MsgBondProvider',
+          value: {
+            creator: m.value.creator,
+            service: m.value.service,
+            bond: m.value.bond,
+          }
+        })),
+        memo: '',
+      };
+      
+      // Sign with Keplr amino
+      const signResponse = await window.keplr.signAmino(
+        CONFIG.CHAIN_ID,
+        account.address,
+        signDoc
+      );
+      
+      // Broadcast the signed transaction
+      const txBytes = makeSignedTxBytes(signResponse);
+      
+      const broadcastResponse = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tx_bytes: txBytes,
+          mode: 'BROADCAST_MODE_SYNC',
+        }),
+      });
+      
+      const result = await broadcastResponse.json();
+      
+      if (result.tx_response) {
+        return {
+          code: result.tx_response.code || 0,
+          transactionHash: result.tx_response.txhash,
+          rawLog: result.tx_response.raw_log,
+        };
+      }
+      
+      throw new Error(result.message || 'Broadcast failed');
+    }
+    
+    function makeSignedTxBytes(signResponse) {
+      // This is a simplified version - in production you'd use proper protobuf encoding
+      // For now, return the signature as base64
+      const combined = JSON.stringify({
+        body: signResponse.signed,
+        auth_info: {
+          signer_infos: [{
+            public_key: signResponse.signature.pub_key,
+            mode_info: { single: { mode: 'SIGN_MODE_LEGACY_AMINO_JSON' } },
+            sequence: signResponse.signed.sequence,
+          }],
+          fee: signResponse.signed.fee,
+        },
+        signatures: [signResponse.signature.signature],
+      });
+      return btoa(combined);
+    }
+
+    // ============================================================
+    // UTILITIES
+    // ============================================================
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    function showLoading(text, subtext) {
+      document.getElementById('loadingText').textContent = text;
+      document.getElementById('loadingSubtext').textContent = subtext || '';
+      document.getElementById('loadingOverlay').classList.remove('hidden');
+    }
+    
+    function hideLoading() {
+      document.getElementById('loadingOverlay').classList.add('hidden');
+    }
+
+    // ============================================================
+    // INITIALIZE
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', () => {
+      loadServices();
+      
+      // Check if Keplr is already connected
+      if (window.keplr) {
+        window.keplr.getKey(CONFIG.CHAIN_ID).then(key => {
+          if (key) {
+            state.walletAddress = key.bech32Address;
+            state.walletPubkey = Buffer.from(key.pubKey).toString('base64');
+            state.walletConnected = true;
+            
+            const btn = document.getElementById('walletBtn');
+            btn.textContent = `${state.walletAddress.slice(0, 10)}...${state.walletAddress.slice(-6)}`;
+            btn.classList.add('connected');
+          }
+        }).catch(() => {});
+      }
+    });
+    
+    // Buffer polyfill for browser
+    if (typeof Buffer === 'undefined') {
+      window.Buffer = {
+        from: (arr) => ({
+          toString: (enc) => {
+            if (enc === 'base64') {
+              return btoa(String.fromCharCode.apply(null, arr));
+            }
+            return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('');
+          }
+        })
+      };
+    }
+  </script>
+</body>
+</html>

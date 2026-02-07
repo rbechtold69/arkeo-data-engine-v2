@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Agents | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="dashboard.css">
+  <style>
+    :root {
+      --bg-main: #0C0E14;
+      --surface: #151820;
+      --border: #2a2f3c;
+      --arkeo: #3BE0FF;
+      --primary: #3BE0FF;
+    }
+    body {
+      background: var(--bg-main);
+      color: white;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      margin: 0;
+      padding: 0;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    .hero {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.3) 0%, rgba(59, 130, 246, 0.3) 50%, rgba(34, 211, 238, 0.3) 100%);
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      border-radius: 1.5rem;
+      padding: 3rem;
+      margin-bottom: 2rem;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23fff' fill-opacity='0.03'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    }
+    .hero-content {
+      position: relative;
+      z-index: 1;
+    }
+    .badge {
+      display: inline-block;
+      background: rgba(139, 92, 246, 0.2);
+      color: #c4b5fd;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      font-size: 0.875rem;
+      font-weight: 500;
+      border: 1px solid rgba(139, 92, 246, 0.3);
+      margin-bottom: 1rem;
+    }
+    .hero h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+    .hero p {
+      font-size: 1.25rem;
+      color: #9ca3af;
+      margin-bottom: 1.5rem;
+    }
+    .hero .highlight {
+      color: #60a5fa;
+      font-weight: 600;
+    }
+    .features {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+    }
+    .feature {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: #d1d5db;
+    }
+    .feature-icon {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+    .cta-buttons {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+      color: white;
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.75rem;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.2s;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
+    }
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.1);
+      color: white;
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.75rem;
+      font-weight: 500;
+      text-decoration: none;
+      display: inline-block;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.2);
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-bottom: 1.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .section-icon {
+      width: 2rem;
+      height: 2rem;
+      background: rgba(59, 224, 255, 0.15);
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--arkeo);
+    }
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .card h3 {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .card p {
+      color: #9ca3af;
+      font-size: 0.875rem;
+      line-height: 1.5;
+    }
+    .code-block {
+      background: #0a0c10;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1rem;
+      font-family: 'Monaco', 'Menlo', monospace;
+      font-size: 0.8rem;
+      color: #d1d5db;
+      overflow-x: auto;
+      margin-top: 1rem;
+    }
+    .code-block .comment {
+      color: #6b7280;
+    }
+    .code-block .keyword {
+      color: #c084fc;
+    }
+    .code-block .string {
+      color: #34d399;
+    }
+    .code-block .function {
+      color: #60a5fa;
+    }
+    .activity-feed {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .activity-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .activity-header h3 {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-weight: 600;
+    }
+    .live-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      background: #10b981;
+      border-radius: 9999px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+    .activity-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      background: rgba(30, 34, 44, 0.8);
+      border-radius: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .activity-left {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .activity-icon {
+      width: 2rem;
+      height: 2rem;
+      background: rgba(59, 130, 246, 0.15);
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #60a5fa;
+    }
+    .activity-agent {
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+    .activity-route {
+      color: #6b7280;
+      font-size: 0.75rem;
+    }
+    .activity-right {
+      text-align: right;
+    }
+    .activity-amount {
+      color: #10b981;
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+    .activity-time {
+      color: #6b7280;
+      font-size: 0.75rem;
+    }
+    .comparison-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    .comparison-table th,
+    .comparison-table td {
+      padding: 1rem;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    .comparison-table th {
+      color: #6b7280;
+      font-weight: 500;
+      font-size: 0.875rem;
+    }
+    .comparison-table td {
+      font-size: 0.875rem;
+    }
+    .check {
+      color: #10b981;
+    }
+    .cross {
+      color: #6b7280;
+    }
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      text-decoration: none;
+      color: white;
+      font-weight: 600;
+    }
+    .nav-logo img {
+      width: 2.5rem;
+      height: 2.5rem;
+    }
+    .nav-links {
+      display: flex;
+      gap: 2rem;
+    }
+    .nav-links a {
+      color: #9ca3af;
+      text-decoration: none;
+      font-size: 0.875rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover,
+    .nav-links a.active {
+      color: white;
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <a href="index.html" class="nav-logo">
+      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+      <span>Arkeo Marketplace</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html">Providers</a>
+      <a href="agents.html" class="active">AI Agents</a>
+      <a href="provider.html">Become Provider</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <!-- Hero Section -->
+    <div class="hero">
+      <div class="hero-content">
+        <span class="badge">🆕 x402 Payment Support</span>
+        <h1>AI Agents Welcome</h1>
+        <p>
+          Pay for blockchain data with <span class="highlight">USDC</span> via x402 protocol.<br>
+          No token buying. No accounts. Just HTTP requests with payments built-in.
+        </p>
+        <div class="features">
+          <div class="feature">
+            <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+            <span>Instant access</span>
+          </div>
+          <div class="feature">
+            <svg class="feature-icon" viewBox="0 0 32 32" fill="currentColor">
+              <circle cx="16" cy="16" r="14" fill="none" stroke="currentColor" stroke-width="2"/>
+              <text x="16" y="21" text-anchor="middle" font-size="14" fill="currentColor">$</text>
+            </svg>
+            <span>Pay with USDC</span>
+          </div>
+          <div class="feature">
+            <svg class="feature-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+            </svg>
+            <span>Agent-native</span>
+          </div>
+        </div>
+        <div class="cta-buttons">
+          <a href="#quickstart" class="btn-primary">Get Started →</a>
+          <a href="https://github.com/arkeonetwork/arkeo-agents" class="btn-secondary">View on GitHub</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Activity Feed -->
+    <div class="activity-feed" style="margin-bottom: 2rem;">
+      <div class="activity-header">
+        <h3>
+          <span class="live-dot"></span>
+          Live Activity
+        </h3>
+        <span style="color: #6b7280; font-size: 0.75rem;">Real-time x402 payments</span>
+      </div>
+      <div class="activity-item">
+        <div class="activity-left">
+          <div class="activity-icon">🤖</div>
+          <div>
+            <div class="activity-agent">ElizaBot</div>
+            <div class="activity-route">ethereum → Red_5</div>
+          </div>
+        </div>
+        <div class="activity-right">
+          <div class="activity-amount">$0.0010</div>
+          <div class="activity-time">2s ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-left">
+          <div class="activity-icon">🤖</div>
+          <div>
+            <div class="activity-agent">AutoGPT-7</div>
+            <div class="activity-route">bitcoin → Node_42</div>
+          </div>
+        </div>
+        <div class="activity-right">
+          <div class="activity-amount">$0.0005</div>
+          <div class="activity-time">5s ago</div>
+        </div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-left">
+          <div class="activity-icon">🤖</div>
+          <div>
+            <div class="activity-agent">LangChain-Agent</div>
+            <div class="activity-route">cosmos → Arkeo_1</div>
+          </div>
+        </div>
+        <div class="activity-right">
+          <div class="activity-amount">$0.0010</div>
+          <div class="activity-time">8s ago</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Why Arkeo -->
+    <h2 class="section-title" style="margin-top: 3rem;">
+      <span class="section-icon">⚡</span>
+      Why Arkeo for AI Agents?
+    </h2>
+    
+    <div class="card" style="margin-bottom: 2rem;">
+      <table class="comparison-table">
+        <thead>
+          <tr>
+            <th>Feature</th>
+            <th>Arkeo + x402</th>
+            <th>Infura</th>
+            <th>POKT</th>
+            <th>Lava</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Instant access (no signup)</td>
+            <td class="check">✓</td>
+            <td class="cross">✗</td>
+            <td class="cross">✗</td>
+            <td class="cross">✗</td>
+          </tr>
+          <tr>
+            <td>Pay with stablecoins</td>
+            <td class="check">✓ USDC</td>
+            <td class="check">✓ Credit card</td>
+            <td class="cross">✗ POKT only</td>
+            <td class="cross">✗ LAVA only</td>
+          </tr>
+          <tr>
+            <td>Agent-native (x402)</td>
+            <td class="check">✓</td>
+            <td class="cross">✗</td>
+            <td class="cross">✗</td>
+            <td class="cross">✗</td>
+          </tr>
+          <tr>
+            <td>Decentralized</td>
+            <td class="check">✓</td>
+            <td class="cross">✗</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+          </tr>
+          <tr>
+            <td>Pay per request</td>
+            <td class="check">✓</td>
+            <td class="check">✓</td>
+            <td class="cross">Sessions</td>
+            <td class="cross">Complex</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Quick Start -->
+    <h2 class="section-title" id="quickstart">
+      <span class="section-icon">🚀</span>
+      Quick Start
+    </h2>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>1. Install x402 SDK</h3>
+        <p>Get started with our Python or Node.js SDK.</p>
+        <div class="code-block">
+<span class="comment"># Python</span>
+pip install arkeo-x402
+
+<span class="comment"># Node.js</span>
+npm install @arkeo/x402-client
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>2. Make Your First Request</h3>
+        <p>Just add your wallet key and start querying.</p>
+        <div class="code-block">
+<span class="keyword">from</span> arkeo_x402 <span class="keyword">import</span> Client
+
+client = Client(wallet_key=<span class="string">"YOUR_KEY"</span>)
+result = client.<span class="function">eth_blockNumber</span>()
+<span class="keyword">print</span>(result)  <span class="comment"># Paid $0.001 USDC</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Framework Integration -->
+    <h2 class="section-title" style="margin-top: 3rem;">
+      <span class="section-icon">🔌</span>
+      Framework Integration
+    </h2>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Eliza Framework</h3>
+        <p>Add blockchain data to your Eliza agent.</p>
+        <div class="code-block">
+<span class="comment">// eliza.config.ts</span>
+<span class="keyword">import</span> { arkeoPlugin } <span class="keyword">from</span> <span class="string">'@arkeo/eliza'</span>;
+
+<span class="keyword">export default</span> {
+  plugins: [
+    <span class="function">arkeoPlugin</span>({
+      network: <span class="string">"base"</span>,
+      chains: [<span class="string">"ethereum"</span>, <span class="string">"bitcoin"</span>]
+    })
+  ]
+};
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>LangChain</h3>
+        <p>Use Arkeo as a tool in your LangChain agents.</p>
+        <div class="code-block">
+<span class="keyword">from</span> arkeo_langchain <span class="keyword">import</span> ArkeoTool
+
+tools = [
+    <span class="function">ArkeoTool</span>(
+        name=<span class="string">"ethereum_rpc"</span>,
+        description=<span class="string">"Query Ethereum blockchain"</span>
+    )
+]
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>AutoGPT</h3>
+        <p>Add blockchain capabilities to AutoGPT.</p>
+        <div class="code-block">
+<span class="comment"># .env</span>
+ARKEO_WALLET_KEY=<span class="string">your_private_key</span>
+ARKEO_NETWORK=<span class="string">base</span>
+
+<span class="comment"># commands.py</span>
+<span class="keyword">from</span> arkeo_autogpt <span class="keyword">import</span> commands
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>CrewAI</h3>
+        <p>Blockchain data for your AI crews.</p>
+        <div class="code-block">
+<span class="keyword">from</span> crewai <span class="keyword">import</span> Agent
+<span class="keyword">from</span> arkeo_crewai <span class="keyword">import</span> ArkeoTools
+
+researcher = <span class="function">Agent</span>(
+    tools=<span class="function">ArkeoTools</span>.all(),
+    role=<span class="string">"Blockchain Researcher"</span>
+)
+        </div>
+      </div>
+    </div>
+
+    <!-- Pricing -->
+    <h2 class="section-title" style="margin-top: 3rem;">
+      <span class="section-icon">💰</span>
+      Simple Pricing
+    </h2>
+
+    <div class="card">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 2rem; text-align: center; padding: 1rem;">
+        <div>
+          <p style="font-size: 2.5rem; font-weight: 700; color: #60a5fa;">$0.001</p>
+          <p style="color: #6b7280;">per request (USDC)</p>
+        </div>
+        <div>
+          <p style="font-size: 2.5rem; font-weight: 700; color: #10b981;">15% off</p>
+          <p style="color: #6b7280;">with ARKEO token</p>
+        </div>
+        <div>
+          <p style="font-size: 2.5rem; font-weight: 700; color: #f59e0b;">$0</p>
+          <p style="color: #6b7280;">no minimum</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div style="text-align: center; margin-top: 4rem; padding: 3rem; background: var(--surface); border-radius: 1.5rem; border: 1px solid var(--border);">
+      <h2 style="font-size: 2rem; font-weight: 700; margin-bottom: 1rem;">Ready to build?</h2>
+      <p style="color: #9ca3af; margin-bottom: 2rem;">Get your AI agent connected to blockchain data in minutes.</p>
+      <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap;">
+        <a href="https://docs.arkeo.network/agents" class="btn-primary">Read the Docs</a>
+        <a href="index.html" class="btn-secondary">Browse Providers</a>
+      </div>
+    </div>
+
+    <footer style="text-align: center; padding: 2rem; color: #6b7280; font-size: 0.875rem; margin-top: 3rem;">
+      <p>Built with ❤️ by the Arkeo community</p>
+      <p style="margin-top: 0.5rem;">
+        <a href="https://arkeo.network" style="color: var(--arkeo); text-decoration: none;">arkeo.network</a> · 
+        <a href="https://github.com/arkeonetwork" style="color: var(--arkeo); text-decoration: none;">GitHub</a> · 
+        <a href="https://discord.gg/arkeo" style="color: var(--arkeo); text-decoration: none;">Discord</a>
+      </p>
+    </footer>
+  </div>
+</body>
+</html>

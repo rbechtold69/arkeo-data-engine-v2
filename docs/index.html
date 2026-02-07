@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arkeo Data Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <style>
+    :root {
+      --bg-main: #0a0c10;
+      --bg-card: #12151c;
+      --bg-card-hover: #181c25;
+      --bg-input: #1a1f2a;
+      --border: #252a36;
+      --border-hover: #3BE0FF;
+      --arkeo: #3BE0FF;
+      --arkeo-dim: rgba(59, 224, 255, 0.1);
+      --arkeo-glow: rgba(59, 224, 255, 0.3);
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --text: #ffffff;
+      --text-dim: #8b92a5;
+      --text-muted: #5a6278;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-main);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* Navigation */
+    .nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .logo img { height: 40px; }
+    .logo-text span { color: var(--arkeo); }
+    
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+    .nav-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-link:hover { color: var(--arkeo); }
+    .nav-link.active { color: var(--arkeo); }
+
+    .btn {
+      padding: 0.75rem 1.5rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .btn-primary {
+      background: var(--arkeo);
+      color: #000;
+    }
+    .btn-primary:hover {
+      box-shadow: 0 0 20px var(--arkeo-glow);
+    }
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--arkeo);
+      color: var(--arkeo);
+    }
+    .btn-outline {
+      background: transparent;
+      color: var(--arkeo);
+      border: 1px solid var(--arkeo);
+    }
+    .btn-outline:hover {
+      background: var(--arkeo-dim);
+    }
+
+    /* Hero Section */
+    .hero {
+      text-align: center;
+      padding: 4rem 2rem;
+      background: linear-gradient(180deg, var(--bg-card) 0%, var(--bg-main) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .hero h1 {
+      font-size: 3rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, var(--text) 0%, var(--arkeo) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero p {
+      font-size: 1.25rem;
+      color: var(--text-dim);
+      max-width: 600px;
+      margin: 0 auto 2rem;
+    }
+    .hero-buttons {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    /* Stats Bar */
+    .stats-bar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1.5rem 2rem;
+    }
+    .stats-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 2rem;
+    }
+    .stat {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 2rem;
+      font-weight: 700;
+      color: var(--arkeo);
+    }
+    .stat-label {
+      font-size: 0.875rem;
+      color: var(--text-dim);
+      margin-top: 0.25rem;
+    }
+
+    /* Main Content */
+    .main {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+
+    /* Section Headers */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .section-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+    }
+
+    /* Filters */
+    .filters {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+      flex-wrap: wrap;
+    }
+    .filter-input {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text);
+      min-width: 200px;
+    }
+    .filter-input:focus {
+      outline: none;
+      border-color: var(--arkeo);
+    }
+    .filter-select {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      border: 1px solid var(--border);
+      background: var(--bg-input);
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    /* Provider Grid */
+    .provider-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 1.5rem;
+    }
+
+    /* Provider Card */
+    .provider-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      transition: all 0.2s;
+    }
+    .provider-card:hover {
+      border-color: var(--arkeo);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+    .provider-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 1rem;
+    }
+    .provider-name {
+      font-size: 1.125rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .provider-service {
+      font-size: 0.875rem;
+      color: var(--text-dim);
+    }
+    .provider-status {
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .provider-status.online {
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--success);
+    }
+    .provider-status.offline {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--error);
+    }
+
+    .provider-stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin: 1rem 0;
+      padding: 1rem 0;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .provider-stat {
+      text-align: center;
+    }
+    .provider-stat-value {
+      font-weight: 600;
+      color: var(--arkeo);
+    }
+    .provider-stat-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .provider-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .provider-actions .btn {
+      flex: 1;
+      justify-content: center;
+      padding: 0.625rem 1rem;
+      font-size: 0.875rem;
+    }
+
+    /* CTA Cards */
+    .cta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+      margin: 3rem 0;
+    }
+    .cta-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      text-align: center;
+      transition: all 0.2s;
+    }
+    .cta-card:hover {
+      border-color: var(--arkeo);
+      transform: translateY(-2px);
+    }
+    .cta-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+    .cta-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .cta-description {
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+      font-size: 0.9rem;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: var(--text-dim);
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--arkeo);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Footer */
+    .footer {
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      margin-top: 4rem;
+    }
+    .footer-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .footer-links {
+      display: flex;
+      gap: 2rem;
+    }
+    .footer-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.875rem;
+    }
+    .footer-link:hover { color: var(--arkeo); }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .nav-links { display: none; }
+      .hero h1 { font-size: 2rem; }
+      .hero p { font-size: 1rem; }
+      .provider-grid { grid-template-columns: 1fr; }
+      .stats-inner { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="index.html" class="logo">
+        <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+        <span class="logo-text">Arkeo <span>Marketplace</span></span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link active">Providers</a>
+        <a href="become-provider.html" class="nav-link">Become a Provider</a>
+        <a href="subscribe.html" class="nav-link">Subscribe</a>
+        <a href="agents.html" class="nav-link">AI Agents</a>
+      </div>
+      <a href="become-provider.html" class="btn btn-primary">Get Started</a>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <h1>Decentralized RPC Infrastructure</h1>
+    <p>Connect to blockchain data providers with pay-as-you-go pricing. No signup required. No KYC. Just connect and query.</p>
+    <div class="hero-buttons">
+      <a href="subscribe.html" class="btn btn-primary">Find a Provider</a>
+      <a href="become-provider.html" class="btn btn-outline">Become a Provider</a>
+    </div>
+  </section>
+
+  <!-- Stats Bar -->
+  <section class="stats-bar">
+    <div class="stats-inner">
+      <div class="stat">
+        <div class="stat-value" id="providerCount">-</div>
+        <div class="stat-label">Active Providers</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="serviceCount">-</div>
+        <div class="stat-label">Supported Chains</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="contractCount">-</div>
+        <div class="stat-label">Active Contracts</div>
+      </div>
+      <div class="stat">
+        <div class="stat-value" id="totalEarnings">-</div>
+        <div class="stat-label">Total Earnings (ARKEO)</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main Content -->
+  <main class="main">
+    <!-- CTA Cards -->
+    <section class="cta-grid">
+      <div class="cta-card">
+        <div class="cta-icon">🖥️</div>
+        <h3 class="cta-title">Run a Node, Earn Crypto</h3>
+        <p class="cta-description">Already running blockchain infrastructure? List your RPC endpoint and earn ARKEO for every request.</p>
+        <a href="become-provider.html" class="btn btn-primary">Become a Provider</a>
+      </div>
+      <div class="cta-card">
+        <div class="cta-icon">⚡</div>
+        <h3 class="cta-title">Instant RPC Access</h3>
+        <p class="cta-description">No signup forms. No API keys. Connect your wallet and start querying blockchain data immediately.</p>
+        <a href="subscribe.html" class="btn btn-primary">Subscribe Now</a>
+      </div>
+      <div class="cta-card">
+        <div class="cta-icon">🤖</div>
+        <h3 class="cta-title">Built for AI Agents</h3>
+        <p class="cta-description">x402 payment protocol enables AI agents to autonomously discover and pay for RPC services.</p>
+        <a href="agents.html" class="btn btn-primary">Learn More</a>
+      </div>
+    </section>
+
+    <!-- Providers Section -->
+    <section>
+      <div class="section-header">
+        <h2 class="section-title">Active Providers</h2>
+        <a href="become-provider.html" class="btn btn-secondary">+ Add Your Node</a>
+      </div>
+
+      <div class="filters">
+        <input type="text" class="filter-input" id="searchInput" placeholder="Search providers or chains..." oninput="filterProviders()">
+        <select class="filter-select" id="statusFilter" onchange="filterProviders()">
+          <option value="all">All Status</option>
+          <option value="online">Online Only</option>
+          <option value="offline">Offline</option>
+        </select>
+        <select class="filter-select" id="sortBy" onchange="filterProviders()">
+          <option value="earnings">Highest Earnings</option>
+          <option value="rate">Lowest Rate</option>
+          <option value="bond">Highest Bond</option>
+        </select>
+      </div>
+
+      <div id="providersLoading" class="loading">
+        <div class="spinner"></div>
+        <p>Loading providers from Arkeo network...</p>
+      </div>
+
+      <div class="provider-grid" id="providerGrid"></div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="footer-inner">
+      <div style="color: var(--text-dim); font-size: 0.875rem;">
+        © 2026 Arkeo Network. Decentralized data infrastructure.
+      </div>
+      <div class="footer-links">
+        <a href="https://docs.arkeo.network" target="_blank" class="footer-link">Docs</a>
+        <a href="https://discord.gg/arkeo" target="_blank" class="footer-link">Discord</a>
+        <a href="https://twitter.com/arkaboreal" target="_blank" class="footer-link">Twitter</a>
+        <a href="https://github.com/arkeonetwork" target="_blank" class="footer-link">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
+    const CONFIG = {
+      REST_API: 'https://rest-seed.arkeo.network',
+      ARKEO_DIVISOR: 100_000_000,
+    };
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    let state = {
+      providers: [],
+      services: {},
+      contracts: [],
+    };
+
+    // ============================================================
+    // LOAD DATA FROM BLOCKCHAIN
+    // ============================================================
+    async function loadData() {
+      try {
+        // Load providers, services, and contracts in parallel
+        const [providersRes, servicesRes, contractsRes] = await Promise.all([
+          fetch(`${CONFIG.REST_API}/arkeo/providers`),
+          fetch(`${CONFIG.REST_API}/arkeo/services`),
+          fetch(`${CONFIG.REST_API}/arkeo/contracts`).catch(() => ({ ok: false })),
+        ]);
+
+        // Parse providers
+        if (providersRes.ok) {
+          const data = await providersRes.json();
+          state.providers = data.provider || data.providers || [];
+        }
+
+        // Parse services into lookup map
+        if (servicesRes.ok) {
+          const data = await servicesRes.json();
+          const services = data.services || data.service || [];
+          state.services = {};
+          services.forEach(s => {
+            state.services[s.service_id] = s;
+          });
+        }
+
+        // Parse contracts
+        if (contractsRes.ok) {
+          const data = await contractsRes.json();
+          state.contracts = data.contracts || data.contract || [];
+        }
+
+        // Update stats
+        updateStats();
+
+        // Render providers
+        renderProviders(state.providers);
+
+      } catch (err) {
+        console.error('Failed to load data:', err);
+        document.getElementById('providersLoading').innerHTML = `
+          <p style="color: var(--error);">Failed to load providers. Please try again.</p>
+        `;
+      }
+    }
+
+    function updateStats() {
+      // Count unique providers
+      const uniqueProviders = new Set(state.providers.map(p => p.pub_key)).size;
+      document.getElementById('providerCount').textContent = uniqueProviders;
+
+      // Count unique services
+      const uniqueServices = new Set(state.providers.map(p => p.service)).size;
+      document.getElementById('serviceCount').textContent = uniqueServices;
+
+      // Contract count
+      document.getElementById('contractCount').textContent = state.contracts.length || '-';
+
+      // Total earnings (sum of all contract paid amounts)
+      let totalEarnings = 0;
+      state.contracts.forEach(c => {
+        totalEarnings += parseInt(c.paid || 0);
+      });
+      document.getElementById('totalEarnings').textContent = formatArkeo(totalEarnings);
+    }
+
+    function formatArkeo(uarkeo) {
+      const val = parseInt(uarkeo || 0) / CONFIG.ARKEO_DIVISOR;
+      if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
+      if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
+      return val.toFixed(2);
+    }
+
+    function getServiceName(serviceId) {
+      const service = state.services[serviceId];
+      if (service) return service.name;
+      return `Service ${serviceId}`;
+    }
+
+    function renderProviders(providers) {
+      const grid = document.getElementById('providerGrid');
+      const loading = document.getElementById('providersLoading');
+      
+      loading.classList.add('hidden');
+      loading.style.display = 'none';
+
+      if (providers.length === 0) {
+        grid.innerHTML = '<p style="color: var(--text-dim); text-align: center; padding: 2rem;">No providers found.</p>';
+        return;
+      }
+
+      grid.innerHTML = providers.map(p => {
+        const serviceName = getServiceName(p.service);
+        const isOnline = p.status === 'ONLINE';
+        const bond = formatArkeo(p.bond);
+        const paygRate = formatArkeo(p.pay_as_you_go_rate?.[0]?.amount || 0);
+        const pubkeyShort = p.pub_key ? `${p.pub_key.slice(0, 12)}...${p.pub_key.slice(-6)}` : '-';
+
+        return `
+          <div class="provider-card">
+            <div class="provider-header">
+              <div>
+                <div class="provider-name">${escapeHtml(serviceName)}</div>
+                <div class="provider-service">${pubkeyShort}</div>
+              </div>
+              <span class="provider-status ${isOnline ? 'online' : 'offline'}">
+                ${isOnline ? '● Online' : '○ Offline'}
+              </span>
+            </div>
+            <div class="provider-stats">
+              <div class="provider-stat">
+                <div class="provider-stat-value">${bond}</div>
+                <div class="provider-stat-label">Bond (ARKEO)</div>
+              </div>
+              <div class="provider-stat">
+                <div class="provider-stat-value">${paygRate}</div>
+                <div class="provider-stat-label">Rate/1K req</div>
+              </div>
+              <div class="provider-stat">
+                <div class="provider-stat-value">${p.settlement_duration || '-'}</div>
+                <div class="provider-stat-label">Settlement</div>
+              </div>
+            </div>
+            <div class="provider-actions">
+              <a href="subscribe.html?service=${p.service}&provider=${encodeURIComponent(p.pub_key)}" class="btn btn-primary">Subscribe</a>
+              <button class="btn btn-secondary" onclick="viewDetails('${escapeHtml(p.pub_key)}')">Details</button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function filterProviders() {
+      const search = document.getElementById('searchInput').value.toLowerCase();
+      const status = document.getElementById('statusFilter').value;
+      const sortBy = document.getElementById('sortBy').value;
+
+      let filtered = state.providers.filter(p => {
+        // Search filter
+        const serviceName = getServiceName(p.service).toLowerCase();
+        const matchesSearch = serviceName.includes(search) || 
+                             (p.pub_key && p.pub_key.toLowerCase().includes(search));
+        
+        // Status filter
+        const matchesStatus = status === 'all' || 
+                             (status === 'online' && p.status === 'ONLINE') ||
+                             (status === 'offline' && p.status !== 'ONLINE');
+
+        return matchesSearch && matchesStatus;
+      });
+
+      // Sort
+      filtered.sort((a, b) => {
+        if (sortBy === 'earnings') {
+          return parseInt(b.bond || 0) - parseInt(a.bond || 0); // Using bond as proxy
+        } else if (sortBy === 'rate') {
+          const rateA = parseInt(a.pay_as_you_go_rate?.[0]?.amount || 999999999);
+          const rateB = parseInt(b.pay_as_you_go_rate?.[0]?.amount || 999999999);
+          return rateA - rateB;
+        } else if (sortBy === 'bond') {
+          return parseInt(b.bond || 0) - parseInt(a.bond || 0);
+        }
+        return 0;
+      });
+
+      renderProviders(filtered);
+    }
+
+    function viewDetails(pubkey) {
+      alert('Provider details coming soon!\n\nPubkey: ' + pubkey);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+
+    // ============================================================
+    // INITIALIZE
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', loadData);
+  </script>
+</body>
+</html>

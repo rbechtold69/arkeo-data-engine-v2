@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Find a Provider | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <style>
+    :root {
+      --bg-main: #0C0E14;
+      --bg-card: #151820;
+      --bg-input: #1a1f2e;
+      --border: #2a2f3c;
+      --border-focus: #3BE0FF;
+      --arkeo: #3BE0FF;
+      --arkeo-dim: rgba(59, 224, 255, 0.1);
+      --success: #10b981;
+      --success-dim: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --text: #ffffff;
+      --text-dim: #9ca3af;
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    body {
+      background: var(--bg-main);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    
+    /* Navigation */
+    .nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .logo img { height: 36px; }
+    .logo span { color: var(--arkeo); }
+    .back-link {
+      color: var(--text-dim);
+      text-decoration: none;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: color 0.2s;
+    }
+    .back-link:hover { color: var(--arkeo); }
+    
+    /* Main Container */
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 2rem;
+    }
+    
+    /* Progress Bar */
+    .progress-container {
+      margin-bottom: 2rem;
+    }
+    .progress-steps {
+      display: flex;
+      justify-content: space-between;
+      position: relative;
+      margin-bottom: 0.5rem;
+    }
+    .progress-steps::before {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border);
+      transform: translateY(-50%);
+      z-index: 0;
+    }
+    .progress-line {
+      position: absolute;
+      top: 50%;
+      left: 0;
+      height: 2px;
+      background: var(--arkeo);
+      transform: translateY(-50%);
+      z-index: 1;
+      transition: width 0.3s ease;
+    }
+    .step-dot {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.875rem;
+      font-weight: 600;
+      position: relative;
+      z-index: 2;
+      transition: all 0.3s;
+    }
+    .step-dot.active {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+      color: var(--arkeo);
+    }
+    .step-dot.complete {
+      border-color: var(--success);
+      background: var(--success);
+      color: white;
+    }
+    .step-labels {
+      display: flex;
+      justify-content: space-between;
+    }
+    .step-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      text-align: center;
+      width: 80px;
+    }
+    .step-label.active { color: var(--arkeo); }
+    
+    /* Wizard Card */
+    .wizard-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+    }
+    .wizard-title {
+      font-size: 1.5rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
+    }
+    .wizard-subtitle {
+      color: var(--text-dim);
+      margin-bottom: 2rem;
+    }
+    
+    /* Form Elements */
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    .form-label {
+      display: block;
+      font-weight: 500;
+      margin-bottom: 0.5rem;
+    }
+    .form-input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      color: var(--text);
+      font-size: 1rem;
+      transition: border-color 0.2s;
+    }
+    .form-input:focus {
+      outline: none;
+      border-color: var(--arkeo);
+    }
+    
+    /* Chain Selector */
+    .chain-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+    .chain-option {
+      padding: 1rem;
+      background: var(--bg-input);
+      border: 2px solid var(--border);
+      border-radius: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .chain-option:hover {
+      border-color: var(--text-dim);
+    }
+    .chain-option.selected {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+    }
+    .chain-option .chain-name {
+      font-weight: 500;
+    }
+    
+    /* Provider Cards */
+    .provider-list {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .provider-card {
+      background: var(--bg-input);
+      border: 2px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .provider-card:hover {
+      border-color: var(--text-dim);
+    }
+    .provider-card.selected {
+      border-color: var(--arkeo);
+      background: var(--arkeo-dim);
+    }
+    .provider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 0.75rem;
+    }
+    .provider-name {
+      font-weight: 600;
+      font-size: 1.1rem;
+    }
+    .provider-rate {
+      background: var(--arkeo-dim);
+      color: var(--arkeo);
+      padding: 0.25rem 0.75rem;
+      border-radius: 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+    }
+    .provider-stats {
+      display: flex;
+      gap: 1.5rem;
+      font-size: 0.875rem;
+      color: var(--text-dim);
+    }
+    .provider-stat {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+    .stat-good { color: var(--success); }
+    .provider-description {
+      margin-top: 0.75rem;
+      font-size: 0.9rem;
+      color: var(--text-dim);
+    }
+    
+    /* Buttons */
+    .btn-group {
+      display: flex;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+    .btn {
+      padding: 0.875rem 1.5rem;
+      border-radius: 0.5rem;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+    }
+    .btn-primary {
+      background: var(--arkeo);
+      color: #000;
+      flex: 1;
+    }
+    .btn-primary:hover {
+      background: #5ce8ff;
+    }
+    .btn-primary:disabled {
+      background: var(--border);
+      color: var(--text-dim);
+      cursor: not-allowed;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--text-dim);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover {
+      border-color: var(--text-dim);
+      color: var(--text);
+    }
+    
+    /* Contract Summary */
+    .contract-summary {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .summary-row:last-child {
+      border-bottom: none;
+      font-weight: 600;
+      font-size: 1.1rem;
+      padding-top: 1rem;
+    }
+    .summary-label {
+      color: var(--text-dim);
+    }
+    .summary-value {
+      font-weight: 500;
+    }
+    
+    /* Deposit Input */
+    .deposit-input-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .deposit-input {
+      width: 120px;
+      padding: 0.75rem 1rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      color: var(--text);
+      font-size: 1.25rem;
+      font-weight: 600;
+      text-align: right;
+    }
+    .deposit-input:focus {
+      outline: none;
+      border-color: var(--arkeo);
+    }
+    .deposit-suffix {
+      font-size: 1.1rem;
+      color: var(--text-dim);
+    }
+    .deposit-estimate {
+      margin-top: 0.75rem;
+      padding: 0.75rem;
+      background: var(--arkeo-dim);
+      border-radius: 0.5rem;
+      font-size: 0.9rem;
+    }
+    
+    /* Wallet Section */
+    .wallet-section {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      text-align: center;
+      margin: 1.5rem 0;
+    }
+    .wallet-label {
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    .connect-wallet-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 1.5rem;
+      background: linear-gradient(135deg, #8b5cf6, #3b82f6);
+      border: none;
+      border-radius: 0.5rem;
+      color: white;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+    .connect-wallet-btn:hover {
+      transform: scale(1.02);
+    }
+    
+    /* Status */
+    .status-box {
+      padding: 1rem;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-top: 1rem;
+    }
+    .status-box.success {
+      background: var(--success-dim);
+      border: 1px solid var(--success);
+    }
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--arkeo);
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Success State */
+    .success-container {
+      text-align: center;
+      padding: 2rem 0;
+    }
+    .success-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+    .success-title {
+      font-size: 1.75rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+    }
+    .success-subtitle {
+      color: var(--text-dim);
+      margin-bottom: 2rem;
+    }
+    
+    /* Endpoint Display */
+    .endpoint-display {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem;
+      margin: 1.5rem 0;
+      font-family: monospace;
+      font-size: 0.95rem;
+      word-break: break-all;
+      text-align: left;
+    }
+    .endpoint-label {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      margin-bottom: 0.5rem;
+      font-family: sans-serif;
+    }
+    .endpoint-url {
+      color: var(--arkeo);
+    }
+    .copy-btn {
+      margin-top: 0.75rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.25rem;
+      color: var(--text);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .copy-btn:hover {
+      background: var(--arkeo);
+      color: #000;
+      border-color: var(--arkeo);
+    }
+    
+    .listing-link {
+      display: inline-block;
+      padding: 0.75rem 1.5rem;
+      background: var(--arkeo);
+      color: #000;
+      text-decoration: none;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      margin: 0.5rem;
+    }
+    .listing-link.secondary {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    
+    /* Hidden */
+    .hidden { display: none !important; }
+    
+    /* Mobile */
+    @media (max-width: 600px) {
+      .chain-grid { grid-template-columns: 1fr; }
+      .btn-group { flex-direction: column; }
+      .container { padding: 1rem; }
+      .provider-stats { flex-wrap: wrap; gap: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <a href="index.html" class="logo">
+      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+      <span>Arkeo</span> Marketplace
+    </a>
+    <a href="index.html" class="back-link">
+      ← Back to Marketplace
+    </a>
+  </nav>
+
+  <div class="container">
+    <!-- Progress Bar -->
+    <div class="progress-container">
+      <div class="progress-steps">
+        <div class="progress-line" id="progressLine" style="width: 0%"></div>
+        <div class="step-dot active" id="dot1">1</div>
+        <div class="step-dot" id="dot2">2</div>
+        <div class="step-dot" id="dot3">3</div>
+      </div>
+      <div class="step-labels">
+        <span class="step-label active" id="label1">Chain</span>
+        <span class="step-label" id="label2">Provider</span>
+        <span class="step-label" id="label3">Connect</span>
+      </div>
+    </div>
+
+    <!-- Step 1: Select Chain -->
+    <div class="wizard-card" id="step1">
+      <h2 class="wizard-title">What data do you need?</h2>
+      <p class="wizard-subtitle">Select the blockchain you want to access.</p>
+      
+      <div class="form-group">
+        <input type="text" class="form-input" placeholder="🔍 Search chains..." id="chainSearch" oninput="filterChains()">
+      </div>
+      
+      <div class="chain-grid" id="chainGrid">
+        <!-- Chains populated by JS -->
+      </div>
+      
+      <div class="btn-group">
+        <button class="btn btn-primary" id="nextBtn1" disabled onclick="goToStep(2)">
+          Find Providers →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 2: Choose Provider -->
+    <div class="wizard-card hidden" id="step2">
+      <h2 class="wizard-title">Choose a Provider</h2>
+      <p class="wizard-subtitle">Select from available <span id="selectedChainName">Ethereum</span> providers.</p>
+      
+      <div class="provider-list" id="providerList">
+        <!-- Providers populated by JS -->
+      </div>
+      
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="goToStep(1)">← Back</button>
+        <button class="btn btn-primary" id="nextBtn2" disabled onclick="goToStep(3)">
+          Continue →
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 3: Open Contract -->
+    <div class="wizard-card hidden" id="step3">
+      <h2 class="wizard-title">Open Contract</h2>
+      <p class="wizard-subtitle">Fund your contract and get instant access.</p>
+      
+      <div class="contract-summary">
+        <div class="summary-row">
+          <span class="summary-label">Chain</span>
+          <span class="summary-value" id="summaryChain">Ethereum Mainnet</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Provider</span>
+          <span class="summary-value" id="summaryProvider">FastNode Pro</span>
+        </div>
+        <div class="summary-row">
+          <span class="summary-label">Rate</span>
+          <span class="summary-value" id="summaryRate">0.001 ARKEO/request</span>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Deposit Amount</label>
+        <div class="deposit-input-group">
+          <input type="number" class="deposit-input" id="depositAmount" value="10" min="1" oninput="updateEstimate()">
+          <span class="deposit-suffix">ARKEO</span>
+        </div>
+        <div class="deposit-estimate" id="depositEstimate">
+          ≈ <strong>10,000</strong> requests
+        </div>
+      </div>
+      
+      <div class="wallet-section" id="walletSection">
+        <div class="wallet-label">Connect your wallet to open the contract</div>
+        <button class="connect-wallet-btn" onclick="connectWallet()">
+          🔗 Connect Keplr Wallet
+        </button>
+      </div>
+      
+      <div id="contractStatus"></div>
+      
+      <div class="btn-group">
+        <button class="btn btn-secondary" onclick="goToStep(2)">← Back</button>
+        <button class="btn btn-primary hidden" id="openContractBtn" onclick="openContract()">
+          Open Contract
+        </button>
+      </div>
+    </div>
+
+    <!-- Step 4: Success -->
+    <div class="wizard-card hidden" id="step4">
+      <div class="success-container">
+        <div class="success-icon">🎉</div>
+        <h2 class="success-title">You're Connected!</h2>
+        <p class="success-subtitle">Your contract is open and ready to use.</p>
+        
+        <div class="endpoint-display">
+          <div class="endpoint-label">Your RPC Endpoint:</div>
+          <div class="endpoint-url" id="finalEndpoint">https://sentinel.fastnode.io/eth?contract=12345</div>
+          <button class="copy-btn" onclick="copyEndpoint()">📋 Copy Endpoint</button>
+        </div>
+        
+        <div class="contract-summary" style="text-align: left;">
+          <div class="summary-row">
+            <span class="summary-label">Deposited</span>
+            <span class="summary-value" id="finalDeposit">10 ARKEO</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Available Requests</span>
+            <span class="summary-value" id="finalRequests">~10,000</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Contract ID</span>
+            <span class="summary-value" id="finalContractId">#12345</span>
+          </div>
+        </div>
+        
+        <a href="index.html" class="listing-link">Back to Marketplace</a>
+        <a href="#" class="listing-link secondary" onclick="findAnother()">Find Another Provider</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Chain data
+    const chains = [
+      { id: 'eth-mainnet', name: 'Ethereum Mainnet', icon: '⟠' },
+      { id: 'btc-mainnet', name: 'Bitcoin', icon: '₿' },
+      { id: 'cosmos-mainnet', name: 'Cosmos Hub', icon: '⚛' },
+      { id: 'osmosis-mainnet', name: 'Osmosis', icon: '🌊' },
+      { id: 'arbitrum-mainnet', name: 'Arbitrum', icon: '🔵' },
+      { id: 'base-mainnet', name: 'Base', icon: '🔷' },
+      { id: 'polygon-mainnet', name: 'Polygon', icon: '💜' },
+      { id: 'avalanche-mainnet', name: 'Avalanche', icon: '🔺' },
+      { id: 'solana-mainnet', name: 'Solana', icon: '◎' },
+      { id: 'thorchain-mainnet', name: 'THORChain', icon: '⚡' },
+    ];
+
+    // Mock provider data
+    const providers = {
+      'eth-mainnet': [
+        { id: 1, name: 'FastNode Pro', rate: 0.001, uptime: 99.9, requests: '2.5M', description: 'Enterprise-grade Ethereum nodes with global distribution.' },
+        { id: 2, name: 'DecentralNode', rate: 0.0008, uptime: 99.5, requests: '1.2M', description: 'Community-run nodes with competitive pricing.' },
+        { id: 3, name: 'ChainRelay', rate: 0.0012, uptime: 99.8, requests: '890K', description: 'Low-latency archive nodes with full history.' },
+      ],
+      'btc-mainnet': [
+        { id: 4, name: 'BitcoinCore Plus', rate: 0.002, uptime: 99.7, requests: '500K', description: 'Full Bitcoin nodes with mempool access.' },
+        { id: 5, name: 'SatoshiNodes', rate: 0.0015, uptime: 99.4, requests: '320K', description: 'Reliable Bitcoin infrastructure since 2020.' },
+      ],
+      'cosmos-mainnet': [
+        { id: 6, name: 'CosmosHub Pro', rate: 0.0005, uptime: 99.9, requests: '1.8M', description: 'Fast Cosmos Hub nodes with IBC support.' },
+      ],
+    };
+
+    let selectedChain = null;
+    let selectedProvider = null;
+    let currentStep = 1;
+
+    // Initialize
+    function init() {
+      renderChains(chains);
+    }
+
+    function renderChains(chainList) {
+      const grid = document.getElementById('chainGrid');
+      grid.innerHTML = chainList.map(chain => `
+        <div class="chain-option" onclick="selectChain('${chain.id}', '${chain.name}')">
+          <span style="font-size: 1.5rem;">${chain.icon}</span>
+          <span class="chain-name">${chain.name}</span>
+        </div>
+      `).join('');
+    }
+
+    function filterChains() {
+      const search = document.getElementById('chainSearch').value.toLowerCase();
+      const filtered = chains.filter(c => c.name.toLowerCase().includes(search));
+      renderChains(filtered);
+    }
+
+    function selectChain(id, name) {
+      selectedChain = { id, name };
+      
+      document.querySelectorAll('.chain-option').forEach(el => {
+        el.classList.remove('selected');
+        if (el.querySelector('.chain-name').textContent === name) {
+          el.classList.add('selected');
+        }
+      });
+      
+      document.getElementById('nextBtn1').disabled = false;
+      document.getElementById('selectedChainName').textContent = name;
+    }
+
+    function renderProviders() {
+      const list = document.getElementById('providerList');
+      const chainProviders = providers[selectedChain.id] || [];
+      
+      if (chainProviders.length === 0) {
+        list.innerHTML = `
+          <div style="text-align: center; padding: 2rem; color: var(--text-dim);">
+            <div style="font-size: 2rem; margin-bottom: 1rem;">🔍</div>
+            <p>No providers available for ${selectedChain.name} yet.</p>
+            <p style="margin-top: 0.5rem;"><a href="become-provider.html" style="color: var(--arkeo);">Become the first provider →</a></p>
+          </div>
+        `;
+        return;
+      }
+      
+      list.innerHTML = chainProviders.map(p => `
+        <div class="provider-card" onclick="selectProvider(${p.id}, '${p.name}', ${p.rate})">
+          <div class="provider-header">
+            <span class="provider-name">${p.name}</span>
+            <span class="provider-rate">${p.rate} ARKEO/req</span>
+          </div>
+          <div class="provider-stats">
+            <span class="provider-stat"><span class="stat-good">●</span> ${p.uptime}% uptime</span>
+            <span class="provider-stat">📊 ${p.requests} requests</span>
+          </div>
+          <div class="provider-description">${p.description}</div>
+        </div>
+      `).join('');
+    }
+
+    function selectProvider(id, name, rate) {
+      selectedProvider = { id, name, rate };
+      
+      document.querySelectorAll('.provider-card').forEach((el, i) => {
+        el.classList.remove('selected');
+      });
+      event.currentTarget.classList.add('selected');
+      
+      document.getElementById('nextBtn2').disabled = false;
+      
+      // Update summary
+      document.getElementById('summaryChain').textContent = selectedChain.name;
+      document.getElementById('summaryProvider').textContent = name;
+      document.getElementById('summaryRate').textContent = rate + ' ARKEO/request';
+    }
+
+    function goToStep(step) {
+      // Hide all steps
+      for (let i = 1; i <= 4; i++) {
+        document.getElementById('step' + i).classList.add('hidden');
+        if (i <= 3) {
+          document.getElementById('dot' + i).classList.remove('active', 'complete');
+          document.getElementById('label' + i).classList.remove('active');
+        }
+      }
+      
+      // Show current step
+      document.getElementById('step' + step).classList.remove('hidden');
+      
+      // Update progress
+      for (let i = 1; i <= Math.min(step, 3); i++) {
+        const dot = document.getElementById('dot' + i);
+        const label = document.getElementById('label' + i);
+        if (i < step) {
+          dot.classList.add('complete');
+          dot.innerHTML = '✓';
+        } else if (i === step) {
+          dot.classList.add('active');
+          dot.innerHTML = i;
+          label.classList.add('active');
+        }
+      }
+      
+      // Progress line
+      const progressPercent = ((Math.min(step, 3) - 1) / 2) * 100;
+      document.getElementById('progressLine').style.width = progressPercent + '%';
+      
+      currentStep = step;
+      
+      // Render providers on step 2
+      if (step === 2) {
+        renderProviders();
+      }
+      
+      // Update estimate on step 3
+      if (step === 3) {
+        updateEstimate();
+      }
+    }
+
+    function updateEstimate() {
+      const amount = parseFloat(document.getElementById('depositAmount').value) || 0;
+      const rate = selectedProvider ? selectedProvider.rate : 0.001;
+      const requests = Math.floor(amount / rate);
+      document.getElementById('depositEstimate').innerHTML = `≈ <strong>${requests.toLocaleString()}</strong> requests`;
+    }
+
+    function connectWallet() {
+      const walletSection = document.getElementById('walletSection');
+      const openBtn = document.getElementById('openContractBtn');
+      
+      walletSection.innerHTML = `
+        <div style="display: flex; align-items: center; justify-content: center; gap: 0.75rem;">
+          <div class="spinner"></div>
+          <span>Connecting to Keplr...</span>
+        </div>
+      `;
+      
+      // Simulate wallet connection
+      setTimeout(() => {
+        walletSection.innerHTML = `
+          <div style="color: var(--success);">
+            ✅ Wallet Connected: <strong>arkeo1abc...xyz</strong>
+          </div>
+        `;
+        openBtn.classList.remove('hidden');
+      }, 1500);
+    }
+
+    function openContract() {
+      const statusDiv = document.getElementById('contractStatus');
+      const btn = document.getElementById('openContractBtn');
+      
+      btn.disabled = true;
+      btn.textContent = 'Opening Contract...';
+      
+      statusDiv.innerHTML = `
+        <div class="status-box" style="background: var(--arkeo-dim); border: 1px solid var(--arkeo);">
+          <div class="spinner"></div>
+          <span>Submitting transaction...</span>
+        </div>
+      `;
+      
+      // Simulate transaction
+      setTimeout(() => {
+        statusDiv.innerHTML = `
+          <div class="status-box success">
+            <span>✅</span>
+            <span>Contract opened successfully!</span>
+          </div>
+        `;
+        
+        // Update final values
+        const amount = document.getElementById('depositAmount').value;
+        const rate = selectedProvider.rate;
+        const requests = Math.floor(amount / rate);
+        
+        document.getElementById('finalDeposit').textContent = amount + ' ARKEO';
+        document.getElementById('finalRequests').textContent = '~' + requests.toLocaleString();
+        document.getElementById('finalContractId').textContent = '#' + Math.floor(Math.random() * 90000 + 10000);
+        document.getElementById('finalEndpoint').textContent = `https://sentinel.${selectedProvider.name.toLowerCase().replace(' ', '')}.io/${selectedChain.id.split('-')[0]}?contract=${Math.floor(Math.random() * 90000 + 10000)}`;
+        
+        setTimeout(() => goToStep(4), 1000);
+      }, 2000);
+    }
+
+    function copyEndpoint() {
+      const endpoint = document.getElementById('finalEndpoint').textContent;
+      navigator.clipboard.writeText(endpoint);
+      
+      const btn = event.target;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => btn.textContent = '📋 Copy Endpoint', 2000);
+    }
+
+    function findAnother() {
+      selectedChain = null;
+      selectedProvider = null;
+      document.querySelectorAll('.chain-option').forEach(el => el.classList.remove('selected'));
+      document.querySelectorAll('.provider-card').forEach(el => el.classList.remove('selected'));
+      document.getElementById('nextBtn1').disabled = true;
+      document.getElementById('nextBtn2').disabled = true;
+      document.getElementById('contractStatus').innerHTML = '';
+      document.getElementById('walletSection').innerHTML = `
+        <div class="wallet-label">Connect your wallet to open the contract</div>
+        <button class="connect-wallet-btn" onclick="connectWallet()">
+          🔗 Connect Keplr Wallet
+        </button>
+      `;
+      document.getElementById('openContractBtn').classList.add('hidden');
+      document.getElementById('openContractBtn').disabled = false;
+      document.getElementById('openContractBtn').textContent = 'Open Contract';
+      goToStep(1);
+    }
+
+    // Initialize on load
+    init();
+  </script>
+</body>
+</html>
