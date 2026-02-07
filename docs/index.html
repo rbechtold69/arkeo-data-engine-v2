@@ -788,9 +788,12 @@
         // Aggregate providers by pubkey and fetch metadata
         await aggregateProviders();
 
+        // Filter to only verified providers (those with accessible metadata)
+        const verifiedProviders = Object.values(state.providerInfos).filter(p => p.verified);
+        
         // Update UI
         updateStats();
-        renderProviders(Object.values(state.providerInfos));
+        renderProviders(verifiedProviders);
         renderEarningsChart();
 
         // Show success briefly
@@ -879,14 +882,14 @@
     async function fetchProviderMetadata(pubkey) {
       const info = state.providerInfos[pubkey];
       if (!info || !info.metadataUri) {
-        // Assign fallback name
-        info.name = `Provider ${pubkey.slice(-8)}`;
+        // Mark as unverified (will be filtered out)
+        info.verified = false;
         return;
       }
       
-      // Skip localhost URIs
+      // Skip localhost URIs - mark as unverified
       if (info.metadataUri.includes('127.0.0.1') || info.metadataUri.includes('localhost')) {
-        info.name = `Provider ${pubkey.slice(-8)}`;
+        info.verified = false;
         return;
       }
       
@@ -897,16 +900,24 @@
         
         if (response.ok) {
           const metadata = await response.json();
-          info.name = metadata.config?.moniker || metadata.moniker || `Provider ${pubkey.slice(-8)}`;
-          info.description = metadata.config?.description || metadata.description || '';
-          info.website = metadata.config?.website || metadata.website || '';
-          info.location = metadata.config?.location || metadata.location || '';
+          const moniker = metadata.config?.moniker || metadata.moniker;
+          
+          // Only mark as verified if we got a real name
+          if (moniker && moniker.length > 0) {
+            info.name = moniker;
+            info.description = metadata.config?.description || metadata.description || '';
+            info.website = metadata.config?.website || metadata.website || '';
+            info.location = metadata.config?.location || metadata.location || '';
+            info.verified = true;
+          } else {
+            info.verified = false;
+          }
         } else {
-          info.name = `Provider ${pubkey.slice(-8)}`;
+          info.verified = false;
         }
       } catch (err) {
-        // Metadata fetch failed, use fallback name
-        info.name = `Provider ${pubkey.slice(-8)}`;
+        // Metadata fetch failed - mark as unverified
+        info.verified = false;
         if (CONFIG.DEBUG_MODE) {
           console.warn('Failed to fetch metadata for', pubkey, err.message);
         }
@@ -927,9 +938,9 @@
     }
 
     function updateStats() {
-      // Count unique data providers (companies)
-      const uniqueProviders = Object.keys(state.providerInfos).length;
-      document.getElementById('providerCount').textContent = uniqueProviders;
+      // Count verified data providers (companies with accessible metadata)
+      const verifiedProviders = Object.values(state.providerInfos).filter(p => p.verified);
+      document.getElementById('providerCount').textContent = verifiedProviders.length;
 
       // Count unique chains/services offered
       const uniqueServices = new Set(state.providers.map(p => p.service)).size;
@@ -1034,7 +1045,7 @@
       const status = document.getElementById('statusFilter').value;
       const sortBy = document.getElementById('sortBy').value;
 
-      let filtered = Object.values(state.providerInfos).filter(p => {
+      let filtered = Object.values(state.providerInfos).filter(p => p.verified).filter(p => {
         // Search filter - search provider name, chains, or pubkey
         const providerName = (p.name || '').toLowerCase();
         const chainNames = p.services?.map(s => s.name.toLowerCase()).join(' ') || '';
@@ -1084,8 +1095,8 @@
     // EARNINGS CHART
     // ============================================================
     function calculateProviderEarnings() {
-      // Use aggregated provider info with real names from metadata
-      const providers = Object.values(state.providerInfos);
+      // Use only verified providers with real names from metadata
+      const providers = Object.values(state.providerInfos).filter(p => p.verified);
       
       // Calculate estimated earnings based on bond size and service count
       const providerEarnings = providers.map(p => {
