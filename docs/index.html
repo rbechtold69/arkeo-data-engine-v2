@@ -1372,7 +1372,7 @@
             </td>
             <td>${totalBond}</td>
             <td>
-              <a href="subscribe.html?provider=${encodeURIComponent(p.pubkey)}" class="btn btn-primary btn-sm">Subscribe</a>
+              <a href="subscribe.html?provider=${encodeURIComponent(p.pubkey || '')}" class="btn btn-primary btn-sm">Subscribe</a>
             </td>
           </tr>
         `;
@@ -1448,7 +1448,7 @@
               </div>
             </div>
             <div class="provider-actions">
-              <a href="subscribe.html?provider=${encodeURIComponent(p.pubkey)}" class="btn btn-primary">Subscribe</a>
+              <a href="subscribe.html?provider=${encodeURIComponent(p.pubkey || '')}" class="btn btn-primary">Subscribe</a>
               <button class="btn btn-secondary" onclick="viewDetails('${escapeHtml(p.pubkey)}')">Details</button>
             </div>
           </div>
