@@ -573,7 +573,7 @@
         </div>
         <div class="chart-card">
           <div class="chart-header">
-            <span class="chart-title">Top Providers (by ARKEO Earnings)</span>
+            <span class="chart-title">Top Providers (by ARKEO Bonded)</span>
             <div class="time-filters">
               <button class="time-filter" data-range="daily" onclick="setTimeRange('daily')">Daily</button>
               <button class="time-filter" data-range="weekly" onclick="setTimeRange('weekly')">Weekly</button>
@@ -863,48 +863,50 @@
     // EARNINGS CHART
     // ============================================================
     function calculateProviderEarnings() {
-      // Group contracts by provider pubkey and calculate earnings
-      const providerEarnings = {};
+      // Group providers by pubkey and aggregate their bonds/services
+      const providerData = {};
       
-      state.contracts.forEach(contract => {
-        const pubkey = contract.provider_address || contract.provider;
-        if (!pubkey) return;
-        
-        const paid = parseInt(contract.paid || 0);
-        if (!providerEarnings[pubkey]) {
-          providerEarnings[pubkey] = {
-            pubkey: pubkey,
-            totalEarnings: 0,
-            contractCount: 0,
-          };
-        }
-        providerEarnings[pubkey].totalEarnings += paid;
-        providerEarnings[pubkey].contractCount++;
-      });
-      
-      // Also check providers for earnings from their bonds/activity
       state.providers.forEach(provider => {
         const pubkey = provider.pub_key;
         if (!pubkey) return;
         
-        // Find service name for this provider
         const serviceName = getServiceName(provider.service);
+        const bond = parseInt(provider.bond || 0);
         
-        if (!providerEarnings[pubkey]) {
-          providerEarnings[pubkey] = {
+        // Use short pubkey as identifier
+        const shortKey = pubkey.slice(0, 20);
+        
+        if (!providerData[shortKey]) {
+          providerData[shortKey] = {
             pubkey: pubkey,
-            totalEarnings: 0,
-            contractCount: 0,
+            shortKey: shortKey,
+            totalBond: 0,
+            services: [],
+            status: provider.status,
           };
         }
-        providerEarnings[pubkey].serviceName = serviceName;
-        providerEarnings[pubkey].status = provider.status;
+        
+        providerData[shortKey].totalBond += bond;
+        providerData[shortKey].services.push(serviceName);
       });
       
-      // Convert to array and sort by earnings
-      const sorted = Object.values(providerEarnings)
-        .filter(p => p.totalEarnings > 0)
-        .sort((a, b) => b.totalEarnings - a.totalEarnings)
+      // Add contract earnings if available
+      state.contracts.forEach(contract => {
+        const pubkey = contract.provider;
+        if (!pubkey) return;
+        
+        const shortKey = pubkey.slice(0, 20);
+        const paid = parseInt(contract.paid || 0);
+        
+        if (providerData[shortKey]) {
+          providerData[shortKey].totalBond += paid;
+        }
+      });
+      
+      // Convert to array and sort by total bond/activity
+      const sorted = Object.values(providerData)
+        .filter(p => p.totalBond > 0)
+        .sort((a, b) => b.totalBond - a.totalBond)
         .slice(0, 10); // Top 10
       
       return sorted;
@@ -928,11 +930,15 @@
       noDataDiv.classList.add('hidden');
       
       const labels = earnings.map(e => {
-        if (e.serviceName) return e.serviceName;
-        return e.pubkey.slice(0, 12) + '...';
+        // Use first service name or shortened pubkey
+        if (e.services && e.services.length > 0) {
+          const name = e.services[0];
+          return name.length > 20 ? name.slice(0, 18) + '...' : name;
+        }
+        return e.shortKey.slice(0, 12) + '...';
       });
       
-      const values = earnings.map(e => e.totalEarnings / CONFIG.ARKEO_DIVISOR);
+      const values = earnings.map(e => e.totalBond / CONFIG.ARKEO_DIVISOR);
       
       // Destroy existing chart if exists
       if (state.chart) {
