@@ -1035,7 +1035,7 @@
       }
       
       list.innerHTML = chainProviders.map(p => `
-        <div class="provider-card" data-pubkey="${p.pubkey}" onclick="selectProvider('${p.id}', '${p.name}', ${p.rate})">
+        <div class="provider-card" data-pubkey="${p.pubkey}" onclick="selectProvider('${p.id}', '${p.name}', ${p.rate}, '${selectedChain.id}')">
           <div class="provider-header">
             <span class="provider-name">${p.name}${p.verified ? ' ✓' : ''}</span>
             <span class="provider-rate">${p.rate.toFixed(4)} ARKEO/req</span>
@@ -1294,13 +1294,21 @@
         // Calculate rate in uarkeo (provider rate is in ARKEO, convert to uarkeo)
         const rateUarkeo = Math.max(1, Math.floor((selectedProvider.rate || 0.00000001) * CONFIG.ARKEO_DIVISOR));
         
+        // Get service ID - ensure it's a valid number
+        const serviceId = selectedProvider.serviceId || selectedChain.id;
+        console.log('Service ID:', serviceId, 'Chain:', selectedChain, 'Provider:', selectedProvider);
+        
+        if (!serviceId) {
+          throw new Error('No service ID found. Please select a provider again.');
+        }
+        
         // Build MsgOpenContract with proper format
         const msg = {
           typeUrl: '/arkeo.arkeo.MsgOpenContract',
           value: {
             creator: walletAddress,
             provider: selectedProvider.pubkey,
-            service: String(selectedProvider.serviceId || selectedChain.id),
+            service: String(serviceId),
             client: walletAddress,
             delegate: '',
             contractType: 1, // PAY_AS_YOU_GO = 1
