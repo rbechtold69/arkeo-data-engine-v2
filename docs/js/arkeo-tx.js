@@ -108,9 +108,20 @@ class ArkeoTxHelper {
   async init() {
     if (this.initialized) return;
     
+    // Load Long.js first (required for int64 support)
+    if (!window.Long) {
+      await this.loadScript('https://cdn.jsdelivr.net/npm/long@5.2.3/umd/index.min.js');
+    }
+    
     // Load protobuf.js from CDN
     if (!window.protobuf) {
       await this.loadScript('https://cdn.jsdelivr.net/npm/protobufjs@7.2.6/dist/protobuf.min.js');
+    }
+    
+    // Configure protobufjs to use Long
+    if (window.Long && window.protobuf) {
+      protobuf.util.Long = window.Long;
+      protobuf.configure();
     }
     
     // Parse the proto definitions
@@ -172,7 +183,14 @@ class ArkeoTxHelper {
     console.log('Encoding payAsYouGoRate:', payAsYouGoRate);
     console.log('minContractDuration input:', params.minContractDuration, '→', parseInt(params.minContractDuration) || 10);
     
-    // Use camelCase - protobufjs auto-converts from snake_case proto
+    // Use Long for int64 fields
+    const Long = window.Long;
+    const minDur = Long ? Long.fromNumber(parseInt(params.minContractDuration) || 10) : (parseInt(params.minContractDuration) || 10);
+    const maxDur = Long ? Long.fromNumber(parseInt(params.maxContractDuration) || 1000000) : (parseInt(params.maxContractDuration) || 1000000);
+    const settleDur = Long ? Long.fromNumber(parseInt(params.settlementDuration) || 10) : (parseInt(params.settlementDuration) || 10);
+    
+    console.log('Duration values (Long):', { minDur, maxDur, settleDur });
+    
     const message = this.MsgModProvider.create({
       creator: params.creator,
       provider: params.provider,
@@ -180,11 +198,11 @@ class ArkeoTxHelper {
       metadataUri: params.metadataUri || '',
       metadataNonce: parseInt(params.metadataNonce) || 1,
       status: parseInt(params.status) || 1,
-      minContractDuration: parseInt(params.minContractDuration) || 10,
-      maxContractDuration: parseInt(params.maxContractDuration) || 1000000,
+      minContractDuration: minDur,
+      maxContractDuration: maxDur,
       subscriptionRate: subscriptionRate,
       payAsYouGoRate: payAsYouGoRate,
-      settlementDuration: parseInt(params.settlementDuration) || 10
+      settlementDuration: settleDur
     });
     
     console.log('MsgModProvider message:', message);
