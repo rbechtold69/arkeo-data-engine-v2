@@ -159,6 +159,7 @@ class ArkeoTxHelper {
   }
 
   encodeModProvider(params) {
+    // Use snake_case to match proto field names exactly
     const subscriptionRate = (params.subscriptionRate || []).map(coin => 
       this.ArkeoCoin.create({ denom: coin.denom, amount: String(coin.amount) })
     );
@@ -167,19 +168,24 @@ class ArkeoTxHelper {
       this.ArkeoCoin.create({ denom: coin.denom, amount: String(coin.amount) })
     );
     
+    console.log('Encoding subscriptionRate:', subscriptionRate);
+    console.log('Encoding payAsYouGoRate:', payAsYouGoRate);
+    
     const message = this.MsgModProvider.create({
       creator: params.creator,
       provider: params.provider,
       service: params.service,
-      metadataUri: params.metadataUri || '',
-      metadataNonce: parseInt(params.metadataNonce) || 1,
+      metadata_uri: params.metadataUri || '',
+      metadata_nonce: parseInt(params.metadataNonce) || 1,
       status: parseInt(params.status) || 1,
-      minContractDuration: parseInt(params.minContractDuration) || 10,
-      maxContractDuration: parseInt(params.maxContractDuration) || 1000000,
-      subscriptionRate: subscriptionRate,
-      payAsYouGoRate: payAsYouGoRate,
-      settlementDuration: parseInt(params.settlementDuration) || 10
+      min_contract_duration: parseInt(params.minContractDuration) || 10,
+      max_contract_duration: parseInt(params.maxContractDuration) || 1000000,
+      subscription_rate: subscriptionRate,
+      pay_as_you_go_rate: payAsYouGoRate,
+      settlement_duration: parseInt(params.settlementDuration) || 10
     });
+    
+    console.log('MsgModProvider message:', message);
     return this.MsgModProvider.encode(message).finish();
   }
 
