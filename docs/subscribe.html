@@ -1383,7 +1383,17 @@
         }
         
         setTimeout(() => goToStep(4), 1000);
-      }, 2000);
+      } catch (err) {
+        console.error('Contract error:', err);
+        document.getElementById('contractStatus').innerHTML = `
+          <div class="status-box error">
+            <span>❌</span>
+            <span>Failed: ${err.message}</span>
+          </div>
+        `;
+        btn.disabled = false;
+        btn.textContent = 'Open Contract';
+      }
     }
 
     function copyEndpoint() {
