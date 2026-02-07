@@ -908,6 +908,13 @@
       return result;
     }
 
+    // HTML escaping to prevent XSS
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+
     // Initialize
     async function init() {
       await loadRealData();
@@ -1067,9 +1074,9 @@
     function renderChains(chainList) {
       const grid = document.getElementById('chainGrid');
       grid.innerHTML = chainList.map(chain => `
-        <div class="chain-option" onclick="selectChain('${chain.id}', '${chain.name}')">
+        <div class="chain-option" onclick="selectChain('${escapeHtml(chain.id)}', '${escapeHtml(chain.name)}')">
           <span style="font-size: 1.5rem;">${chain.icon}</span>
-          <span class="chain-name">${chain.name}</span>
+          <span class="chain-name">${escapeHtml(chain.name)}</span>
         </div>
       `).join('');
     }
@@ -1110,16 +1117,16 @@
       }
       
       list.innerHTML = chainProviders.map(p => `
-        <div class="provider-card" data-pubkey="${p.pubkey}" onclick="selectProvider('${p.id}', '${p.name}', ${p.rate}, '${selectedChain.id}')">
+        <div class="provider-card" data-pubkey="${escapeHtml(p.pubkey)}" onclick="selectProvider('${escapeHtml(p.id)}', '${escapeHtml(p.name)}', ${p.rate}, '${escapeHtml(selectedChain.id)}')">
           <div class="provider-header">
-            <span class="provider-name">${p.name}${p.verified ? ' ✓' : ''}</span>
+            <span class="provider-name">${escapeHtml(p.name)}${p.verified ? ' ✓' : ''}</span>
             <span class="provider-rate">${p.rate.toFixed(4)} ARKEO/req</span>
           </div>
           <div class="provider-stats">
             <span class="provider-stat"><span class="stat-good">●</span> Online</span>
             <span class="provider-stat">📊 ${p.requests} requests</span>
           </div>
-          <div class="provider-description">${p.description || 'Arkeo data provider'}</div>
+          <div class="provider-description">${escapeHtml(p.description) || 'Arkeo data provider'}</div>
         </div>
       `).join('');
     }
