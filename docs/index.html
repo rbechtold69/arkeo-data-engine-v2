@@ -5,7 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Arkeo Data Marketplace</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <meta name="description" content="Decentralized RPC infrastructure marketplace. Connect to blockchain data providers with pay-as-you-go pricing.">
+  <meta name="theme-color" content="#0a0c10">
+  <!-- Open Graph -->
+  <meta property="og:title" content="Arkeo Data Marketplace">
+  <meta property="og:description" content="Decentralized RPC infrastructure. No signup. No KYC. Just connect and query.">
+  <meta property="og:type" content="website">
+  <!-- Scripts -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
   <style>
     :root {
       --bg-main: #0a0c10;
@@ -494,13 +503,92 @@
     }
     .footer-link:hover { color: var(--arkeo); }
 
-    /* Responsive */
+    /* Responsive - Tablet */
+    @media (max-width: 1024px) {
+      .momentum-content {
+        grid-template-columns: 1fr;
+      }
+      .chart-card {
+        min-height: 300px;
+      }
+      .cta-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Responsive - Mobile */
     @media (max-width: 768px) {
+      .nav { padding: 0.75rem 1rem; }
       .nav-links { display: none; }
-      .hero h1 { font-size: 2rem; }
-      .hero p { font-size: 1rem; }
+      .nav-inner { flex-wrap: wrap; gap: 0.5rem; }
+      .logo { font-size: 1rem; }
+      .logo img { height: 32px; }
+      
+      .hero { padding: 2rem 1rem; }
+      .hero h1 { font-size: 1.75rem; }
+      .hero p { font-size: 0.9rem; }
+      .hero-buttons { flex-direction: column; }
+      .hero-buttons .btn { width: 100%; justify-content: center; }
+      
+      .stats-bar { padding: 1rem; }
+      .stats-inner { grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+      .stat-value { font-size: 1.5rem; }
+      
+      .main { padding: 1rem; }
+      
+      .momentum-section { padding: 1.5rem; }
+      .momentum-text h2 { font-size: 1.25rem; }
+      .momentum-buttons { flex-direction: column; }
+      .momentum-buttons .btn { width: 100%; justify-content: center; }
+      
+      .cta-grid { grid-template-columns: 1fr; }
+      .cta-card { padding: 1.5rem; }
+      
+      .section-header { flex-direction: column; gap: 1rem; align-items: flex-start; }
+      .filters { flex-direction: column; }
+      .filter-input, .filter-select { width: 100%; min-width: unset; }
+      
       .provider-grid { grid-template-columns: 1fr; }
-      .stats-inner { grid-template-columns: repeat(2, 1fr); }
+      .provider-card { padding: 1rem; }
+      .provider-stats { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+      .provider-actions { flex-direction: column; }
+      .provider-actions .btn { width: 100%; }
+      
+      .time-filters { flex-wrap: wrap; gap: 0.25rem; }
+      .time-filter { padding: 0.25rem 0.5rem; font-size: 0.7rem; }
+      
+      .footer-inner { flex-direction: column; text-align: center; }
+      .footer-links { flex-wrap: wrap; justify-content: center; }
+    }
+
+    /* Responsive - Small Mobile */
+    @media (max-width: 380px) {
+      .hero h1 { font-size: 1.5rem; }
+      .stat-value { font-size: 1.25rem; }
+      .btn { padding: 0.625rem 1rem; font-size: 0.875rem; }
+    }
+
+    /* Touch-friendly */
+    @media (hover: none) {
+      .provider-card:hover {
+        transform: none;
+      }
+      .btn:active {
+        transform: scale(0.98);
+      }
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      * {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* Dark mode (already dark, but ensure system preference respected) */
+    @media (prefers-color-scheme: light) {
+      /* Could add light mode styles here if needed */
     }
   </style>
 </head>
@@ -658,12 +746,9 @@
 
   <script>
     // ============================================================
-    // CONFIGURATION
+    // CONFIG is loaded from js/config.js
+    // Utils are loaded from js/utils.js
     // ============================================================
-    const CONFIG = {
-      REST_API: 'https://rest-seed.arkeo.network',
-      ARKEO_DIVISOR: 100_000_000,
-    };
 
     // ============================================================
     // STATE
@@ -680,51 +765,74 @@
     // LOAD DATA FROM BLOCKCHAIN
     // ============================================================
     async function loadData() {
+      const loadingEl = document.getElementById('providersLoading');
+      
       try {
-        // Load providers, services, and contracts in parallel
-        const [providersRes, servicesRes, contractsRes] = await Promise.all([
-          fetch(`${CONFIG.REST_API}/arkeo/providers`),
-          fetch(`${CONFIG.REST_API}/arkeo/services`),
-          fetch(`${CONFIG.REST_API}/arkeo/contracts`).catch(() => ({ ok: false })),
+        // Load providers, services, and contracts in parallel with caching
+        const [providers, services, contracts] = await Promise.all([
+          API.getProviders(),
+          API.getServices(),
+          API.getContracts().catch(() => []), // Contracts optional
         ]);
 
-        // Parse providers
-        if (providersRes.ok) {
-          const data = await providersRes.json();
-          state.providers = data.provider || data.providers || [];
-        }
+        state.providers = providers;
+        state.contracts = contracts;
+        
+        // Build services lookup map
+        state.services = {};
+        services.forEach(s => {
+          state.services[s.service_id] = s;
+        });
 
-        // Parse services into lookup map
-        if (servicesRes.ok) {
-          const data = await servicesRes.json();
-          const services = data.services || data.service || [];
-          state.services = {};
-          services.forEach(s => {
-            state.services[s.service_id] = s;
+        // Update UI
+        updateStats();
+        renderProviders(state.providers);
+        renderEarningsChart();
+
+        // Show success briefly
+        if (CONFIG.DEBUG_MODE) {
+          console.log('Data loaded:', { 
+            providers: state.providers.length, 
+            services: Object.keys(state.services).length,
+            contracts: state.contracts.length 
           });
         }
 
-        // Parse contracts
-        if (contractsRes.ok) {
-          const data = await contractsRes.json();
-          state.contracts = data.contracts || data.contract || [];
-        }
-
-        // Update stats
-        updateStats();
-
-        // Render providers
-        renderProviders(state.providers);
-        
-        // Render earnings chart
-        renderEarningsChart();
-
       } catch (err) {
-        console.error('Failed to load data:', err);
-        document.getElementById('providersLoading').innerHTML = `
-          <p style="color: var(--error);">Failed to load providers. Please try again.</p>
-        `;
+        ErrorHandler.handle(err, 'loadData');
+        
+        // Try to show cached data if available
+        const cachedProviders = Cache.get('providers');
+        if (cachedProviders) {
+          state.providers = cachedProviders.provider || cachedProviders.providers || [];
+          updateStats();
+          renderProviders(state.providers);
+          renderEarningsChart();
+          ErrorHandler.showToast('Showing cached data. Live data unavailable.', 'warning');
+        } else {
+          loadingEl.innerHTML = `
+            <p style="color: var(--error);">
+              Failed to load providers. 
+              <button onclick="loadData()" style="color: var(--arkeo); background: none; border: none; cursor: pointer; text-decoration: underline;">
+                Try again
+              </button>
+            </p>
+          `;
+        }
       }
+    }
+    
+    // Auto-refresh data periodically
+    function startAutoRefresh() {
+      setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          // Clear cache and reload
+          Cache.remove('providers');
+          Cache.remove('services');
+          Cache.remove('contracts');
+          loadData();
+        }
+      }, CONFIG.REFRESH_INTERVAL_MS);
     }
 
     function updateStats() {
@@ -747,11 +855,15 @@
       document.getElementById('totalEarnings').textContent = formatArkeo(totalEarnings);
     }
 
-    function formatArkeo(uarkeo) {
+    function formatArkeo(uarkeo, decimals = 2) {
+      // Use utility if available, fallback to local
+      if (typeof Format !== 'undefined') {
+        return Format.arkeo(uarkeo, decimals);
+      }
       const val = parseInt(uarkeo || 0) / CONFIG.ARKEO_DIVISOR;
       if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
       if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
-      return val.toFixed(2);
+      return val.toFixed(decimals);
     }
 
     function getServiceName(serviceId) {
@@ -1020,7 +1132,28 @@
     // ============================================================
     // INITIALIZE
     // ============================================================
-    document.addEventListener('DOMContentLoaded', loadData);
+    document.addEventListener('DOMContentLoaded', () => {
+      // Load initial data
+      loadData();
+      
+      // Start auto-refresh (every 30 seconds when tab is visible)
+      startAutoRefresh();
+      
+      // Global error handler
+      window.onerror = (msg, url, line, col, error) => {
+        ErrorHandler.handle(error || new Error(msg), `Global: ${url}:${line}`);
+        return false; // Let browser handle too
+      };
+      
+      // Handle unhandled promise rejections
+      window.onunhandledrejection = (event) => {
+        ErrorHandler.handle(event.reason, 'Unhandled Promise');
+      };
+      
+      if (CONFIG.DEBUG_MODE) {
+        console.log('Arkeo Marketplace initialized', { config: CONFIG });
+      }
+    });
   </script>
 </body>
 </html>
