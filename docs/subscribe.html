@@ -623,25 +623,38 @@
             <div>
               <div style="font-weight: 600; margin-bottom: 0.25rem;">🛡️ Enable Auto-Failover</div>
               <div style="font-size: 0.85rem; color: var(--text-dim); line-height: 1.4;">
-                Automatically creates backup contracts before your active contract expires. 
-                Ensures 100% uptime with seamless provider switching.
+                Automatically creates overlapping backup contracts and routes to best available providers.
               </div>
             </div>
           </label>
           
           <div id="failoverDetails" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; font-size: 0.85rem;">
-              <div>
-                <div style="color: var(--text-dim); margin-bottom: 0.25rem;">Overlap Threshold</div>
-                <div style="font-weight: 600;">20% remaining</div>
+            <div style="font-size: 0.85rem; margin-bottom: 0.75rem;">
+              <strong>How providers are ranked:</strong>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--arkeo); color: #000; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">1</span>
+                <span><strong>Location match</strong> — Providers in your region first</span>
               </div>
-              <div>
-                <div style="color: var(--text-dim); margin-bottom: 0.25rem;">Backup Providers</div>
-                <div style="font-weight: 600;">Top 3 by rate</div>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--arkeo); color: #000; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">2</span>
+                <span><strong>Lowest rate</strong> — Cheapest pay-as-you-go rate</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <span style="background: var(--arkeo); color: #000; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">3</span>
+                <span><strong>Top 5 queued</strong> — Best alternatives ready to switch</span>
               </div>
             </div>
-            <div style="margin-top: 0.75rem; padding: 0.5rem; background: rgba(59, 224, 255, 0.1); border-radius: 0.25rem; font-size: 0.8rem; color: var(--arkeo);">
-              ⚡ When your contract hits 20%, we auto-create an overlapping contract so there's zero downtime.
+            <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; font-size: 0.85rem;">
+              <div style="background: rgba(59, 224, 255, 0.1); padding: 0.75rem; border-radius: 0.5rem;">
+                <div style="color: var(--text-dim); margin-bottom: 0.25rem;">Overlap Threshold</div>
+                <div style="font-weight: 600; color: var(--arkeo);">20% remaining</div>
+              </div>
+              <div style="background: rgba(16, 185, 129, 0.1); padding: 0.75rem; border-radius: 0.5rem;">
+                <div style="color: var(--text-dim); margin-bottom: 0.25rem;">Backup Contracts</div>
+                <div style="font-weight: 600; color: #10b981;">Auto-created</div>
+              </div>
             </div>
           </div>
         </div>
@@ -699,12 +712,14 @@
         <div id="failoverInfo" style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 0.5rem; padding: 1rem; margin: 1rem 0; text-align: left;">
           <div style="font-weight: 600; margin-bottom: 0.5rem;">🛡️ Failover Protection Active</div>
           <div style="font-size: 0.85rem; color: var(--text-dim); line-height: 1.5;">
-            When your contract reaches 20% remaining, we'll automatically create a backup contract 
-            with the next best provider. Your service will seamlessly switch over with zero downtime.
+            When your contract reaches 20% remaining, an overlapping backup contract is auto-created.
+            If your provider goes down, traffic routes to the next best provider instantly.
           </div>
           <div style="margin-top: 0.75rem; font-size: 0.85rem;">
-            <strong>Backup providers queued:</strong> 
-            <span id="backupProviders" style="color: var(--arkeo);">Everstake, Liquify</span>
+            <strong>Ranked backup providers:</strong>
+          </div>
+          <div id="backupProvidersList" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem;">
+            <!-- Populated by JS -->
           </div>
         </div>
         
@@ -1178,13 +1193,22 @@
           failoverStatus.querySelector('.summary-value').innerHTML = '🛡️ Enabled';
           failoverStatus.querySelector('.summary-value').style.color = '#10b981';
           failoverInfo.style.display = 'block';
-          // Show other providers as backups
+          
+          // Show ranked backup providers (sorted by rate, excluding selected)
+          const backupList = document.getElementById('backupProvidersList');
           const otherProviders = Object.values(KNOWN_PROVIDERS)
             .filter(p => p.name !== selectedProvider.name)
-            .slice(0, 2)
-            .map(p => p.name)
-            .join(', ');
-          document.getElementById('backupProviders').textContent = otherProviders || 'None available';
+            .slice(0, 4);
+          
+          backupList.innerHTML = otherProviders.map((p, i) => `
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <span style="background: ${i === 0 ? '#10b981' : 'var(--border)'}; color: ${i === 0 ? '#000' : 'var(--text-dim)'}; 
+                          width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; 
+                          justify-content: center; font-size: 0.7rem; font-weight: 600;">${i + 1}</span>
+              <span style="color: ${i === 0 ? 'var(--arkeo)' : 'var(--text-dim)'};">${p.name}</span>
+              ${i === 0 ? '<span style="font-size: 0.75rem; color: #10b981;">← Next in queue</span>' : ''}
+            </div>
+          `).join('');
         } else {
           failoverStatus.querySelector('.summary-value').innerHTML = '○ Disabled';
           failoverStatus.querySelector('.summary-value').style.color = 'var(--text-dim)';
