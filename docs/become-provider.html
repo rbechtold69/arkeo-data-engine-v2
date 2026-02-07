@@ -1540,113 +1540,67 @@
       // Initialize the Arkeo TX helper
       await window.arkeoTx.init();
       
-      const offlineSigner = window.keplr.getOfflineSigner(CONFIG.CHAIN_ID);
-      const accounts = await offlineSigner.getAccounts();
-      const account = accounts[0];
-      
       console.log('Signing message:', msg);
+      console.log('Account info:', accountInfo);
       
-      // Encode the message using protobuf
-      let msgBytes;
-      if (msg.typeUrl === '/arkeo.arkeo.MsgBondProvider') {
-        msgBytes = window.arkeoTx.encodeBondProvider(
-          msg.value.creator,
-          msg.value.provider,
-          msg.value.service,
-          msg.value.bond
-        );
-      } else if (msg.typeUrl === '/arkeo.arkeo.MsgModProvider') {
-        msgBytes = window.arkeoTx.encodeModProvider(msg.value);
-      } else {
-        throw new Error('Unknown message type: ' + msg.typeUrl);
+      // Get pubkey bytes from state
+      const pubkeyBytes = state.walletPubkeyBytes;
+      if (!pubkeyBytes) {
+        throw new Error('No wallet pubkey bytes available');
       }
       
-      console.log('Encoded message bytes:', msgBytes);
+      // Build TxBody
+      const bodyBytes = window.arkeoTx.buildTxBody([msg], 'Registered via Arkeo Marketplace');
+      console.log('TxBody bytes:', bodyBytes);
       
-      // Wrap as Any
-      const anyBytes = window.arkeoTx.wrapAsAny(msg.typeUrl, msgBytes);
-      console.log('Any-wrapped bytes:', anyBytes);
+      // Build AuthInfo
+      const authInfoBytes = window.arkeoTx.buildAuthInfo(
+        pubkeyBytes,
+        parseInt(accountInfo.sequence),
+        '10000',  // fee amount
+        300000    // gas limit
+      );
+      console.log('AuthInfo bytes:', authInfoBytes);
       
-      // For signing, we still need to use Keplr's signDirect
-      // But first, let's try the JSON broadcast approach with proper structure
-      
-      // Broadcast via REST with JSON format (Cosmos SDK should convert)
-      const txBody = {
-        messages: [{
-          "@type": msg.typeUrl,
-          ...msg.value
-        }],
-        memo: "Registered via Arkeo Marketplace",
-        timeout_height: "0",
-        extension_options: [],
-        non_critical_extension_options: []
-      };
-      
-      const authInfo = {
-        signer_infos: [{
-          public_key: {
-            "@type": "/cosmos.crypto.secp256k1.PubKey",
-            key: state.walletPubkey
-          },
-          mode_info: {
-            single: {
-              mode: "SIGN_MODE_LEGACY_AMINO_JSON"
-            }
-          },
-          sequence: accountInfo.sequence
-        }],
-        fee: {
-          amount: [{ denom: CONFIG.ARKEO_DENOM, amount: "10000" }],
-          gas_limit: "300000",
-          payer: "",
-          granter: ""
-        }
-      };
-      
-      // Create amino sign doc
-      const aminoMsg = {
-        type: msg.typeUrl.replace('/arkeo.arkeo.', 'arkeo/'),
-        value: msg.value
-      };
-      
+      // Create SignDoc for Keplr
       const signDoc = {
-        chain_id: CONFIG.CHAIN_ID,
-        account_number: accountInfo.accountNumber,
-        sequence: accountInfo.sequence,
-        fee: {
-          amount: [{ denom: CONFIG.ARKEO_DENOM, amount: "10000" }],
-          gas: "300000"
-        },
-        msgs: [aminoMsg],
-        memo: "Registered via Arkeo Marketplace"
+        bodyBytes: bodyBytes,
+        authInfoBytes: authInfoBytes,
+        chainId: CONFIG.CHAIN_ID,
+        accountNumber: accountInfo.accountNumber
       };
       
-      console.log('Sign doc:', JSON.stringify(signDoc, null, 2));
+      console.log('SignDoc:', signDoc);
       
-      // Sign with Amino
-      const signResponse = await window.keplr.signAmino(
+      // Sign with Keplr's signDirect
+      const signResponse = await window.keplr.signDirect(
         CONFIG.CHAIN_ID,
-        account.address,
+        state.walletAddress,
         signDoc
       );
       
-      console.log('Signature:', signResponse.signature);
+      console.log('Sign response:', signResponse);
       
-      // Build the complete signed tx in the format the REST API expects
-      const signedTx = {
-        body: txBody,
-        auth_info: authInfo,
-        signatures: [signResponse.signature.signature]
-      };
+      // Build TxRaw with signature
+      const signatureBytes = window.arkeoTx.base64ToBytes(signResponse.signature.signature);
+      const txRawBytes = window.arkeoTx.buildTxRaw(
+        signResponse.signed.bodyBytes,
+        signResponse.signed.authInfoBytes,
+        [signatureBytes]
+      );
       
-      console.log('Signed TX:', JSON.stringify(signedTx, null, 2));
+      console.log('TxRaw bytes length:', txRawBytes.length);
       
-      // Broadcast
+      // Convert to base64 for broadcast
+      const txBytesBase64 = window.arkeoTx.bytesToBase64(txRawBytes);
+      console.log('TX bytes (base64):', txBytesBase64.substring(0, 100) + '...');
+      
+      // Broadcast via REST
       const broadcastResponse = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tx: signedTx,
+          tx_bytes: txBytesBase64,
           mode: 'BROADCAST_MODE_SYNC',
         }),
       });
