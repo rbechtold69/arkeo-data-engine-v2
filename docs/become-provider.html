@@ -800,12 +800,14 @@
         state.walletPubkey = bufferToBase64(accounts[0].pubkey);
         state.walletConnected = true;
         
-        // Get the key info from Keplr for bech32 pubkey
+        // Get the key info from Keplr
         const keyInfo = await window.keplr.getKey(CONFIG.CHAIN_ID);
-        state.walletPubkeyBech32 = keyInfo.bech32Address;
+        
+        // Convert pubkey to arkeopub1... format
+        state.walletPubkeyBech32 = pubkeyToBech32(accounts[0].pubkey, 'arkeopub');
         
         console.log('Wallet pubkey (base64):', state.walletPubkey);
-        console.log('Wallet bech32:', state.walletPubkeyBech32);
+        console.log('Wallet pubkey (bech32):', state.walletPubkeyBech32);
         
         // Update UI
         btn.textContent = `${state.walletAddress.slice(0, 10)}...${state.walletAddress.slice(-6)}`;
@@ -1265,6 +1267,94 @@
       }
       return btoa(binary);
     }
+    
+    // Convert pubkey bytes to bech32 format (arkeopub1...)
+    function pubkeyToBech32(pubkeyBytes, prefix) {
+      // Amino prefix for secp256k1 pubkey: eb5ae98721
+      const aminoPrefix = [0xeb, 0x5a, 0xe9, 0x87, 0x21];
+      const pubkey = new Uint8Array(pubkeyBytes);
+      
+      // Combine amino prefix + pubkey
+      const combined = new Uint8Array(aminoPrefix.length + pubkey.length);
+      combined.set(aminoPrefix);
+      combined.set(pubkey, aminoPrefix.length);
+      
+      // Convert to 5-bit groups for bech32
+      const words = toWords(combined);
+      
+      // Encode as bech32
+      return bech32Encode(prefix, words);
+    }
+    
+    // Convert bytes to 5-bit words
+    function toWords(bytes) {
+      const words = [];
+      let value = 0;
+      let bits = 0;
+      
+      for (const byte of bytes) {
+        value = (value << 8) | byte;
+        bits += 8;
+        while (bits >= 5) {
+          bits -= 5;
+          words.push((value >> bits) & 0x1f);
+        }
+      }
+      
+      if (bits > 0) {
+        words.push((value << (5 - bits)) & 0x1f);
+      }
+      
+      return words;
+    }
+    
+    // Bech32 encoding
+    function bech32Encode(prefix, words) {
+      const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+      const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+      
+      function polymod(values) {
+        let chk = 1;
+        for (const v of values) {
+          const top = chk >> 25;
+          chk = ((chk & 0x1ffffff) << 5) ^ v;
+          for (let i = 0; i < 5; i++) {
+            if ((top >> i) & 1) chk ^= GENERATOR[i];
+          }
+        }
+        return chk;
+      }
+      
+      function hrpExpand(hrp) {
+        const result = [];
+        for (const c of hrp) {
+          result.push(c.charCodeAt(0) >> 5);
+        }
+        result.push(0);
+        for (const c of hrp) {
+          result.push(c.charCodeAt(0) & 31);
+        }
+        return result;
+      }
+      
+      function createChecksum(hrp, data) {
+        const values = hrpExpand(hrp).concat(data).concat([0, 0, 0, 0, 0, 0]);
+        const mod = polymod(values) ^ 1;
+        const result = [];
+        for (let i = 0; i < 6; i++) {
+          result.push((mod >> (5 * (5 - i))) & 31);
+        }
+        return result;
+      }
+      
+      const checksum = createChecksum(prefix, words);
+      const combined = words.concat(checksum);
+      let result = prefix + '1';
+      for (const w of combined) {
+        result += CHARSET[w];
+      }
+      return result;
+    }
 
     // ============================================================
     // PROVIDER REGISTRATION (ON-CHAIN)
@@ -1316,11 +1406,13 @@
           type: 'arkeo/MsgBondProvider',
           value: {
             creator: state.walletAddress,
-            provider: state.walletPubkeyBech32 || state.walletAddress,
+            provider: state.walletPubkeyBech32,
             service: String(state.selectedService.id),
-            bond: CONFIG.MIN_BOND,
+            bond: "100000000",  // 1 ARKEO in uarkeo (no denom suffix)
           }
         };
+        
+        console.log('Bond message:', JSON.stringify(bondMsg, null, 2));
         
         const offlineSigner = window.keplr.getOfflineSigner(CONFIG.CHAIN_ID);
         const bondResult = await signAndBroadcastAmino(offlineSigner, [bondMsg], accountInfo1);
@@ -1351,18 +1443,20 @@
           type: 'arkeo/MsgModProvider',
           value: {
             creator: state.walletAddress,
-            provider: state.walletPubkeyBech32 || state.walletAddress,
+            provider: state.walletPubkeyBech32,
             service: String(state.selectedService.id),
-            metadata_uri: state.metadataUrl || '',
-            metadata_nonce: '1',
+            metadataUri: state.metadataUrl || '',
+            metadataNonce: '1',
             status: 1, // ONLINE
-            min_contract_duration: '10',
-            max_contract_duration: '1000000',
-            subscription_rate: [],
-            pay_as_you_go_rate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate) }],
-            settlement_duration: '10',
+            minContractDuration: '10',
+            maxContractDuration: '1000000',
+            subscriptionRate: [],
+            payAsYouGoRate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate) }],
+            settlementDuration: '10',
           }
         };
+        
+        console.log('Mod message:', JSON.stringify(modMsg, null, 2));
         
         const modResult = await signAndBroadcastAmino(offlineSigner, [modMsg], accountInfo2);
         
