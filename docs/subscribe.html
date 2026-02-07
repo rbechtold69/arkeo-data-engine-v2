@@ -787,8 +787,9 @@
           const pubkey = p.pub_key;
           
           // Check if this provider is in our verified list (match by prefix)
+          // API returns shorter pubkeys, so check if our verified prefix starts with API pubkey
           const matchedPrefix = verifiedPrefixes.find(prefix => 
-            pubkey.startsWith(prefix.slice(0, 45))
+            prefix.startsWith(pubkey.slice(0, 40)) || pubkey.startsWith(prefix.slice(0, 40))
           );
           
           // Skip if not verified
@@ -817,6 +818,11 @@
             pubkey: pubkey
           });
         });
+        
+        // Only show chains that have verified providers
+        chains = chains.filter(chain => 
+          providersByChain[chain.id] && providersByChain[chain.id].length > 0
+        );
         
         renderChains(chains);
         
