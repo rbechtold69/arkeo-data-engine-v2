@@ -777,34 +777,45 @@
           };
         }).sort((a, b) => a.name.localeCompare(b.name));
         
-        // Group providers by chain
+        // Group providers by chain - ONLY verified providers
         providersByChain = {};
+        
+        // Get list of verified pubkey prefixes
+        const verifiedPrefixes = Object.keys(KNOWN_PROVIDERS);
+        
         rawProviders.forEach(p => {
+          const pubkey = p.pub_key;
+          
+          // Check if this provider is in our verified list (match by prefix)
+          const matchedPrefix = verifiedPrefixes.find(prefix => 
+            pubkey.startsWith(prefix.slice(0, 45))
+          );
+          
+          // Skip if not verified
+          if (!matchedPrefix) return;
+          
+          const meta = KNOWN_PROVIDERS[matchedPrefix];
+          
           if (!providersByChain[p.service]) {
             providersByChain[p.service] = [];
           }
           
-          // Find provider metadata
-          const pubkey = p.pub_key;
-          const knownMeta = Object.entries(KNOWN_PROVIDERS).find(([k]) => 
-            pubkey.startsWith(k.slice(0, 40)) || k.startsWith(pubkey.slice(0, 40))
+          // Check if we already added this provider for this chain
+          const alreadyAdded = providersByChain[p.service].some(
+            existing => existing.name === meta.name
           );
+          if (alreadyAdded) return;
           
-          const meta = knownMeta ? knownMeta[1] : { name: `Provider ${pubkey.slice(-8)}`, description: '', location: '' };
-          
-          // Only add if we know this provider (verified)
-          if (knownMeta) {
-            const rate = parseInt(p.pay_as_you_go_rate?.[0]?.amount || 0) / 100000000;
-            providersByChain[p.service].push({
-              id: pubkey,
-              name: meta.name,
-              rate: rate || 0.001,
-              uptime: 99.9,
-              requests: formatNumber(Math.floor(parseInt(p.bond || 0) / 100000000 * 100)),
-              description: meta.description,
-              pubkey: pubkey
-            });
-          }
+          const rate = parseInt(p.pay_as_you_go_rate?.[0]?.amount || 0) / 100000000;
+          providersByChain[p.service].push({
+            id: pubkey,
+            name: meta.name,
+            rate: rate || 0.001,
+            uptime: 99.9,
+            requests: formatNumber(Math.floor(parseInt(p.bond || 0) / 100000000 * 100)),
+            description: meta.description,
+            pubkey: pubkey
+          });
         });
         
         renderChains(chains);
