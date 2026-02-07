@@ -973,7 +973,7 @@
         
         // Update UI
         updateStats();
-        renderProviders(verifiedProviders);
+        renderProviders(verifiedProviders, 5); // Show top 5 on homepage
         renderEarningsChart();
 
         // Show success briefly
@@ -1235,7 +1235,14 @@
       document.getElementById('providerGrid').classList.toggle('hidden', view !== 'grid');
     }
     
-    function renderProviders(providers) {
+    let showAllProviders = false;
+    
+    function toggleShowAll() {
+      showAllProviders = !showAllProviders;
+      filterProviders();
+    }
+    
+    function renderProviders(providers, limit = null) {
       const grid = document.getElementById('providerGrid');
       const tableBody = document.getElementById('providerTableBody');
       const loading = document.getElementById('providersLoading');
@@ -1247,11 +1254,16 @@
         const emptyMsg = '<p style="color: var(--text-dim); text-align: center; padding: 2rem;">No providers found.</p>';
         grid.innerHTML = emptyMsg;
         tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 2rem;">No providers found.</td></tr>`;
+        document.getElementById('viewAllContainer')?.remove();
         return;
       }
+      
+      const totalCount = providers.length;
+      const displayProviders = (limit && !showAllProviders) ? providers.slice(0, limit) : providers;
+      const hasMore = limit && !showAllProviders && totalCount > limit;
 
       // Render Table View
-      tableBody.innerHTML = providers.map(p => {
+      tableBody.innerHTML = displayProviders.map(p => {
         const isOnline = p.status === 'ONLINE';
         const totalBond = formatArkeo(p.totalBond);
         const serviceCount = p.services?.length || 0;
@@ -1293,8 +1305,32 @@
         `;
       }).join('');
 
+      // Add "View All" button if there are more providers
+      let viewAllContainer = document.getElementById('viewAllContainer');
+      if (hasMore) {
+        if (!viewAllContainer) {
+          viewAllContainer = document.createElement('div');
+          viewAllContainer.id = 'viewAllContainer';
+          viewAllContainer.style.cssText = 'text-align: center; padding: 1.5rem; border-top: 1px solid var(--border);';
+          document.getElementById('providerTableContainer').appendChild(viewAllContainer);
+        }
+        viewAllContainer.innerHTML = `
+          <button onclick="toggleShowAll()" class="btn btn-secondary" style="min-width: 200px;">
+            View All ${totalCount} Providers →
+          </button>
+        `;
+      } else if (showAllProviders && viewAllContainer) {
+        viewAllContainer.innerHTML = `
+          <button onclick="toggleShowAll()" class="btn btn-secondary" style="min-width: 200px;">
+            ← Show Less
+          </button>
+        `;
+      } else if (viewAllContainer) {
+        viewAllContainer.remove();
+      }
+
       // Render Grid View
-      grid.innerHTML = providers.map(p => {
+      grid.innerHTML = displayProviders.map(p => {
         const isOnline = p.status === 'ONLINE';
         const totalBond = formatArkeo(p.totalBond);
         const serviceCount = p.services?.length || 0;
@@ -1400,7 +1436,7 @@
         return 0;
       });
 
-      renderProviders(filtered);
+      renderProviders(filtered, 5);
     }
 
     function viewDetails(pubkey) {
