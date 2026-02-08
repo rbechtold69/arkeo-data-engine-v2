@@ -761,6 +761,70 @@
     };
 
     // ============================================================
+    // DISPLAY NAME & ICON MAPS
+    // ============================================================
+    const CHAIN_DISPLAY_NAMES = {
+      'gaia-mainnet-rpc': 'Cosmos Hub (RPC)',
+      'gaia-mainnet-fullnode': 'Cosmos Hub',
+      'eth-mainnet-fullnode': 'Ethereum',
+      'eth-mainnet-archive': 'Ethereum (Archive)',
+      'btc-mainnet-fullnode': 'Bitcoin',
+      'arkeo-mainnet-fullnode': 'Arkeo',
+      'arkeo-mainnet-rest': 'Arkeo (REST)',
+      'osmosis-mainnet-fullnode': 'Osmosis',
+      'thorchain-mainnet-fullnode': 'THORChain',
+      'maya-mainnet-fullnode': 'Maya Protocol',
+      'base-mainnet-fullnode': 'Base',
+      'cosmos-mainnet-fullnode': 'Cosmos Hub',
+    };
+
+    const CHAIN_ICONS = {
+      'eth': '⟠',
+      'btc': '₿',
+      'gaia': '⚛',
+      'cosmos': '⚛',
+      'thorchain': '⚡',
+      'osmosis': '🌊',
+      'arkeo': '🔷',
+      'base': '🔵',
+      'maya': '🏛',
+    };
+
+    const SEARCH_ALIASES = {
+      'cosmos': ['gaia', 'cosmos'],
+      'thor': ['thorchain'],
+      'btc': ['bitcoin', 'btc'],
+      'bitcoin': ['btc'],
+      'eth': ['ethereum', 'eth'],
+      'ethereum': ['eth'],
+      'atom': ['gaia', 'cosmos'],
+      'rune': ['thorchain'],
+      'osmo': ['osmosis'],
+    };
+
+    const KNOWN_PROVIDERS = [
+      { pubkey: 'arkeopub1addwnpepq2ydhpj50hpfepq03d0sgatwj7srpjrqnc63vk0z5eaqfverv3rqzprl70', name: 'Arkeo Foundation', location: 'Global' },
+      { pubkey: 'arkeopub1addwnpepqdvlra44yykhmmpwtfavs35a5w6h8xqtuceedkuxur6v0gs8yfxa59h7wnm', name: '0xFury', location: 'Europe' },
+    ];
+
+    function getChainDisplayName(rawName) {
+      if (CHAIN_DISPLAY_NAMES[rawName]) return CHAIN_DISPLAY_NAMES[rawName];
+      // Clean up: remove -mainnet-fullnode, capitalize
+      return rawName
+        .replace(/-mainnet-(fullnode|archive|rest|rpc)/g, '')
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function getChainIcon(rawName) {
+      const lower = rawName.toLowerCase();
+      for (const [key, icon] of Object.entries(CHAIN_ICONS)) {
+        if (lower.includes(key)) return icon;
+      }
+      return '🔗';
+    }
+
+    // ============================================================
     // STATE
     // ============================================================
     let state = {
@@ -932,11 +996,22 @@
       const loadingDiv = document.getElementById('loadingChains');
       
       try {
-        // Fetch services and contracts in parallel
-        const [servicesRes, contracts] = await Promise.all([
+        // Fetch services, contracts, and providers in parallel
+        const [servicesRes, contracts, providersRes] = await Promise.all([
           fetch(`${CONFIG.REST_API}/arkeo/services`).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); }),
           fetchAllContracts().catch(err => { console.warn('Contract fetch failed:', err); return []; }),
+          fetch(`${CONFIG.REST_API}/arkeo/providers`).then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
+        
+        // Count providers per service
+        const providerCounts = {};
+        if (providersRes) {
+          const providers = providersRes.provider || providersRes.providers || [];
+          for (const p of providers) {
+            const svc = p.service || '';
+            if (svc) providerCounts[svc] = (providerCounts[svc] || 0) + 1;
+          }
+        }
         
         // Parse services
         let services = servicesRes.services || servicesRes.service || [];
@@ -955,11 +1030,12 @@
         // Compute demand from contracts
         state.serviceDemand = computeServiceDemand(contracts);
         
-        // Enrich services with demand data
+        // Enrich services with demand data and provider counts
         for (const svc of state.services) {
           const d = state.serviceDemand[svc.name] || state.serviceDemand[svc.id] || { active: 0, total: 0 };
           svc.activeContracts = d.active;
           svc.totalContracts = d.total;
+          svc.providerCount = providerCounts[svc.name] || 0;
         }
         
         // Sort by active contracts (desc), then total contracts (desc), then name (asc)
@@ -1007,28 +1083,45 @@
       grid.innerHTML = services.map(s => {
         const active = s.activeContracts || 0;
         const total = s.totalContracts || 0;
+        const providerCount = s.providerCount || 0;
         const d = getDemandIndicator(active);
         const countText = active > 0 ? `${active} active contract${active !== 1 ? 's' : ''}` : (total > 0 ? `${total} total` : '');
+        const displayName = getChainDisplayName(s.name);
+        const icon = getChainIcon(s.name);
         
         return `
         <div class="chain-option" onclick="selectService(${s.id}, '${escapeHtml(s.name)}')">
-          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🔗</div>
-          <div class="chain-name">${escapeHtml(s.name)}</div>
-          <div class="chain-id">ID: ${s.id}</div>
+          <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">${icon}</div>
+          <div class="chain-name">${escapeHtml(displayName)}</div>
+          <div class="chain-id">${escapeHtml(s.name)}</div>
           <div class="chain-demand ${d.cls}" title="${d.label}">
             <span>${d.icon}</span>
             <span class="demand-text">${countText || d.label}</span>
+          </div>
+          <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.25rem;">
+            ${providerCount > 0 ? `👥 ${providerCount} provider${providerCount !== 1 ? 's' : ''}` : '🆕 No providers yet'}
           </div>
         </div>`;
       }).join('');
     }
     
     function filterChains() {
-      const search = document.getElementById('chainSearch').value.toLowerCase();
-      const filtered = state.services.filter(s => 
-        s.name.toLowerCase().includes(search) || 
-        String(s.id).includes(search)
-      );
+      const search = document.getElementById('chainSearch').value.toLowerCase().trim();
+      if (!search) { renderServices(state.services); return; }
+      
+      // Expand search term via aliases
+      const aliasMatches = SEARCH_ALIASES[search] || [];
+      
+      const filtered = state.services.filter(s => {
+        const name = s.name.toLowerCase();
+        const displayName = getChainDisplayName(s.name).toLowerCase();
+        if (name.includes(search) || displayName.includes(search) || String(s.id).includes(search)) return true;
+        // Check aliases
+        for (const alias of aliasMatches) {
+          if (name.includes(alias) || displayName.includes(alias)) return true;
+        }
+        return false;
+      });
       renderServices(filtered);
     }
     
@@ -1042,7 +1135,7 @@
       event.currentTarget.classList.add('selected');
       
       document.getElementById('nextBtn1').disabled = false;
-      document.getElementById('selectedChainName').textContent = name;
+      document.getElementById('selectedChainName').textContent = getChainDisplayName(name);
     }
 
     // ============================================================
