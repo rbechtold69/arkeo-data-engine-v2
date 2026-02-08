@@ -974,6 +974,7 @@
               <th>Transactions</th>
               <th>ARKEO Earned</th>
               <th>Status</th>
+              <th title="Health checks use on-chain contract data. Active contracts prove a provider is serving data.">Health ℹ️</th>
               <th>Bond</th>
               <th></th>
             </tr>
@@ -1058,6 +1059,7 @@
       providerInfos: {},    // Aggregated provider info by pubkey (with metadata)
       services: {},         // Service ID -> service info lookup
       contracts: [],
+      contractsByProvider: {}, // pubkey -> count of active contracts
       timeRange: 'all_time',
       chart: null,
     };
@@ -1078,6 +1080,15 @@
 
         state.providers = providers;
         state.contracts = contracts;
+        
+        // Count active contracts per provider
+        state.contractsByProvider = {};
+        contracts.forEach(c => {
+          const pk = c.provider;
+          if (pk) {
+            state.contractsByProvider[pk] = (state.contractsByProvider[pk] || 0) + 1;
+          }
+        });
         
         // Build services lookup map
         state.services = {};
@@ -1394,7 +1405,7 @@
       if (providers.length === 0) {
         const emptyMsg = '<p style="color: var(--text-dim); text-align: center; padding: 2rem;">No providers found.</p>';
         grid.innerHTML = emptyMsg;
-        tableBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: var(--text-dim); padding: 2rem;">No providers found.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">No providers found.</td></tr>`;
         document.getElementById('viewAllContainer')?.remove();
         return;
       }
@@ -1438,6 +1449,7 @@
                 ${isOnline ? '● Online' : '○ Offline'}
               </span>
             </td>
+            <td>${healthHtml(p, false)}</td>
             <td>${totalBond}</td>
             <td>
               <a href="subscribe.html?provider=${encodeURIComponent(p.pubkey || '')}" class="btn btn-primary btn-sm">Subscribe</a>
@@ -1496,6 +1508,7 @@
                 ${isOnline ? '● Online' : '○ Offline'}
               </span>
             </div>
+            <div style="margin-bottom: 0.5rem;">${healthHtml(p, true)}</div>
             ${p.description ? `<p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.4;">${escapeHtml(p.description.slice(0, 100))}${p.description.length > 100 ? '...' : ''}</p>` : ''}
             <div style="margin-bottom: 1rem;">
               <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Supported Chains</div>
@@ -1578,6 +1591,32 @@
       });
 
       renderProviders(filtered, 5);
+    }
+
+    function getHealthIndicator(provider) {
+      const pk = provider.pubkey;
+      const uri = provider.metadataUri || '';
+      const isLocalhost = uri.includes('127.0.0.1') || uri.includes('localhost');
+      const contractCount = state.contractsByProvider[pk] || 0;
+      
+      if (isLocalhost) {
+        return { dot: '🔴', label: 'Misconfigured', cls: 'health-bad', title: 'Provider uses localhost URI — not reachable by users' };
+      }
+      if (contractCount > 0) {
+        return { dot: '🟢', label: `${contractCount} contract${contractCount > 1 ? 's' : ''}`, cls: 'health-good', title: 'Active contracts prove this provider is serving data' };
+      }
+      if (provider.status === 'ONLINE') {
+        return { dot: '🟡', label: 'No contracts', cls: 'health-warn', title: 'Online but no active contracts yet — unproven' };
+      }
+      return { dot: '🔴', label: 'Offline', cls: 'health-bad', title: 'Provider is offline' };
+    }
+
+    function healthHtml(provider, compact) {
+      const h = getHealthIndicator(provider);
+      if (compact) {
+        return `<span title="${h.title}" style="cursor:help;">${h.dot} <span style="font-size:0.75rem;color:var(--text-dim);">${h.label}</span></span>`;
+      }
+      return `<span title="${h.title}" style="cursor:help;">${h.dot} ${h.label}</span>`;
     }
 
     function viewDetails(pubkey) {
