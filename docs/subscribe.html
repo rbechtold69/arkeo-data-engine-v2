@@ -637,25 +637,60 @@
           </div>
         </div>
         <!-- USDC payment info (hidden by default) -->
-        <div id="usdcPaymentInfo" style="display: none; background: rgba(59,224,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; font-size: 0.85rem;">
-          <div style="font-weight: 600; margin-bottom: 0.5rem;">USDC Payment Flow</div>
-          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem; padding: 0.6rem; background: var(--bg-input); border-radius: 0.375rem; font-size: 0.8rem; flex-wrap: wrap;">
-            <span style="background: rgba(59,224,255,0.1); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-weight: 600;">Your USDC</span>
-            <span style="color: var(--arkeo);">→</span>
-            <span style="background: rgba(245,158,11,0.1); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-weight: 600; color: #f59e0b;">Osmosis DEX</span>
-            <span style="color: var(--arkeo);">→</span>
-            <span style="background: rgba(59,224,255,0.1); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-weight: 600; color: var(--arkeo);">ARKEO</span>
-            <span style="color: var(--arkeo);">→</span>
-            <span style="background: rgba(16,185,129,0.1); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-weight: 600; color: #10b981;">Contract Opens</span>
+        <div id="usdcPaymentInfo" style="display: none; background: rgba(59,224,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1rem; font-size: 0.85rem;">
+          <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 1rem;">💵 Pay with USDC → Get ARKEO</div>
+          
+          <!-- Live price display -->
+          <div id="arkeoPriceDisplay" style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 1rem;">
+            <div style="font-size: 0.8rem; padding: 0.5rem 0.75rem; background: var(--bg-input); border-radius: 0.375rem; flex: 1; min-width: 140px;">
+              <span style="color: var(--text-dim);">ARKEO price:</span> <span id="arkeoPriceValue" style="font-weight: 600;">Loading...</span>
+            </div>
+            <div style="font-size: 0.8rem; padding: 0.5rem 0.75rem; background: var(--bg-input); border-radius: 0.375rem; flex: 1; min-width: 140px;">
+              <span style="color: var(--text-dim);">You need:</span> <span id="arkeoNeeded" style="font-weight: 600; color: var(--arkeo);">—</span>
+            </div>
           </div>
-          <div style="color: var(--text-dim); line-height: 1.5; margin-bottom: 0.5rem;">USDC payments are automatically converted to ARKEO through Osmosis DEX. This creates buy pressure on the ARKEO token with every transaction.</div>
-          <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
-            <div style="font-size: 0.8rem; padding: 0.4rem 0.6rem; background: var(--bg-input); border-radius: 0.375rem;">
-              <span style="color: var(--text-dim);">Est. rate:</span> <span style="font-weight: 600;">1 USDC ≈ 125 ARKEO</span>
+
+          <!-- Step-by-step guide -->
+          <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+            <!-- Step 1 -->
+            <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: var(--bg-input); border-radius: 0.5rem;">
+              <span style="background: var(--arkeo); color: #000; min-width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px;">1</span>
+              <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 0.25rem;">Swap USDC → ARKEO on Osmosis</div>
+                <div style="color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0.5rem;">Use Osmosis DEX to convert your USDC to ARKEO tokens.</div>
+                <a id="osmosisSwapLink" href="https://app.osmosis.zone/?from=USDC&to=ARKEO" target="_blank" rel="noopener" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; background: linear-gradient(135deg, #5604a8, #462ad8); color: #fff; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 600; text-decoration: none; transition: opacity 0.2s;">
+                  🌊 Swap on Osmosis →
+                </a>
+              </div>
             </div>
-            <div style="font-size: 0.8rem; padding: 0.4rem 0.6rem; background: rgba(249,115,22,0.1); border-radius: 0.375rem;">
-              <span style="color: #f97316;">🔥 2% burn proposed</span> — subject to DAO vote
+            <!-- Step 2 -->
+            <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: var(--bg-input); border-radius: 0.5rem;">
+              <span style="background: var(--arkeo); color: #000; min-width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px;">2</span>
+              <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 0.25rem;">IBC Transfer ARKEO to Arkeo Chain</div>
+                <div style="color: var(--text-dim); font-size: 0.8rem;">In Keplr, send ARKEO from Osmosis to your Arkeo wallet. If you swapped via Keplr, it may already be on the Arkeo chain.</div>
+              </div>
             </div>
+            <!-- Step 3 -->
+            <div style="display: flex; gap: 0.75rem; align-items: flex-start; padding: 0.75rem; background: var(--bg-input); border-radius: 0.5rem;">
+              <span style="background: var(--arkeo); color: #000; min-width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px;">3</span>
+              <div style="flex: 1;">
+                <div style="font-weight: 600; margin-bottom: 0.25rem;">Come Back & Pay with ARKEO</div>
+                <div style="color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0.5rem;">Once you have ARKEO in your wallet, switch to direct ARKEO payment.</div>
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                  <button onclick="selectPayment('arkeo')" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; background: #10b981; color: #fff; border: none; border-radius: 0.375rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                    💎 Switch to ARKEO Payment
+                  </button>
+                  <button onclick="recheckBalance()" id="recheckBalanceBtn" style="display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.8rem; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 0.375rem; font-size: 0.8rem; font-weight: 600; cursor: pointer;">
+                    🔄 Check My Balance
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(249,115,22,0.1); border-radius: 0.375rem; font-size: 0.8rem;">
+            <span style="color: #f97316;">🔥 2% burn proposed</span> — subject to DAO vote · Every swap creates ARKEO buy pressure
           </div>
         </div>
         <!-- How payments work (collapsible) -->
@@ -1459,12 +1494,21 @@
       const amount = parseFloat(document.getElementById('depositAmount').value) || 0;
       let rate = selectedProvider ? selectedProvider.rate : 0.001;
       
-      // ARKEO gets 25% more requests (discount)
-      const discount = paymentMethod === 'arkeo' ? 1.25 : 1;
-      const requests = Math.floor((amount / rate) * discount);
-      
-      const bonusText = paymentMethod === 'arkeo' ? ' <span style="color: #10b981;">(+25% bonus!)</span>' : '';
-      document.getElementById('depositEstimate').innerHTML = `≈ <strong>${requests.toLocaleString()}</strong> requests${bonusText}`;
+      if (paymentMethod === 'usdc') {
+        // USDC mode: convert USDC to ARKEO equivalent for request estimate
+        if (arkeoPrice && amount > 0) {
+          const arkeoEquiv = amount / arkeoPrice;
+          const requests = Math.floor(arkeoEquiv / rate);
+          document.getElementById('depositEstimate').innerHTML = `≈ <strong>${arkeoEquiv.toFixed(2)}</strong> ARKEO → <strong>${requests.toLocaleString()}</strong> requests`;
+        } else {
+          document.getElementById('depositEstimate').innerHTML = `Enter USDC amount — price loading...`;
+        }
+        updateUsdcEstimate();
+      } else {
+        // ARKEO gets 25% more requests (discount)
+        const requests = Math.floor((amount / rate) * 1.25);
+        document.getElementById('depositEstimate').innerHTML = `≈ <strong>${requests.toLocaleString()}</strong> requests <span style="color: #10b981;">(+25% bonus!)</span>`;
+      }
     }
 
     // ============================================================
@@ -1796,8 +1840,100 @@
       goToStep(1);
     }
 
+    // ============================================================
+    // ARKEO PRICE & USDC FLOW
+    // ============================================================
+    let arkeoPrice = null; // USD price
+
+    async function fetchArkeoPrice() {
+      try {
+        const resp = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=arkeo&vs_currencies=usd');
+        const data = await resp.json();
+        if (data.arkeo?.usd) {
+          arkeoPrice = data.arkeo.usd;
+          updatePriceDisplay();
+          return;
+        }
+      } catch (e) { console.warn('CoinGecko price fetch failed:', e); }
+      // Fallback: try Osmosis pool
+      try {
+        const resp = await fetch('https://lcd.osmosis.zone/osmosis/poolmanager/v2/pools/2977');
+        const data = await resp.json();
+        // Parse pool assets to derive price if possible
+        console.log('Osmosis pool data:', data);
+      } catch (e) { console.warn('Osmosis price fetch also failed:', e); }
+      // Hard fallback
+      arkeoPrice = null;
+      updatePriceDisplay();
+    }
+
+    function updatePriceDisplay() {
+      const priceEl = document.getElementById('arkeoPriceValue');
+      const neededEl = document.getElementById('arkeoNeeded');
+      if (!priceEl) return;
+      
+      if (arkeoPrice) {
+        priceEl.textContent = '$' + arkeoPrice.toFixed(6);
+        priceEl.style.color = 'var(--arkeo)';
+        updateUsdcEstimate();
+      } else {
+        priceEl.textContent = 'Unavailable';
+        priceEl.style.color = 'var(--warning)';
+        neededEl.textContent = 'Enter USDC amount above';
+      }
+    }
+
+    function updateUsdcEstimate() {
+      const neededEl = document.getElementById('arkeoNeeded');
+      if (!neededEl || !arkeoPrice) return;
+      
+      const usdcAmount = parseFloat(document.getElementById('depositAmount').value) || 0;
+      if (paymentMethod !== 'usdc' || usdcAmount <= 0) {
+        neededEl.textContent = '—';
+        return;
+      }
+      const arkeoAmount = usdcAmount / arkeoPrice;
+      neededEl.textContent = `~${arkeoAmount.toFixed(2)} ARKEO (≈ $${usdcAmount.toFixed(2)})`;
+    }
+
+    async function recheckBalance() {
+      const btn = document.getElementById('recheckBalanceBtn');
+      if (!walletAddress) {
+        alert('Please connect your Keplr wallet first.');
+        return;
+      }
+      btn.textContent = '⏳ Checking...';
+      btn.disabled = true;
+      try {
+        const resp = await fetch(`${CONFIG.REST_API}/cosmos/bank/v1beta1/balances/${walletAddress}`);
+        const data = await resp.json();
+        const arkeoBalance = data.balances?.find(b => b.denom === CONFIG.ARKEO_DENOM);
+        const bal = arkeoBalance ? (parseInt(arkeoBalance.amount) / CONFIG.ARKEO_DIVISOR).toFixed(2) : '0.00';
+        
+        // Update wallet display
+        const walletSection = document.getElementById('walletSection');
+        walletSection.innerHTML = `
+          <div style="text-align: center;">
+            <div style="color: var(--success);">
+              <div>✅ Wallet Connected</div>
+              <div style="font-weight: 600; margin-top: 0.25rem;">${walletAddress.slice(0, 12)}...${walletAddress.slice(-6)}</div>
+              <div style="color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem;">
+                Balance: <strong style="color: var(--arkeo);">${bal} ARKEO</strong> <span style="font-size: 0.75rem; color: var(--text-dim);">(just refreshed)</span>
+              </div>
+            </div>
+          </div>
+        `;
+        btn.textContent = '✅ Balance: ' + bal + ' ARKEO';
+        setTimeout(() => { btn.textContent = '🔄 Check My Balance'; btn.disabled = false; }, 3000);
+      } catch (e) {
+        btn.textContent = '❌ Failed to check';
+        setTimeout(() => { btn.textContent = '🔄 Check My Balance'; btn.disabled = false; }, 2000);
+      }
+    }
+
     // Initialize on load
     init();
+    fetchArkeoPrice();
   </script>
 </body>
 </html>
