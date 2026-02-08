@@ -145,8 +145,36 @@
     }
     .nav-buttons {
       display: flex;
-      gap: 0.75rem;
+      gap: 0.5rem;
       align-items: center;
+    }
+    .nav-btn {
+      padding: 0.45rem 0.9rem;
+      border-radius: 0.375rem;
+      font-weight: 500;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid var(--border);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--text-dim);
+      background: transparent;
+    }
+    .nav-btn:hover {
+      color: var(--arkeo);
+      border-color: var(--arkeo);
+      background: rgba(59, 224, 255, 0.05);
+    }
+    .nav-btn-accent {
+      border-color: rgba(59, 224, 255, 0.3);
+      color: var(--arkeo);
+    }
+    .nav-btn-accent:hover {
+      background: rgba(59, 224, 255, 0.1);
+      border-color: var(--arkeo);
     }
 
     /* Hero Section */
@@ -846,9 +874,9 @@
         <a href="x402-setup.html" class="nav-link">⚡ x402</a>
       </div>
       <div class="nav-buttons">
-        <a href="become-provider.html" class="btn btn-provide">I want to Provide Data</a>
-        <a href="subscribe.html" class="btn btn-use">I want to Use Data</a>
-        <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="btn btn-buy">💎 Buy ARKEO</a>
+        <a href="become-provider.html" class="nav-btn">Provide Data</a>
+        <a href="subscribe.html" class="nav-btn">Use Data</a>
+        <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
       </div>
     </div>
   </nav>
