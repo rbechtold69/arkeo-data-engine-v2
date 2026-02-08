@@ -914,7 +914,7 @@
           <option value="all">All Data Types</option>
           <option value="eth">Ethereum</option>
           <option value="btc">Bitcoin</option>
-          <option value="cosmos">Cosmos</option>
+          <option value="gaia">Cosmos</option>
           <option value="thorchain">THORChain</option>
           <option value="osmosis">Osmosis</option>
         </select>
@@ -2004,11 +2004,27 @@
       const status = document.getElementById('statusFilter').value;
       const sortBy = document.getElementById('sortBy').value;
 
+      // Common chain name aliases (search term → actual service name)
+      const chainAliases = {
+        'cosmos': 'gaia', 'atom': 'gaia', 'cosmoshub': 'gaia',
+        'thor': 'thorchain', 'rune': 'thorchain',
+        'btc': 'bitcoin', 'eth': 'ethereum',
+        'bnb': 'binance', 'bsc': 'binance',
+        'avax': 'avalanche', 'sol': 'solana',
+        'dot': 'polkadot', 'matic': 'polygon',
+        'arb': 'arbitrum', 'op': 'optimism',
+      };
+      const expandedSearch = chainAliases[search] || search;
+
       let filtered = Object.values(state.providerInfos).filter(p => {
         // Search filter - search provider name, chains, or pubkey
         const providerName = (p.name || '').toLowerCase();
         const chainNames = p.services?.map(s => s.name.toLowerCase()).join(' ') || '';
-        const matchesSearch = providerName.includes(search) || 
+        const serviceDescs = p.services?.map(s => (s.description || '').toLowerCase()).join(' ') || '';
+        const matchesSearch = providerName.includes(expandedSearch) || 
+                             chainNames.includes(expandedSearch) ||
+                             serviceDescs.includes(expandedSearch) ||
+                             providerName.includes(search) ||
                              chainNames.includes(search) ||
                              (p.pubkey && p.pubkey.toLowerCase().includes(search));
         
