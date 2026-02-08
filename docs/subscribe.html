@@ -837,6 +837,9 @@
     // Demand data from contracts
     let serviceDemand = {};
     
+    // Service ID to name lookup (built from API)
+    let serviceIdToName = {};
+    
     // Real chain and provider data (loaded from API)
     let chains = [];
     let providersByChain = {};
@@ -1033,29 +1036,37 @@
         rawProviders = (providersRes.provider || []).filter(p => p.status === 'ONLINE');
         serviceDemand = computeServiceDemand(allContracts);
         
+        // Build service ID → name lookup from API
+        serviceIdToName = {};
+        services.forEach(s => {
+          const id = s.service_id || s.service;
+          const name = s.name || s.service;
+          if (id && name) {
+            serviceIdToName[id] = name;
+            SERVICE_ID_TO_NAME[id] = name; // Also update for contract opening
+          }
+        });
+        
         // Build set of all known service IDs (from services API + providers)
         const allServiceIds = new Set();
-        services.forEach(s => { allServiceIds.add(s.service || s.service_id); });
+        services.forEach(s => { allServiceIds.add(s.service_id || s.service); });
         rawProviders.forEach(p => { allServiceIds.add(p.service); });
         
         // Build chains list from ALL services that have ONLINE providers
         const activeServices = new Set();
         rawProviders.forEach(p => activeServices.add(p.service));
         
-        // Also add services from the API that might not have online providers yet
-        // (so users can see what's available even without providers)
-        services.forEach(s => {
-          const sid = s.service || s.service_id;
-          if (sid) activeServices.add(sid);
-        });
+        // Only show services that have ONLINE providers
+        // (394 total services exist, most without providers)
         
         chains = Array.from(activeServices).map(serviceId => {
           const displayName = getDisplayName(serviceId);
+          const serviceName = serviceIdToName[serviceId] || '';
           return {
             id: serviceId,
             name: displayName,
             icon: getChainIcon(serviceId),
-            searchTerms: (serviceId + ' ' + displayName).toLowerCase()
+            searchTerms: (serviceId + ' ' + serviceName + ' ' + displayName).toLowerCase()
           };
         });
         
@@ -1146,20 +1157,36 @@
     }
     
     function getDisplayName(serviceId) {
+      // First check direct match
       if (CHAIN_DISPLAY_NAMES[serviceId]) return CHAIN_DISPLAY_NAMES[serviceId];
-      // Auto-format: strip -mainnet-fullnode/-mainnet-rpc, capitalize
-      let name = String(serviceId).replace(/-mainnet-(fullnode|rpc)/gi, (_, type) => type === 'rpc' ? ' (RPC)' : '');
+      // Then look up the service name from API and check display names
+      const serviceName = serviceIdToName[serviceId];
+      if (serviceName && CHAIN_DISPLAY_NAMES[serviceName]) return CHAIN_DISPLAY_NAMES[serviceName];
+      // Auto-format from service name or ID
+      let name = serviceName || String(serviceId);
+      name = name.replace(/-(mainnet|testnet)-(fullnode|archivenode|rpc|grpc|unchained)/gi, (_, net, type) => {
+        let suffix = '';
+        if (type === 'rpc') suffix = ' (RPC)';
+        else if (type === 'grpc') suffix = ' (gRPC)';
+        else if (type === 'archivenode') suffix = ' (Archive)';
+        else if (type === 'unchained') suffix = ' (Unchained)';
+        if (net === 'testnet') suffix = ' Testnet' + suffix;
+        return suffix;
+      });
       name = name.replace(/-/g, ' ').trim();
       return name.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     }
     
     function getChainIcon(serviceId) {
-      const id = String(serviceId).toLowerCase();
+      // Look up service name from API, fall back to string ID
+      const serviceName = serviceIdToName[serviceId] || '';
+      const id = (serviceName + ' ' + String(serviceId)).toLowerCase();
       const icons = {
         'eth': '⟠', 'btc': '₿', 'gaia': '⚛', 'osmosis': '🌊',
         'thorchain': '⚡', 'arkeo': '🔷', 'avax': '🔺', 'maya': '🌙',
         'base': '🔵', 'bsc': '💛', 'sol': '☀️', 'dot': '⭕',
-        'matic': '💜', 'arb': '🔷', 'op': '🔴',
+        'matic': '💜', 'arb': '🔷', 'op-': '🔴', 'aptos': '🟢',
+        'sui': '💧', 'near': '🌐', 'fantom': '👻', 'celo': '🟡',
       };
       for (const [key, icon] of Object.entries(icons)) {
         if (id.includes(key)) return icon;
