@@ -536,9 +536,9 @@
       <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
       <span>Arkeo</span> Marketplace
     </a>
-    <a href="index.html" class="back-link">
-      ← Back to Marketplace
-    </a>
+    <button class="connect-wallet-btn" id="navWalletBtn" onclick="connectWallet()" style="padding: 0.5rem 1rem; font-size: 0.85rem;">
+      🔗 Connect Keplr
+    </button>
   </nav>
 
   <div class="container">
@@ -1457,6 +1457,15 @@
           </div>
         `;
         openBtn.classList.remove('hidden');
+        
+        // Update nav wallet button
+        const navBtn = document.getElementById('navWalletBtn');
+        if (navBtn) {
+          navBtn.innerHTML = `✅ ${walletAddress.slice(0, 8)}...${walletAddress.slice(-4)}`;
+          navBtn.style.background = 'rgba(16, 185, 129, 0.2)';
+          navBtn.style.borderColor = '#10b981';
+          navBtn.onclick = null;
+        }
         
       } catch (err) {
         console.error('Wallet connection failed:', err);
