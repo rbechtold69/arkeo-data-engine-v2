@@ -624,6 +624,10 @@
           <button class="btn btn-secondary" id="payUsdcBtn" onclick="selectPayment('usdc')" style="flex: 1;">
             💵 Pay with USDC
           </button>
+          <button class="btn btn-secondary" id="payX402Btn" onclick="selectPayment('x402')" style="flex: 1; position: relative;">
+            ⚡ Pay with x402
+            <span style="position: absolute; top: -10px; right: -10px; background: linear-gradient(135deg, #8b5cf6, #3b82f6); color: #fff; font-size: 0.65rem; padding: 3px 8px; border-radius: 10px; font-weight: 700;">NEW</span>
+          </button>
         </div>
         <!-- ARKEO payment info (shown by default) -->
         <div id="arkeoPaymentInfo" style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem; font-size: 0.85rem;">
@@ -691,6 +695,59 @@
           
           <div style="margin-top: 0.75rem; padding: 0.5rem 0.75rem; background: rgba(249,115,22,0.1); border-radius: 0.375rem; font-size: 0.8rem;">
             <span style="color: #f97316;">🔥 2% burn proposed</span> — subject to DAO vote · Every swap creates ARKEO buy pressure
+          </div>
+        </div>
+        <!-- x402 payment info (hidden by default) -->
+        <div id="x402PaymentInfo" style="display: none; background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.4); border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1rem; font-size: 0.85rem;">
+          <div style="font-weight: 700; margin-bottom: 0.75rem; font-size: 1rem;">⚡ x402 — HTTP-Native Payments</div>
+          <div style="color: var(--text-dim); line-height: 1.6; margin-bottom: 1rem;">
+            No contract needed. Pay per request with USDC using the <a href="https://x402.org" target="_blank" style="color: var(--arkeo);">x402 protocol</a> — Coinbase's open HTTP payment standard. Perfect for <strong>AI agents</strong> and programmatic access.
+          </div>
+
+          <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(139,92,246,0.1); border-radius: 0.5rem;">
+            <div style="font-weight: 600; margin-bottom: 0.5rem;">💰 Estimated Cost</div>
+            <div style="color: var(--text-dim); font-size: 0.85rem;">~$0.0001 per request (paid in USDC on Base network)</div>
+          </div>
+
+          <div style="margin-bottom: 1rem;">
+            <div style="font-weight: 600; margin-bottom: 0.5rem;">📦 Quick Start</div>
+            <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.8rem; overflow-x: auto; position: relative;">
+              <button onclick="navigator.clipboard.writeText(this.parentElement.querySelector('pre').textContent); this.textContent='✓ Copied!'; setTimeout(()=>this.textContent='📋',2000);"
+                style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">📋</button>
+<pre style="color: #e6edf3; margin: 0; white-space: pre-wrap;"><span style="color: #7ee787;">import</span> { wrapFetch } <span style="color: #7ee787;">from</span> <span style="color: #a5d6ff;">"@anthropic-ai/x402-fetch"</span>;
+
+<span style="color: #8b949e;">// Wrap fetch with x402 payment support</span>
+<span style="color: #7ee787;">const</span> paidFetch = wrapFetch(fetch, {
+  <span style="color: #79c0ff;">walletPrivateKey</span>: process.env.WALLET_KEY,
+  <span style="color: #79c0ff;">network</span>: <span style="color: #a5d6ff;">"base"</span>,
+});
+
+<span style="color: #8b949e;">// Make a paid RPC request — payment happens automatically</span>
+<span style="color: #7ee787;">const</span> response = <span style="color: #7ee787;">await</span> paidFetch(
+  <span style="color: #a5d6ff;">"https://sentinel.provider.io/eth"</span>,
+  {
+    <span style="color: #79c0ff;">method</span>: <span style="color: #a5d6ff;">"POST"</span>,
+    <span style="color: #79c0ff;">body</span>: JSON.stringify({
+      <span style="color: #79c0ff;">jsonrpc</span>: <span style="color: #a5d6ff;">"2.0"</span>,
+      <span style="color: #79c0ff;">method</span>: <span style="color: #a5d6ff;">"eth_blockNumber"</span>,
+      <span style="color: #79c0ff;">params</span>: [],
+      <span style="color: #79c0ff;">id</span>: <span style="color: #79c0ff;">1</span>
+    })
+  }
+);</pre>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🤖 AI Agent Ready</span>
+            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🔗 No Account Needed</span>
+            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">💸 Pay Per Request</span>
+            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🔵 Base Network</span>
+          </div>
+
+          <div style="font-size: 0.8rem; color: var(--text-dim);">
+            <a href="https://x402.org" target="_blank" style="color: var(--arkeo);">Learn more about x402 →</a> · 
+            <a href="https://www.npmjs.com/package/@anthropic-ai/x402-fetch" target="_blank" style="color: var(--arkeo);">npm package →</a>
           </div>
         </div>
         <!-- How payments work (collapsible) -->
@@ -1458,34 +1515,42 @@
       paymentMethod = method;
       const arkeoBtn = document.getElementById('payArkeoBtn');
       const usdcBtn = document.getElementById('payUsdcBtn');
+      const x402Btn = document.getElementById('payX402Btn');
       const suffix = document.getElementById('depositSuffix');
       const arkeoInfo = document.getElementById('arkeoPaymentInfo');
       const usdcInfo = document.getElementById('usdcPaymentInfo');
+      const x402Info = document.getElementById('x402PaymentInfo');
+      
+      // Reset all buttons
+      [arkeoBtn, usdcBtn, x402Btn].forEach(btn => {
+        btn.classList.remove('btn-primary');
+        btn.classList.add('btn-secondary');
+        btn.style.border = '';
+        btn.style.boxShadow = '';
+      });
+      arkeoInfo.style.display = 'none';
+      usdcInfo.style.display = 'none';
+      x402Info.style.display = 'none';
       
       if (method === 'arkeo') {
         arkeoBtn.classList.remove('btn-secondary');
         arkeoBtn.classList.add('btn-primary');
         arkeoBtn.style.border = '2px solid #10b981';
         arkeoBtn.style.boxShadow = '0 0 15px rgba(16,185,129,0.2)';
-        usdcBtn.classList.remove('btn-primary');
-        usdcBtn.classList.add('btn-secondary');
-        usdcBtn.style.border = '';
-        usdcBtn.style.boxShadow = '';
         suffix.textContent = 'ARKEO';
         arkeoInfo.style.display = 'block';
-        usdcInfo.style.display = 'none';
-      } else {
+      } else if (method === 'usdc') {
         usdcBtn.classList.remove('btn-secondary');
         usdcBtn.classList.add('btn-primary');
-        usdcBtn.style.border = '';
-        usdcBtn.style.boxShadow = '';
-        arkeoBtn.classList.remove('btn-primary');
-        arkeoBtn.classList.add('btn-secondary');
-        arkeoBtn.style.border = '';
-        arkeoBtn.style.boxShadow = '';
         suffix.textContent = 'USDC';
-        arkeoInfo.style.display = 'none';
         usdcInfo.style.display = 'block';
+      } else if (method === 'x402') {
+        x402Btn.classList.remove('btn-secondary');
+        x402Btn.classList.add('btn-primary');
+        x402Btn.style.border = '2px solid #8b5cf6';
+        x402Btn.style.boxShadow = '0 0 15px rgba(139,92,246,0.2)';
+        suffix.textContent = 'USDC';
+        x402Info.style.display = 'block';
       }
       updateEstimate();
     }

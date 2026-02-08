@@ -850,6 +850,105 @@ sudo systemctl enable fail2ban
     </div>
   </div>
 
+    <!-- Accept x402 Payments (collapsible) -->
+    <div style="margin-top: 2rem; background: var(--bg-card); border: 1px solid rgba(139,92,246,0.4); border-radius: 1rem; overflow: hidden;">
+      <button onclick="this.parentElement.querySelector('.x402-body').classList.toggle('hidden'); this.querySelector('.x402-arrow').textContent = this.querySelector('.x402-arrow').textContent === '▸' ? '▾' : '▸';"
+        style="width: 100%; padding: 1.25rem 1.5rem; background: none; border: none; color: #a78bfa; font-size: 1.1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; text-align: left;">
+        <span class="x402-arrow">▸</span> ⚡ Accept x402 Payments (USDC Micropayments)
+        <span style="font-size: 0.7rem; background: linear-gradient(135deg, #8b5cf6, #3b82f6); color: #fff; padding: 0.2rem 0.6rem; border-radius: 0.25rem; font-weight: 600; margin-left: 0.5rem;">NEW</span>
+      </button>
+      <div class="x402-body hidden" style="padding: 0 1.5rem 1.5rem; color: var(--text-dim); font-size: 0.9rem; line-height: 1.7;">
+
+        <p style="margin-bottom: 1rem;">
+          <a href="https://x402.org" target="_blank" style="color: var(--arkeo);">x402</a> is Coinbase's open HTTP payment standard. It lets clients pay per request with USDC — no accounts, no KYC. 
+          Add x402 middleware to your sentinel to accept micropayments from AI agents and developers on <strong>Base network</strong> (low fees).
+        </p>
+
+        <!-- Step 1: Install -->
+        <div style="margin-bottom: 1.5rem;">
+          <h3 style="color: var(--text); margin-bottom: 0.5rem;">1. Install x402 packages</h3>
+          <div style="background: var(--bg-input); border-radius: 0.5rem; padding: 1rem; font-family: monospace; font-size: 0.85rem; overflow-x: auto; position: relative;">
+            <button onclick="navigator.clipboard.writeText('npm install @x402/express @x402/core @x402/evm'); this.textContent='✓ Copied!'; setTimeout(()=>this.textContent='📋 Copy',2000);"
+              style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">📋 Copy</button>
+            <pre style="color: #10b981; margin: 0;">npm install @x402/express @x402/core @x402/evm</pre>
+          </div>
+        </div>
+
+        <!-- Step 2: Add Middleware -->
+        <div style="margin-bottom: 1.5rem;">
+          <h3 style="color: var(--text); margin-bottom: 0.5rem;">2. Add x402 middleware to your sentinel</h3>
+          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; overflow-x: auto; position: relative;">
+            <button onclick="navigator.clipboard.writeText(this.parentElement.querySelector('pre').textContent); this.textContent='✓ Copied!'; setTimeout(()=>this.textContent='📋 Copy',2000);"
+              style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">📋 Copy</button>
+<pre style="color: #e6edf3; margin: 0; white-space: pre-wrap;"><span style="color: #7ee787;">import</span> express <span style="color: #7ee787;">from</span> <span style="color: #a5d6ff;">"express"</span>;
+<span style="color: #7ee787;">import</span> { paymentMiddleware } <span style="color: #7ee787;">from</span> <span style="color: #a5d6ff;">"@x402/express"</span>;
+<span style="color: #7ee787;">import</span> { createVerifier } <span style="color: #7ee787;">from</span> <span style="color: #a5d6ff;">"@x402/evm"</span>;
+
+<span style="color: #7ee787;">const</span> app = express();
+
+<span style="color: #8b949e;">// Your wallet address to receive USDC payments</span>
+<span style="color: #7ee787;">const</span> WALLET_ADDRESS = <span style="color: #a5d6ff;">"0xYourWalletAddress"</span>;
+
+<span style="color: #8b949e;">// Configure x402 payment verification</span>
+<span style="color: #7ee787;">const</span> verifier = createVerifier({
+  <span style="color: #79c0ff;">network</span>: <span style="color: #a5d6ff;">"base"</span>,  <span style="color: #8b949e;">// Base network for low fees</span>
+});
+
+<span style="color: #8b949e;">// Protect your RPC endpoint with x402</span>
+app.use(<span style="color: #a5d6ff;">"/rpc"</span>, paymentMiddleware(verifier, {
+  <span style="color: #79c0ff;">recipient</span>: WALLET_ADDRESS,
+  <span style="color: #79c0ff;">amount</span>: <span style="color: #a5d6ff;">"0.0001"</span>,  <span style="color: #8b949e;">// $0.0001 USDC per request</span>
+  <span style="color: #79c0ff;">asset</span>: <span style="color: #a5d6ff;">"USDC"</span>,
+}));
+
+<span style="color: #8b949e;">// Proxy to your node</span>
+app.post(<span style="color: #a5d6ff;">"/rpc"</span>, <span style="color: #7ee787;">async</span> (req, res) => {
+  <span style="color: #7ee787;">const</span> response = <span style="color: #7ee787;">await</span> fetch(<span style="color: #a5d6ff;">"http://localhost:26657"</span>, {
+    <span style="color: #79c0ff;">method</span>: <span style="color: #a5d6ff;">"POST"</span>,
+    <span style="color: #79c0ff;">body</span>: JSON.stringify(req.body),
+  });
+  res.json(<span style="color: #7ee787;">await</span> response.json());
+});
+
+app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
+          </div>
+        </div>
+
+        <!-- Requirements -->
+        <div style="margin-bottom: 1rem;">
+          <h3 style="color: var(--text); margin-bottom: 0.5rem;">3. Requirements</h3>
+          <ul style="padding-left: 1.5rem; margin-bottom: 0.75rem;">
+            <li>An EVM wallet address to receive USDC payments</li>
+            <li>Runs on <strong>Base network</strong> — transaction fees are fractions of a cent</li>
+            <li>Works alongside your existing Arkeo sentinel — run on a different port</li>
+            <li>Set your own per-request price in USDC</li>
+          </ul>
+        </div>
+
+        <!-- Benefits -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 0.75rem; margin-bottom: 1rem;">
+          <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem;">
+            <div style="font-weight: 600; color: var(--text); margin-bottom: 0.25rem;">🤖 AI Agent Revenue</div>
+            <div style="font-size: 0.8rem;">Agents can't sign up for accounts — x402 lets them pay automatically.</div>
+          </div>
+          <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem;">
+            <div style="font-weight: 600; color: var(--text); margin-bottom: 0.25rem;">💸 Instant Settlement</div>
+            <div style="font-size: 0.8rem;">USDC payments settle on Base — no waiting for on-chain contract claims.</div>
+          </div>
+          <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1rem;">
+            <div style="font-weight: 600; color: var(--text); margin-bottom: 0.25rem;">🌐 HTTP Standard</div>
+            <div style="font-size: 0.8rem;">Uses HTTP 402 status code — works with any HTTP client.</div>
+          </div>
+        </div>
+
+        <p>
+          <a href="https://x402.org/docs/sellers" target="_blank" style="color: var(--arkeo);">Full x402 seller documentation →</a>
+        </p>
+
+      </div>
+    </div>
+  </div>
+
   <!-- Loading Overlay -->
   <div class="loading-overlay hidden" id="loadingOverlay">
     <div class="spinner" style="width: 48px; height: 48px; border-width: 3px;"></div>
