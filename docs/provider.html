@@ -375,7 +375,7 @@
     };
 
     function getChainIcon(serviceName) {
-      const lower = (serviceName || '').toLowerCase();
+      const lower = String(serviceName || '').toLowerCase();
       for (const [key, icon] of Object.entries(CHAIN_ICONS)) {
         if (lower.includes(key)) return icon;
       }
@@ -383,8 +383,9 @@
     }
 
     function getChainDisplayName(serviceName) {
-      if (!serviceName) return 'Unknown';
-      return serviceName.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+      if (!serviceName && serviceName !== 0) return 'Unknown';
+      const str = String(serviceName);
+      return str.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     }
 
     function formatArkeo(uarkeo, decimals = 2) {
@@ -422,10 +423,15 @@
       if (!pubkey) { showError('No pubkey in URL'); return; }
 
       try {
-        const [providers, contracts] = await Promise.all([
+        const [providers, contracts, servicesList] = await Promise.all([
           API.getProviders(),
           API.getContracts().catch(() => []),
+          API.getServices().catch(() => []),
         ]);
+
+        // Build service ID → name map
+        const serviceMap = {};
+        servicesList.forEach(s => { serviceMap[s.service_id] = s.name || s.description || ('Service ' + s.service_id); });
 
         // Find all entries for this provider
         const providerEntries = providers.filter(p => p.pub_key === pubkey);
@@ -442,9 +448,10 @@
           info.totalBond += parseInt(p.bond || 0);
           if (p.status === 'ONLINE') info.status = 'ONLINE';
           info.metadataUri = info.metadataUri || p.metadata_uri;
-          const svcName = p.service || 'Unknown';
+          const svcId = p.service;
+          const svcName = serviceMap[svcId] || ('Service ' + svcId);
           info.services.push({
-            id: p.service,
+            id: svcId,
             name: svcName,
             displayName: getChainDisplayName(svcName),
             icon: getChainIcon(svcName),
