@@ -419,7 +419,7 @@
     async function loadProvider() {
       const params = new URLSearchParams(window.location.search);
       const pubkey = params.get('pubkey');
-      if (!pubkey) { showError(); return; }
+      if (!pubkey) { showError('No pubkey in URL'); return; }
 
       try {
         const [providers, contracts] = await Promise.all([
@@ -429,7 +429,7 @@
 
         // Find all entries for this provider
         const providerEntries = providers.filter(p => p.pub_key === pubkey);
-        if (providerEntries.length === 0) { showError(); return; }
+        if (providerEntries.length === 0) { showError('Provider not found in ' + providers.length + ' providers. Pubkey: ' + pubkey.slice(0,20) + '...'); return; }
 
         // Aggregate info
         const info = {
@@ -541,14 +541,18 @@
         renderProvider(info, provContracts, { totalPaid, totalNonce, activeContracts, total: provContracts.length }, repTotal, repBreakdown);
 
       } catch (err) {
-        console.error(err);
-        showError();
+        console.error('Provider load error:', err);
+        showError(err.message || String(err));
       }
     }
 
-    function showError() {
+    function showError(detail) {
       document.getElementById('loading').style.display = 'none';
-      document.getElementById('error').style.display = 'block';
+      const errorEl = document.getElementById('error');
+      if (detail) {
+        errorEl.querySelector('p').textContent = 'Error loading provider: ' + detail;
+      }
+      errorEl.style.display = 'block';
     }
 
     function renderProvider(info, contracts, contractStats, repTotal, repBreakdown) {
