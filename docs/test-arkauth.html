@@ -146,6 +146,7 @@
   <script>
     let signerFn = null;
     let walletAddress = '';
+    let pubKeyBech32 = '';
 
     const $ = id => document.getElementById(id);
     const output = $('output');
@@ -172,6 +173,7 @@
         const result = await ArkAuth.getKeplrSigner(chainId);
         signerFn = result.signerFn;
         walletAddress = result.address;
+        pubKeyBech32 = result.pubKeyBech32;
 
         $('walletStatus').textContent = 'Connected';
         $('walletStatus').className = 'status status-connected';
@@ -181,6 +183,7 @@
 
         log('Status', 'Keplr connected', 'ok');
         log('Address', walletAddress);
+        log('PubKey', pubKeyBech32);
       } catch (err) {
         log('Error', err.message, 'err');
       }
@@ -200,7 +203,7 @@
       }
     });
 
-    // Test request
+    // Test request (uses 4-part arkauth with spender pubkey for delegate contracts)
     $('testBtn').addEventListener('click', async () => {
       clearOutput();
       try {
@@ -210,12 +213,18 @@
         const nonce = $('nonce').value.trim();
 
         log('Action', 'Signing and sending request…');
-        const result = await ArkAuth.testArkAuth(sentinelUrl, service, contractId, signerFn, nonce);
 
-        log('ArkAuth', result.arkauth);
-        log('URL', result.url);
-        log('Status', `${result.status}`, result.status >= 200 && result.status < 300 ? 'ok' : 'err');
-        log('Response', result.body.substring(0, 2000));
+        // Use 4-part format: contractId:pubkey:nonce:sig (needed for delegate auth)
+        const arkauth = await ArkAuth.generateArkAuthWithSpender(contractId, nonce, pubKeyBech32, signerFn);
+        const url = `${sentinelUrl.replace(/\/$/, '')}/${service}?arkauth=${encodeURIComponent(arkauth)}`;
+
+        log('ArkAuth', arkauth);
+        log('URL', url);
+
+        const resp = await fetch(url);
+        const body = await resp.text();
+        log('Status', `${resp.status}`, resp.status >= 200 && resp.status < 300 ? 'ok' : 'err');
+        log('Response', body.substring(0, 2000));
 
         // Auto-increment nonce
         $('nonce').value = parseInt(nonce) + 1;

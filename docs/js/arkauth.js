@@ -21,6 +21,58 @@ const ArkAuth = (() => {
   }
 
   /**
+   * Bech32 encoding (BIP-173).
+   * @param {string} prefix - Human-readable prefix (e.g. "arkeopub")
+   * @param {Uint8Array} data - Raw bytes to encode
+   * @returns {string} Bech32-encoded string
+   */
+  function bech32Encode(prefix, data) {
+    const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+    const GENERATOR = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+    function polymod(values) {
+      let chk = 1;
+      for (const v of values) {
+        const top = chk >> 25;
+        chk = ((chk & 0x1ffffff) << 5) ^ v;
+        for (let i = 0; i < 5; i++) {
+          if ((top >> i) & 1) chk ^= GENERATOR[i];
+        }
+      }
+      return chk;
+    }
+
+    function hrpExpand(hrp) {
+      const ret = [];
+      for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) >> 5);
+      ret.push(0);
+      for (let i = 0; i < hrp.length; i++) ret.push(hrp.charCodeAt(i) & 31);
+      return ret;
+    }
+
+    // Convert 8-bit to 5-bit groups
+    const words = [];
+    let acc = 0, bits = 0;
+    for (const b of data) {
+      acc = (acc << 8) | b;
+      bits += 8;
+      while (bits >= 5) {
+        bits -= 5;
+        words.push((acc >> bits) & 31);
+      }
+    }
+    if (bits > 0) words.push((acc << (5 - bits)) & 31);
+
+    // Checksum
+    const values = hrpExpand(prefix).concat(words).concat([0, 0, 0, 0, 0, 0]);
+    const mod = polymod(values) ^ 1;
+    const checksum = [];
+    for (let i = 0; i < 6; i++) checksum.push((mod >> (5 * (5 - i))) & 31);
+
+    return prefix + '1' + words.concat(checksum).map(v => CHARSET[v]).join('');
+  }
+
+  /**
    * SHA-256 hash using SubtleCrypto.
    * @param {string} message - UTF-8 string to hash
    * @returns {Promise<Uint8Array>} 32-byte hash
@@ -118,16 +170,20 @@ const ArkAuth = (() => {
     const account = accounts[0];
     const address = account.address;
 
-    // Get bech32-encoded public key if available via getKey
+    // Get bech32-encoded public key via getKey
     let pubKeyBech32 = '';
     try {
       const key = await window.keplr.getKey(chainId);
-      // key.bech32Address is the address; we need the pubkey
-      // Keplr doesn't directly give bech32 pubkey, but we can use the raw pubkey
-      // The sentinel expects cosmos bech32 pubkey format
-      pubKeyBech32 = key.bech32Address; // fallback — actual bech32 pubkey needs encoding
-    } catch (_) {
-      // Not critical for 3-part auth
+      // key.pubKey is a Uint8Array of the raw secp256k1 compressed public key (33 bytes)
+      // We need to bech32-encode it with prefix "arkeopub" using amino encoding
+      // Amino prefix for secp256k1 pubkey: eb5ae987 21 (5 bytes)
+      const aminoPrefix = new Uint8Array([0xeb, 0x5a, 0xe9, 0x87, 0x21]);
+      const pubKeyWithPrefix = new Uint8Array(aminoPrefix.length + key.pubKey.length);
+      pubKeyWithPrefix.set(aminoPrefix);
+      pubKeyWithPrefix.set(key.pubKey, aminoPrefix.length);
+      pubKeyBech32 = bech32Encode('arkeopub', pubKeyWithPrefix);
+    } catch (e) {
+      console.warn('Could not derive bech32 pubkey:', e);
     }
 
     /**
