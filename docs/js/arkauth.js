@@ -260,6 +260,7 @@ const ArkAuth = (() => {
     sha256,
     toHex,
     buildPreimage,
+    bech32Encode,
   };
 })();
 
