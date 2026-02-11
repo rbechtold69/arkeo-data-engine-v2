@@ -386,7 +386,28 @@
       border-radius: 0.5rem;
       font-size: 0.9rem;
     }
-    
+
+    .duration-preset {
+      padding: 0.4rem 0.8rem;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .duration-preset:hover {
+      border-color: var(--arkeo);
+      color: var(--text);
+    }
+    .duration-preset.active {
+      background: var(--arkeo-dim);
+      border-color: var(--arkeo);
+      color: var(--arkeo);
+      font-weight: 600;
+    }
+
     /* Wallet Section */
     .wallet-section {
       background: var(--bg-input);
@@ -776,6 +797,30 @@
       </div>
       
       <div class="form-group">
+        <label class="form-label">Contract Duration</label>
+        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem; flex-wrap: wrap;">
+          <button type="button" class="duration-preset" onclick="setDuration(1, 'hours')">1 Hour</button>
+          <button type="button" class="duration-preset" onclick="setDuration(1, 'days')">1 Day</button>
+          <button type="button" class="duration-preset" onclick="setDuration(1, 'weeks')">1 Week</button>
+          <button type="button" class="duration-preset" onclick="setDuration(1, 'months')">1 Month</button>
+          <button type="button" class="duration-preset active" onclick="setDuration(1, 'years')">1 Year</button>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <input type="number" class="deposit-input" id="durationValue" value="1" min="1" style="width: 80px;" oninput="updateDuration()">
+          <select id="durationUnit" style="padding: 0.6rem 0.75rem; background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.5rem; color: var(--text); font-size: 0.95rem; outline: none;" onchange="updateDuration()">
+            <option value="hours">Hours</option>
+            <option value="days">Days</option>
+            <option value="weeks">Weeks</option>
+            <option value="months">Months</option>
+            <option value="years" selected>Years</option>
+          </select>
+        </div>
+        <div class="deposit-estimate" id="durationEstimate">
+          ≈ <strong>7,884,000</strong> blocks (~1 year at ~4s/block)
+        </div>
+      </div>
+
+      <div class="form-group">
         <label class="form-label">Deposit Amount</label>
         <div class="deposit-input-group">
           <input type="number" class="deposit-input" id="depositAmount" value="10" min="1" oninput="updateEstimate()">
@@ -866,6 +911,10 @@
           <div class="summary-row">
             <span class="summary-label">Deposited</span>
             <span class="summary-value" id="finalDeposit">10 ARKEO</span>
+          </div>
+          <div class="summary-row">
+            <span class="summary-label">Duration</span>
+            <span class="summary-value" id="finalDuration">~1 year</span>
           </div>
           <div class="summary-row">
             <span class="summary-label">Available Requests</span>
@@ -1587,6 +1636,49 @@
       updateEstimate();
     }
     
+    // Duration picker
+    const BLOCK_TIME_SECONDS = 4;
+    let contractDurationBlocks = 7884000; // default 1 year
+
+    function durationToBlocks(value, unit) {
+      const seconds = {
+        hours: value * 3600,
+        days: value * 86400,
+        weeks: value * 604800,
+        months: value * 2592000, // 30 days
+        years: value * 31536000, // 365 days
+      };
+      return Math.round((seconds[unit] || 0) / BLOCK_TIME_SECONDS);
+    }
+
+    function blocksToHumanTime(blocks) {
+      const totalSeconds = blocks * BLOCK_TIME_SECONDS;
+      if (totalSeconds >= 31536000) return `~${(totalSeconds / 31536000).toFixed(1)} year${totalSeconds >= 63072000 ? 's' : ''}`;
+      if (totalSeconds >= 2592000) return `~${(totalSeconds / 2592000).toFixed(1)} month${totalSeconds >= 5184000 ? 's' : ''}`;
+      if (totalSeconds >= 604800) return `~${(totalSeconds / 604800).toFixed(1)} week${totalSeconds >= 1209600 ? 's' : ''}`;
+      if (totalSeconds >= 86400) return `~${(totalSeconds / 86400).toFixed(1)} day${totalSeconds >= 172800 ? 's' : ''}`;
+      return `~${(totalSeconds / 3600).toFixed(1)} hour${totalSeconds >= 7200 ? 's' : ''}`;
+    }
+
+    function setDuration(value, unit) {
+      document.getElementById('durationValue').value = value;
+      document.getElementById('durationUnit').value = unit;
+      document.querySelectorAll('.duration-preset').forEach(b => b.classList.remove('active'));
+      event.target.classList.add('active');
+      updateDuration();
+    }
+
+    function updateDuration() {
+      const value = parseFloat(document.getElementById('durationValue').value) || 1;
+      const unit = document.getElementById('durationUnit').value;
+      contractDurationBlocks = durationToBlocks(value, unit);
+      const humanTime = blocksToHumanTime(contractDurationBlocks);
+      document.getElementById('durationEstimate').innerHTML = 
+        `≈ <strong>${contractDurationBlocks.toLocaleString()}</strong> blocks (${humanTime} at ~${BLOCK_TIME_SECONDS}s/block)`;
+      // Clear active preset if custom
+      document.querySelectorAll('.duration-preset').forEach(b => b.classList.remove('active'));
+    }
+
     function updateEstimate() {
       const amount = parseFloat(document.getElementById('depositAmount').value) || 0;
       let rate = selectedProvider ? selectedProvider.rate : 0.001;
@@ -1758,6 +1850,13 @@
         const clientPubkey = pubkeyToBech32(walletPubkeyBytes, 'arkeopub');
         console.log('Client pubkey:', clientPubkey);
         
+        // Validate duration against provider's min/max
+        const minDur = parseInt(selectedProvider.minDuration || 5);
+        const maxDur = parseInt(selectedProvider.maxDuration || 432000);
+        if (contractDurationBlocks < minDur || contractDurationBlocks > maxDur) {
+          throw new Error(`Duration must be between ${minDur.toLocaleString()} and ${maxDur.toLocaleString()} blocks (${blocksToHumanTime(minDur)} to ${blocksToHumanTime(maxDur)}). You selected ${contractDurationBlocks.toLocaleString()} blocks.`);
+        }
+
         // Calculate rate in uarkeo (provider rate is in ARKEO, convert to uarkeo)
         const rateUarkeo = Math.max(1, Math.floor((selectedProvider.rate || 0.00000001) * CONFIG.ARKEO_DIVISOR));
         
@@ -1781,7 +1880,7 @@
             client: clientPubkey,
             delegate: '',
             contractType: 1, // PAY_AS_YOU_GO = 1
-            duration: '1000000',
+            duration: String(contractDurationBlocks),
             rate: { denom: CONFIG.ARKEO_DENOM, amount: String(rateUarkeo) },
             deposit: depositUarkeo,
             settlementDuration: '10',
@@ -1858,6 +1957,7 @@
         const requests = Math.floor((parseFloat(depositAmount) * CONFIG.ARKEO_DIVISOR) / rate);
         
         document.getElementById('finalDeposit').textContent = depositAmount + ' ARKEO';
+        document.getElementById('finalDuration').textContent = blocksToHumanTime(contractDurationBlocks);
         document.getElementById('finalRequests').textContent = '~' + requests.toLocaleString();
         // Contract ID will come from tx response in production
         document.getElementById('finalContractId').textContent = txHash ? txHash.slice(0, 12) + '...' : 'Pending...';
