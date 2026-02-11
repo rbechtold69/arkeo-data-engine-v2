@@ -1517,11 +1517,10 @@
           if (p.status !== 'ONLINE' || p.totalBond < parseInt(CONFIG.MIN_BOND)) return false;
           const uri = p.metadataUri || '';
           if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
-          if (!uri || uri.trim() === '') return false;
-          // Must be in KNOWN_PROVIDERS or have HTTPS metadata (reachable from browser)
-          const isVerified = p.verified || false;
-          const hasHttps = uri.startsWith('https://');
-          if (!isVerified && !hasHttps) return false;
+          // Must be in KNOWN_PROVIDERS or have a metadata URI
+          const isKnown = !!KNOWN_PROVIDERS[p.pubkey] || Object.keys(KNOWN_PROVIDERS).some(k =>
+            k.startsWith(p.pubkey.slice(0, 40)) || p.pubkey.startsWith(k.slice(0, 40)));
+          if (!isKnown && (!uri || uri.trim() === '')) return false;
           return true;
         });
         
@@ -1909,10 +1908,9 @@
         if (p.status !== 'ONLINE' || p.totalBond < parseInt(CONFIG.MIN_BOND)) return false;
         const uri = p.metadataUri || '';
         if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
-        if (!uri || uri.trim() === '') return false;
-        const isVerified = p.verified || false;
-        const hasHttps = uri.startsWith('https://');
-        if (!isVerified && !hasHttps) return false;
+        const isKnown = !!KNOWN_PROVIDERS[p.pubkey] || Object.keys(KNOWN_PROVIDERS).some(k =>
+          k.startsWith(p.pubkey.slice(0, 40)) || p.pubkey.startsWith(k.slice(0, 40)));
+        if (!isKnown && (!uri || uri.trim() === '')) return false;
         return true;
       });
       document.getElementById('providerCount').textContent = visibleProviders.length;
@@ -2253,12 +2251,11 @@
       // Re-render with updated health
       const onlineProviders = Object.values(state.providerInfos).filter(p => {
         if (p.status !== 'ONLINE' || p.totalBond < parseInt(CONFIG.MIN_BOND)) return false;
-        const metaUri = p.services?.find(s => s.metadataUri)?.metadataUri || '';
-        if (metaUri.includes('localhost') || metaUri.includes('127.0.0.1')) return false;
-        if (!metaUri || metaUri.trim() === '') return false;
-        const isVerified = p.verified || false;
-        const hasHttps = metaUri.startsWith('https://');
-        if (!isVerified && !hasHttps) return false;
+        const uri = p.metadataUri || '';
+        if (uri.includes('localhost') || uri.includes('127.0.0.1')) return false;
+        const isKnown = !!KNOWN_PROVIDERS[p.pubkey] || Object.keys(KNOWN_PROVIDERS).some(k =>
+          k.startsWith(p.pubkey.slice(0, 40)) || p.pubkey.startsWith(k.slice(0, 40)));
+        if (!isKnown && (!uri || uri.trim() === '')) return false;
         return true;
       });
       onlineProviders.sort((a, b) => {
