@@ -329,63 +329,17 @@
     </div>
   </footer>
 
+  <script src="js/providers.js"></script>
   <script>
-    // Known providers cache
-    const KNOWN_PROVIDERS = {
-      'arkeopub1addwnpepqdgt6w2qqkt4jydfud507nl740gxeag7g': {
-        name: 'Liquify', description: 'Professional blockchain infrastructure provider',
-        website: 'https://liquify.com', location: 'Europe',
-      },
-      'arkeopub1addwnpepq22m27n5ryy787muswzjqjk0k9k7lfp4h': {
-        name: 'Arkeo Core Provider', description: 'This is the Arkeo Core Provider used for primary development and support.',
-        website: 'https://arkeo.network', location: 'Americas – Northern',
-      },
-      'arkeopub1addwnpepqdnr9x5c386meywavzmy5wa2xfwkn26j2': {
-        name: 'Everstake', description: 'Staking provider with enterprise-grade infrastructure',
-        website: 'https://everstake.one', location: 'Europe',
-      },
-      'arkeopub1addwnpepqvj8mevcpdamq9cp5478t8k36tpmc7tfa': {
-        name: 'Stake Village', description: 'Validator and infrastructure provider',
-        website: 'https://stakevillage.net', location: 'Europe',
-      },
-      'arkeopub1addwnpepqgvlg57udnpwh4y6k7yedt6pnfd0gutcq': {
-        name: 'Nodefleet.org', description: 'Blockchain node infrastructure services',
-        website: 'https://nodefleet.org', location: 'Americas',
-      },
-      'arkeopub1addwnpepqduv5lky7ckq8efzzu08rm62ml6mvahjv': {
-        name: 'Roomit', description: 'Blockchain infrastructure provider',
-        website: 'https://roomit.xyz', location: 'Asia',
-      },
-      'arkeopub1addwnpepqdvlra44yykhmmpwtfavs35a5w6h8xqtuceedkuxur6v0gs8yfxa59h7wnm': {
-        name: '0xFury', description: 'Enterprise-grade blockchain infrastructure solutions',
-        website: 'https://0xfury.com', location: 'Europe',
-      },
-      // Red_5 entries removed — clean slate
-      'arkeopub1addwnpepqdc6phgk8vqky8v7vyyyk0zck0696nne4lpg66r0ju9yvh98ksgm76dh5ez': {
-        name: 'Innovation Theory', description: 'Blockchain infrastructure provider',
-        website: 'https://innovationtheory.com', location: 'Americas',
-      },
-      'arkeopub1addwnpepqfn52r6xng2wwfrgz2tm5yvscq42k3yu3ky9cg3kw5s6p0qg7tfx75uwq3z': {
-        name: 'Innovation Theory Node', description: 'Blockchain node infrastructure',
-        website: 'https://innovationtheory.com', location: 'Americas',
-      },
-      'arkeopub1addwnpepqwm4225stataymep57cs5y0waw3fhnr67w4e940kpk5jek26en3qxym33wg': {
-        name: 'HODL Validators', description: 'Staking and infrastructure services',
-        website: 'https://hodl.validators.online', location: 'Europe',
-      },
-      'arkeopub1addwnpepq2lmfqggxp29nj3ekl3ltxncv79y4yen55p2wvqqky6asnkqh5l0yjn2kfd': {
-        name: 'Stake Village', description: 'Validator and infrastructure provider',
-        website: 'https://stakevillage.net', location: 'Europe',
-      },
-      'arkeopub1addwnpepqg3lll0dt65suhu4e7hx898rytl9902gw28dupfyfglx5l74an8sc4kvj92': {
-        name: 'Provider 178.208', description: 'Arkeo data provider',
-        location: 'Unknown',
-      },
-      'arkeopub1addwnpepqdt79h8767429wpr44gxwavca708rmx8fhf4gxrfp86pqkf30kch7g3j4q5': {
-        name: 'Nodes Guru', description: 'Professional node infrastructure',
-        website: 'https://nodes.guru', location: 'Europe',
-      },
-    };
+    // KNOWN_PROVIDERS loaded from js/providers.js
+    
+    function findKnown(pk) {
+      if (typeof KNOWN_PROVIDERS === 'undefined') return null;
+      if (KNOWN_PROVIDERS[pk]) return KNOWN_PROVIDERS[pk];
+      const match = Object.keys(KNOWN_PROVIDERS).find(k =>
+        k.startsWith(pk.slice(0, 40)) || pk.startsWith(k.slice(0, 40)));
+      return match ? KNOWN_PROVIDERS[match] : null;
+    }
 
     const CHAIN_ICONS = {
       'eth': '⟠', 'ethereum': '⟠', 'btc': '₿', 'bitcoin': '₿',
@@ -484,11 +438,8 @@
         });
 
         // Apply known metadata
-        const knownKey = Object.keys(KNOWN_PROVIDERS).find(k =>
-          k === pubkey || pubkey.startsWith(k) || k.startsWith(pubkey.slice(0, 40))
-        );
-        if (knownKey) {
-          const meta = KNOWN_PROVIDERS[knownKey];
+        const meta = findKnown(pubkey);
+        if (meta) {
           info.name = meta.name;
           info.description = meta.description;
           info.website = meta.website;
