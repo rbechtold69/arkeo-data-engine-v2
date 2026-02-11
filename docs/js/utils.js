@@ -162,31 +162,41 @@ const API = {
       }
     }
     
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-      });
-      
-      if (!response.ok) {
-        throw new AppError(`API error: ${response.status}`, 'API_ERROR', { status: response.status, url });
+    const maxRetries = options.retries || 3;
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * attempt));
+        
+        const response = await fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            ...options.headers,
+          },
+        });
+        
+        if (!response.ok) {
+          throw new AppError(`API error: ${response.status}`, 'API_ERROR', { status: response.status, url });
+        }
+        
+        const data = await response.json();
+        
+        // Cache successful response
+        if (options.useCache !== false) {
+          Cache.set(cacheKey, data, options.cacheTtl);
+        }
+        
+        return data;
+      } catch (error) {
+        lastError = error;
+        if (CONFIG.DEBUG_MODE) console.warn(`API attempt ${attempt + 1}/${maxRetries} failed:`, error.message);
       }
-      
-      const data = await response.json();
-      
-      // Cache successful response
-      if (options.useCache !== false) {
-        Cache.set(cacheKey, data, options.cacheTtl);
-      }
-      
-      return data;
-    } catch (error) {
-      ErrorHandler.handle(error, `API.fetch(${url})`);
-      throw error;
     }
+    
+    ErrorHandler.handle(lastError, `API.fetch(${url})`);
+    throw lastError;
   },
   
   async getProviders() {
