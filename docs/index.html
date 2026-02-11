@@ -1503,7 +1503,7 @@
         calculateReputationScores();
 
         // Show all ONLINE providers (verified ones highlighted, new providers auto-included)
-        const onlineProviders = Object.values(state.providerInfos).filter(p => p.status === 'ONLINE');
+        const onlineProviders = Object.values(state.providerInfos).filter(p => p.status === 'ONLINE' && p.totalBond > 0);
         
         // Sort by reputation by default
         onlineProviders.sort((a, b) => (state.reputationScores[b.pubkey]?.total || 0) - (state.reputationScores[a.pubkey]?.total || 0));
@@ -1531,7 +1531,7 @@
         if (cachedProviders) {
           state.providerInfos = cachedProviders;
           updateStats();
-          renderProviders(Object.values(state.providerInfos));
+          renderProviders(Object.values(state.providerInfos).filter(p => p.totalBond > 0));
           renderEarningsChart();
           ErrorHandler.showToast('Showing cached data. Live data unavailable.', 'warning');
         } else {
@@ -1833,7 +1833,7 @@
 
     function updateStats() {
       // Count all ONLINE providers
-      const onlineProviders = Object.values(state.providerInfos).filter(p => p.status === 'ONLINE');
+      const onlineProviders = Object.values(state.providerInfos).filter(p => p.status === 'ONLINE' && p.totalBond > 0);
       document.getElementById('providerCount').textContent = onlineProviders.length;
 
       // Count unique chains/services offered
