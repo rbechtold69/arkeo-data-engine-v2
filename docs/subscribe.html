@@ -1269,7 +1269,8 @@
             requests: formatNumber(Math.floor(parseInt(p.bond || 0) / 100000000 * 100)),
             description: meta?.description || 'Arkeo data provider',
             pubkey: pubkey,
-            verified: !!matchedPrefix
+            verified: !!matchedPrefix,
+            metadataUri: p.metadata_uri || '',
           });
         });
         
@@ -1462,7 +1463,11 @@
     }
 
     function selectProvider(pubkey, name, rate, serviceId = null) {
-      selectedProvider = { id: pubkey, name, rate, pubkey, serviceId: serviceId || selectedChain?.id };
+      // Find the provider's metadata URI from our loaded data
+      const chainProviders = providersByChain[serviceId || selectedChain?.id] || [];
+      const provInfo = chainProviders.find(p => p.pubkey === pubkey);
+      const metadataUri = provInfo?.metadataUri || '';
+      selectedProvider = { id: pubkey, name, rate, pubkey, serviceId: serviceId || selectedChain?.id, metadataUri };
       
       document.querySelectorAll('.provider-card').forEach((el) => {
         el.classList.remove('selected');
@@ -1848,9 +1853,18 @@
         // Contract ID will come from tx response in production
         document.getElementById('finalContractId').textContent = txHash ? txHash.slice(0, 12) + '...' : 'Pending...';
         
-        // Build sentinel endpoint URL — show provider pubkey for reference
-        // The actual sentinel URL comes from the provider's on-chain metadata
-        document.getElementById('finalEndpoint').textContent = `Use provider sentinel (see provider details page)`;
+        // Build the actual RPC endpoint from provider's metadata URI
+        // Provider metadata URI points to sentinel — strip /metadata.json to get base URL
+        const providerInfo = Object.values(providersByChain).flat().find(p => p.pubkey === selectedProvider.pubkey);
+        let sentinelBaseUrl = '';
+        if (providerInfo?.metadataUri) {
+          sentinelBaseUrl = providerInfo.metadataUri.replace(/\/metadata\.json$/, '');
+        } else if (selectedProvider.metadataUri) {
+          sentinelBaseUrl = selectedProvider.metadataUri.replace(/\/metadata\.json$/, '');
+        }
+        const serviceName = selectedProvider.serviceId || selectedChain?.id || '';
+        const endpointUrl = sentinelBaseUrl ? `${sentinelBaseUrl}/${serviceName}` : `Provider sentinel URL not found`;
+        document.getElementById('finalEndpoint').textContent = endpointUrl;
         
         // Update failover status
         const failoverStatus = document.getElementById('failoverStatus');
