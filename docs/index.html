@@ -1529,7 +1529,13 @@
         });
         
         // Sort by reputation by default
-        onlineProviders.sort((a, b) => (state.reputationScores[b.pubkey]?.total || 0) - (state.reputationScores[a.pubkey]?.total || 0));
+        // Sort: healthy first, then by reputation
+        onlineProviders.sort((a, b) => {
+          const aHealth = (KNOWN_PROVIDERS[a.pubkey]?.health === 'healthy') ? 1 : 0;
+          const bHealth = (KNOWN_PROVIDERS[b.pubkey]?.health === 'healthy') ? 1 : 0;
+          if (bHealth !== aHealth) return bHealth - aHealth;
+          return (state.reputationScores[b.pubkey]?.total || 0) - (state.reputationScores[a.pubkey]?.total || 0);
+        });
 
         // Update UI
         updateStats();
@@ -2228,16 +2234,24 @@
       const pk = provider.pubkey;
       const uri = provider.metadataUri || '';
       const isLocalhost = uri.includes('127.0.0.1') || uri.includes('localhost');
+      const known = typeof KNOWN_PROVIDERS !== 'undefined' ? KNOWN_PROVIDERS[pk] : null;
+      const health = known?.health || 'unknown';
       const contractCount = state.contractsByProvider[pk] || 0;
       
       if (isLocalhost) {
         return { dot: '🔴', label: 'Misconfigured', cls: 'health-bad', title: 'Provider uses localhost URI — not reachable by users' };
       }
-      if (contractCount > 0) {
-        return { dot: '🟢', label: `${contractCount} contract${contractCount > 1 ? 's' : ''}`, cls: 'health-good', title: 'Active contracts prove this provider is serving data' };
+      if (health === 'healthy' && contractCount > 0) {
+        return { dot: '🟢', label: `Active · ${contractCount} contract${contractCount > 1 ? 's' : ''}`, cls: 'health-good', title: 'Sentinel responding, actively serving contracts' };
+      }
+      if (health === 'healthy') {
+        return { dot: '🟢', label: 'Ready', cls: 'health-good', title: 'Sentinel responding and ready for contracts' };
+      }
+      if (health === 'unhealthy') {
+        return { dot: '🔴', label: 'Unreachable', cls: 'health-bad', title: 'Sentinel not responding — provider may be offline' };
       }
       if (provider.status === 'ONLINE') {
-        return { dot: '🟡', label: 'No contracts', cls: 'health-warn', title: 'Online but no active contracts yet — unproven' };
+        return { dot: '🟡', label: 'Unverified', cls: 'health-warn', title: 'On-chain status is ONLINE but health not verified' };
       }
       return { dot: '🔴', label: 'Offline', cls: 'health-bad', title: 'Provider is offline' };
     }
