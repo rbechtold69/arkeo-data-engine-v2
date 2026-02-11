@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Become a Provider | Arkeo Marketplace</title>
+  <title>Become a Provider | Arkeo Marketplace v2</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
   <!-- Arkeo transaction helper with protobuf encoding -->
   <script src="js/arkeo-tx.js"></script>
@@ -1439,22 +1439,22 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         </div>
       `;
       
-      // Test Sentinel — try /metadata.json which sentinels always serve
+      // Test Sentinel — try to reach it, but don't block on failure
+      // Many sentinels have CORS/firewall configs that prevent browser testing
       sentinelStatus.innerHTML = `
         <div class="status-box testing">
           <div class="spinner"></div>
-          <span>Testing sentinel endpoint...</span>
+          <span>Checking sentinel...</span>
         </div>
       `;
       
       let sentinelOk = false;
+      let sentinelReachable = false;
       try {
         const response = await fetch(sentinelUrl + '/metadata.json', {
-          signal: AbortSignal.timeout(10000),
-          mode: 'cors',
+          signal: AbortSignal.timeout(8000),
         });
-        
-        // Any response (even 400/403) means the sentinel is running
+        sentinelReachable = true;
         sentinelStatus.innerHTML = `
           <div class="status-box success">
             <span>✅</span>
@@ -1463,31 +1463,22 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         `;
         sentinelOk = true;
       } catch (err) {
-        // CORS errors and network errors both throw TypeError
-        // Try an opaque request to check if server is at least responding
+        // Browser can't reach it — this is common due to CORS, firewalls, etc.
+        // Validate URL format and let them proceed
         try {
-          const opaqueResp = await fetch(sentinelUrl + '/metadata.json', {
-            signal: AbortSignal.timeout(10000),
-            mode: 'no-cors',
-          });
-          // no-cors returns opaque response (status 0) but proves server is reachable
+          const url = new URL(sentinelUrl);
           sentinelStatus.innerHTML = `
             <div class="status-box success">
               <span>✅</span>
-              <span>Sentinel is reachable! (CORS headers not set — this is normal for sentinels)</span>
+              <span>Sentinel URL saved — will be verified on-chain after registration.</span>
             </div>
           `;
           sentinelOk = true;
-        } catch (err2) {
+        } catch (urlErr) {
           sentinelStatus.innerHTML = `
             <div class="status-box warning">
               <span>⚠️</span>
-              <span>Can't reach sentinel from browser. Make sure it's running and the URL is correct.</span>
-            </div>
-            <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-dim);">
-              If your sentinel is behind a firewall or not yet started, you can continue and set it up later.
-              <button class="btn btn-secondary" style="margin-left: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.8rem;" 
-                      onclick="proceedWithoutSentinelTest()">Continue Anyway →</button>
+              <span>Invalid URL format. Please enter a valid URL (e.g. https://your-server.com)</span>
             </div>
           `;
         }
