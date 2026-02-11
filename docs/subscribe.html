@@ -1949,9 +1949,46 @@
         const txHash = result.tx_response.txhash;
         
         statusDiv.innerHTML = `
+          <div class="status-box" style="background: var(--arkeo-dim); border: 1px solid var(--arkeo);">
+            <div class="spinner"></div>
+            <span>TX submitted, waiting for confirmation...</span>
+          </div>
+        `;
+
+        // Poll for TX confirmation (up to 30 seconds)
+        let confirmed = false;
+        for (let i = 0; i < 10; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          try {
+            const txRes = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs/${txHash}`);
+            const txData = await txRes.json();
+            if (txData.tx_response) {
+              if (txData.tx_response.code !== 0) {
+                throw new Error(txData.tx_response.raw_log || 'Transaction failed on-chain');
+              }
+              confirmed = true;
+              break;
+            }
+          } catch (e) {
+            if (e.message.includes('failed on-chain')) throw e;
+            // TX not found yet, keep polling
+          }
+        }
+
+        if (!confirmed) {
+          statusDiv.innerHTML = `
+            <div class="status-box" style="background: rgba(245,158,11,0.1); border: 1px solid var(--warning);">
+              <span>⚠️</span>
+              <span>TX submitted but not yet confirmed. Check TX: ${txHash.slice(0, 16)}...</span>
+            </div>
+          `;
+          return;
+        }
+
+        statusDiv.innerHTML = `
           <div class="status-box success">
             <span>✅</span>
-            <span>Contract opened! TX: ${txHash.slice(0, 12)}...</span>
+            <span>Contract confirmed! TX: ${txHash.slice(0, 12)}...</span>
           </div>
         `;
         

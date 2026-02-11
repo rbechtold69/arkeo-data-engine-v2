@@ -453,7 +453,7 @@
       state.contracts = allContracts.filter(c => {
         const isClient = c.client === state.walletPubkey;
         const isDelegate = c.delegate === state.walletPubkey;
-        const isProvider = c.delegate === state.walletAddress || c.provider === state.walletAddress;
+        const isProvider = c.provider === state.walletPubkey;
         return isClient || isDelegate || isProvider;
       }).map(c => {
         const isClient = c.client === state.walletPubkey;
@@ -463,6 +463,11 @@
         const paid = parseInt(c.paid) || 0;
         const active = state.currentHeight < (height + duration) && deposit > paid;
         return { ...c, isClient, active };
+      }).filter(c => {
+        // Hide empty expired contracts (zero deposit, no activity)
+        const deposit = parseInt(c.deposit) || 0;
+        if (!c.active && deposit === 0) return false;
+        return true;
       });
 
       document.getElementById('loadingState').style.display = 'none';
