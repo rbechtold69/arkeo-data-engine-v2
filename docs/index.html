@@ -940,17 +940,8 @@
         <div class="stat-label">Total Bonded (ARKEO)</div>
       </div>
       <div class="stat">
-        <div class="stat-value" id="totalProviderEarnings">-</div>
-        <div class="stat-label">Total Provider Earnings (ARKEO) <span class="badge-estimated" title="Estimated from on-chain bond and activity data">⚠️ Est.</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-value" id="avgProviderEarnings">-</div>
-        <div class="stat-label">Avg Earnings/Provider (ARKEO) <span class="badge-estimated" title="Estimated from on-chain bond and activity data">⚠️ Est.</span></div>
-      </div>
-      <div class="stat">
-        <div class="stat-value" id="burnedArkeo" style="color: #f97316;">0</div>
-        <div class="stat-label">🔥 ARKEO Burned</div>
-        <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 0.15rem;">Proposed</div>
+        <div class="stat-value" id="totalContracts">-</div>
+        <div class="stat-label">Total Contracts</div>
       </div>
     </div>
   </section>
@@ -1859,28 +1850,40 @@
     }
 
     function updateStats() {
-      // Count all ONLINE providers
       const currentHeight = state.currentHeight || 0;
-      const statsActiveKeys = new Set();
-      state.contracts.forEach(c => {
-        if (parseInt(c.height || 0) + parseInt(c.duration || 0) > currentHeight) statsActiveKeys.add(c.provider);
+
+      // Use same filter as provider listing: ONLINE, bond > 0, no localhost
+      const visibleProviders = Object.values(state.providerInfos).filter(p => {
+        if (p.status !== 'ONLINE' || p.totalBond <= 0) return false;
+        const uri = p.metadataUri || '';
+        if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
+        return true;
       });
-      const onlineProviders = Object.values(state.providerInfos).filter(p => p.status === 'ONLINE' && p.totalBond > 0 && statsActiveKeys.has(p.pubkey));
-      document.getElementById('providerCount').textContent = onlineProviders.length;
+      document.getElementById('providerCount').textContent = visibleProviders.length;
 
-      // Count unique chains/services offered
-      const uniqueServices = new Set(state.providers.map(p => p.service)).size;
-      document.getElementById('serviceCount').textContent = uniqueServices;
+      // Count unique chains/services from visible providers only
+      const visiblePubkeys = new Set(visibleProviders.map(p => p.pubkey));
+      const visibleServices = new Set();
+      state.providers.forEach(p => {
+        if (visiblePubkeys.has(p.pub_key)) visibleServices.add(p.service);
+      });
+      document.getElementById('serviceCount').textContent = visibleServices.size;
 
-      // Contract count
-      document.getElementById('contractCount').textContent = state.contracts.length || '-';
+      // Active contracts (non-expired)
+      const activeContracts = state.contracts.filter(c => 
+        parseInt(c.height || 0) + parseInt(c.duration || 0) > currentHeight
+      );
+      document.getElementById('contractCount').textContent = activeContracts.length;
 
-      // Total bond across all providers (as proxy for marketplace activity)
+      // Total bond from visible providers only
       let totalBond = 0;
-      Object.values(state.providerInfos).forEach(p => {
-        totalBond += (p.totalBond || 0);
-      });
+      visibleProviders.forEach(p => { totalBond += (p.totalBond || 0); });
       document.getElementById('totalEarnings').textContent = formatArkeo(totalBond);
+
+      // Total contracts ever opened
+      const totalContractsEl = document.getElementById('totalContracts');
+      if (totalContractsEl) totalContractsEl.textContent = state.contracts.length || '0';
+
       // Sync flywheel stats
       const flywheelBonded = document.getElementById('flywheelBonded');
       if (flywheelBonded) flywheelBonded.textContent = formatArkeo(totalBond);
