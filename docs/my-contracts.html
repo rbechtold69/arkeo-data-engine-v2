@@ -293,8 +293,12 @@
         state.walletAddress = accounts[0].address;
         state.walletPubkeyBytes = accounts[0].pubkey;
 
-        // Build arkeopub address from pubkey
-        state.walletPubkey = ArkAuth.bech32Encode('arkeopub', accounts[0].pubkey);
+        // Build arkeopub address from pubkey (amino-encoded secp256k1)
+        const aminoPrefix = new Uint8Array([0xeb, 0x5a, 0xe9, 0x87, 0x21]);
+        const pubWithPrefix = new Uint8Array(aminoPrefix.length + accounts[0].pubkey.length);
+        pubWithPrefix.set(aminoPrefix);
+        pubWithPrefix.set(accounts[0].pubkey, aminoPrefix.length);
+        state.walletPubkey = ArkAuth.bech32Encode('arkeopub', pubWithPrefix);
 
         const btn = document.getElementById('walletBtn');
         btn.className = 'wallet-btn connected';
