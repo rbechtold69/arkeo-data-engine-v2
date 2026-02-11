@@ -475,7 +475,11 @@
         }
 
         // Try fetching metadata_uri
-        if (info.metadataUri && !info.metadataUri.includes('127.0.0.1') && !info.metadataUri.includes('localhost')) {
+        if (info.metadataUri) {
+          // Upgrade HTTP to HTTPS for known providers with SSL
+          info.metadataUri = info.metadataUri.replace('http://161.35.97.215:3636', 'https://red5-arkeo.duckdns.org');
+        }
+        if (info.metadataUri && !info.metadataUri.includes('127.0.0.1') && !info.metadataUri.includes('localhost') && !info.metadataUri.startsWith('http://')) {
           try {
             const resp = await fetch(info.metadataUri, { signal: AbortSignal.timeout(5000) });
             if (resp.ok) {
