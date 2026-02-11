@@ -1517,7 +1517,7 @@
         // 3. Must be verified (in KNOWN_PROVIDERS) OR have valid HTTPS metadata
         // 4. Must have at least one service with a real PAYG rate
         const onlineProviders = Object.values(state.providerInfos).filter(p => {
-          if (p.status !== 'ONLINE' || p.totalBond <= 0) return false;
+          if (p.status !== 'ONLINE' || p.totalBond < parseInt(CONFIG.MIN_BOND)) return false;
           const uri = p.metadataUri || '';
           if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
           if (!uri || uri.trim() === '') return false;
@@ -1554,7 +1554,7 @@
         if (cachedProviders) {
           state.providerInfos = cachedProviders;
           updateStats();
-          renderProviders(Object.values(state.providerInfos).filter(p => p.totalBond > 0));
+          renderProviders(Object.values(state.providerInfos).filter(p => p.totalBond >= parseInt(CONFIG.MIN_BOND)));
           renderEarningsChart();
           ErrorHandler.showToast('Showing cached data. Live data unavailable.', 'warning');
         } else {
@@ -1900,7 +1900,7 @@
 
       // Use same filter as provider listing
       const visibleProviders = Object.values(state.providerInfos).filter(p => {
-        if (p.status !== 'ONLINE' || p.totalBond <= 0) return false;
+        if (p.status !== 'ONLINE' || p.totalBond < parseInt(CONFIG.MIN_BOND)) return false;
         const uri = p.metadataUri || '';
         if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
         if (!uri || uri.trim() === '') return false;
