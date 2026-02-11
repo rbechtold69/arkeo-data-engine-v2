@@ -169,11 +169,11 @@ const API = {
       try {
         if (attempt > 0) await new Promise(r => setTimeout(r, 1000 * attempt));
         
+        const { cacheKey: _ck, useCache: _uc, cacheTtl: _ct, retries: _r, ...fetchOpts } = options;
         const response = await fetch(url, {
-          ...options,
+          ...fetchOpts,
           headers: {
-            'Content-Type': 'application/json',
-            ...options.headers,
+            ...fetchOpts.headers,
           },
         });
         
