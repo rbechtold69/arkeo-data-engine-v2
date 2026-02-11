@@ -511,13 +511,14 @@
         const contractType = parseInt(c.contract_type) === 0 ? 'Sub' : 'PAYG';
         const service = state.services?.[c.service] || c.service || '-';
         // Resolve pubkeys to names
-        const providerName = (typeof KNOWN_PROVIDERS !== 'undefined' && KNOWN_PROVIDERS[c.provider])
-          ? KNOWN_PROVIDERS[c.provider].name
-          : c.provider?.slice(0, 16) + '...';
-        const clientName = c.client?.slice(0, 16) + '...';
+        function resolveName(pubkey) {
+          if (pubkey === state.walletPubkey) return '🟢 You';
+          if (typeof KNOWN_PROVIDERS !== 'undefined' && KNOWN_PROVIDERS[pubkey]) return KNOWN_PROVIDERS[pubkey].name;
+          return pubkey?.slice(0, 20) + '...';
+        }
         const counterparty = c.isClient
-          ? `<span title="${c.provider}">${providerName}</span>`
-          : `<span title="${c.client}">${clientName}</span>`;
+          ? `<span title="${c.provider}">${resolveName(c.provider)}</span>`
+          : `<span title="${c.client}">${resolveName(c.client)}</span>`;
         
         // Calculate time remaining
         const height = parseInt(c.height) || 0;
