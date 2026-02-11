@@ -32,7 +32,7 @@ const CONFIG = {
   // Feature Flags
   ENABLE_CACHING: true,
   ENABLE_REAL_TIME: false, // WebSocket support (future)
-  DEBUG_MODE: true,
+  DEBUG_MODE: false,
 };
 
 // Freeze config to prevent accidental modification

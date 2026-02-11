@@ -1425,17 +1425,6 @@
   </footer>
 
   <script>
-    // Global error handler for debugging
-    window.onerror = function(msg, src, line, col, err) {
-      const el = document.getElementById('providersLoading');
-      if (el) el.innerHTML = '<p style="color:red;font-size:12px;">JS Error: ' + msg + ' at line ' + line + '</p>';
-      console.error('Global error:', msg, src, line, col, err);
-    };
-    window.addEventListener('unhandledrejection', function(e) {
-      const el = document.getElementById('providersLoading');
-      if (el) el.innerHTML = '<p style="color:red;font-size:12px;">Promise Error: ' + (e.reason?.message || e.reason) + '</p>';
-      console.error('Unhandled rejection:', e.reason);
-    });
     // ============================================================
     // CONFIG is loaded from js/config.js
     // Utils are loaded from js/utils.js
@@ -1488,7 +1477,7 @@
           const deposit = parseInt(c.deposit || 0);
           const paid = parseInt(c.paid || 0);
           const expiry = parseInt(c.height || 0) + parseInt(c.duration || 0);
-          const isActive = expiry > currentHeight && deposit > paid;
+          const isActive = expiry > state.currentHeight && deposit > paid;
           if (pk && isActive) {
             state.contractsByProvider[pk] = (state.contractsByProvider[pk] || 0) + 1;
           }
