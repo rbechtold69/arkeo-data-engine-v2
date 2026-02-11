@@ -1430,46 +1430,16 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       
       btn.disabled = true;
       
-      // Test RPC
+      // RPC URL: Don't test from browser — it's a local/internal URL that only the sentinel connects to.
+      // Just validate format.
       rpcStatus.innerHTML = `
-        <div class="status-box testing">
-          <div class="spinner"></div>
-          <span>Testing local RPC...</span>
+        <div class="status-box success">
+          <span>✅</span>
+          <span>RPC URL saved — your sentinel will connect to this internally.</span>
         </div>
       `;
       
-      let rpcOk = false;
-      try {
-        // For Cosmos/Tendermint nodes, try /status
-        const response = await fetch(rpcUrl + '/status', {
-          signal: AbortSignal.timeout(10000),
-        });
-        
-        if (response.ok) {
-          const data = await response.json();
-          const nodeInfo = data.result?.node_info?.moniker || 'Node';
-          rpcStatus.innerHTML = `
-            <div class="status-box success">
-              <span>✅</span>
-              <span>RPC OK: ${nodeInfo}</span>
-            </div>
-          `;
-          rpcOk = true;
-        } else {
-          throw new Error(`HTTP ${response.status}`);
-        }
-      } catch (err) {
-        rpcStatus.innerHTML = `
-          <div class="status-box warning">
-            <span>⚠️</span>
-            <span>Can't reach RPC from browser (may work locally): ${err.message}</span>
-          </div>
-        `;
-        // Allow to proceed - browser may be blocked by CORS but sentinel can reach it
-        rpcOk = true;
-      }
-      
-      // Test Sentinel
+      // Test Sentinel — try /metadata.json which sentinels always serve
       sentinelStatus.innerHTML = `
         <div class="status-box testing">
           <div class="spinner"></div>
@@ -1479,39 +1449,51 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       
       let sentinelOk = false;
       try {
-        const response = await fetch(sentinelUrl + '/healthz', {
+        const response = await fetch(sentinelUrl + '/metadata.json', {
           signal: AbortSignal.timeout(10000),
+          mode: 'cors',
         });
         
-        if (response.ok) {
+        // Any response (even 400/403) means the sentinel is running
+        sentinelStatus.innerHTML = `
+          <div class="status-box success">
+            <span>✅</span>
+            <span>Sentinel is running!</span>
+          </div>
+        `;
+        sentinelOk = true;
+      } catch (err) {
+        // CORS errors and network errors both throw TypeError
+        // Try an opaque request to check if server is at least responding
+        try {
+          const opaqueResp = await fetch(sentinelUrl + '/metadata.json', {
+            signal: AbortSignal.timeout(10000),
+            mode: 'no-cors',
+          });
+          // no-cors returns opaque response (status 0) but proves server is reachable
           sentinelStatus.innerHTML = `
             <div class="status-box success">
               <span>✅</span>
-              <span>Sentinel is running!</span>
+              <span>Sentinel is reachable! (CORS headers not set — this is normal for sentinels)</span>
             </div>
           `;
           sentinelOk = true;
-        } else {
-          throw new Error(`HTTP ${response.status}`);
+        } catch (err2) {
+          sentinelStatus.innerHTML = `
+            <div class="status-box warning">
+              <span>⚠️</span>
+              <span>Can't reach sentinel from browser. Make sure it's running and the URL is correct.</span>
+            </div>
+            <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-dim);">
+              If your sentinel is behind a firewall or not yet started, you can continue and set it up later.
+              <button class="btn btn-secondary" style="margin-left: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.8rem;" 
+                      onclick="proceedWithoutSentinelTest()">Continue Anyway →</button>
+            </div>
+          `;
         }
-      } catch (err) {
-        sentinelStatus.innerHTML = `
-          <div class="status-box warning">
-            <span>⚠️</span>
-            <span>Sentinel not reachable yet: ${err.message}</span>
-          </div>
-        `;
-        // Show continue anyway option
-        sentinelStatus.innerHTML += `
-          <div style="margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-dim);">
-            You can continue if sentinel will be running before registration.
-            <button class="btn btn-secondary" style="margin-left: 0.5rem; padding: 0.25rem 0.75rem; font-size: 0.8rem;" 
-                    onclick="proceedWithoutSentinelTest()">Continue Anyway →</button>
-          </div>
-        `;
       }
       
-      if (rpcOk && sentinelOk) {
+      if (sentinelOk) {
         state.rpcUrl = rpcUrl;
         state.sentinelUrl = sentinelUrl;
         setTimeout(() => goToStep(3), 1500);
