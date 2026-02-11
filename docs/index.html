@@ -1468,7 +1468,7 @@
           state.currentHeight = parseInt(statusData.result?.sync_info?.latest_block_height || '0');
         } catch (e) { state.currentHeight = 0; }
         
-        // Count ACTIVE contracts per provider (must have remaining deposit)
+        // Count ACTIVE contracts per provider (non-expired with remaining deposit)
         // Also track QPM (queries_per_minute) per provider from contracts
         state.contractsByProvider = {};
         state.qpmByProvider = {};
@@ -1476,8 +1476,9 @@
           const pk = c.provider;
           const deposit = parseInt(c.deposit || 0);
           const paid = parseInt(c.paid || 0);
-          const hasBalance = deposit > paid;
-          if (pk && hasBalance) {
+          const expiry = parseInt(c.height || 0) + parseInt(c.duration || 0);
+          const isActive = expiry > currentHeight && deposit > paid;
+          if (pk && isActive) {
             state.contractsByProvider[pk] = (state.contractsByProvider[pk] || 0) + 1;
           }
           // Track QPM from contract data
@@ -1704,6 +1705,26 @@
         description: 'Blockchain node infrastructure',
         website: 'https://innovationtheory.com',
         location: 'Americas',
+      },
+      // Stake Village secondary (stakevillage.net domain, 3 services)
+      'arkeopub1addwnpepq2lmfqggxp29nj3ekl3ltxncv79y4yen55p2wvqqky6asnkqh5l0yjn2kfd': {
+        name: 'Stake Village',
+        description: 'Validator and infrastructure provider',
+        website: 'https://stakevillage.net',
+        location: 'Europe',
+      },
+      // Unknown provider (178.208.86.13)
+      'arkeopub1addwnpepqg3lll0dt65suhu4e7hx898rytl9902gw28dupfyfglx5l74an8sc4kvj92': {
+        name: 'Provider 178.208',
+        description: 'Arkeo data provider',
+        location: 'Unknown',
+      },
+      // Nodes Guru (5.9.31.102)
+      'arkeopub1addwnpepqdt79h8767429wpr44gxwavca708rmx8fhf4gxrfp86pqkf30kch7g3j4q5': {
+        name: 'Nodes Guru',
+        description: 'Professional node infrastructure',
+        website: 'https://nodes.guru',
+        location: 'Europe',
       },
     };
     
