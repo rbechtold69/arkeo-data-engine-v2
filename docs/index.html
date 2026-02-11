@@ -1677,6 +1677,34 @@
         website: 'https://arkeo.network',
         location: 'Americas',
       },
+      // Red_5 (provider-automation key) - original provider, 1 service
+      'arkeopub1addwnpepq2vn90jnf4tz9dylcujr5fwt55vzg07ufr30sjtsja77gwvy83wyxfck9lj': {
+        name: 'Red_5',
+        description: 'Arkeo validator and data provider',
+        website: 'https://arkeo.network',
+        location: 'Americas',
+      },
+      // Innovation Theory secondary (port 3638)
+      'arkeopub1addwnpepqdc6phgk8vqky8v7vyyyk0zck0696nne4lpg66r0ju9yvh98ksgm76dh5ez': {
+        name: 'Innovation Theory',
+        description: 'Blockchain infrastructure provider',
+        website: 'https://innovationtheory.com',
+        location: 'Americas',
+      },
+      // HODL Validators
+      'arkeopub1addwnpepqwm4225stataymep57cs5y0waw3fhnr67w4e940kpk5jek26en3qxym33wg': {
+        name: 'HODL Validators',
+        description: 'Staking and infrastructure services',
+        website: 'https://hodl.validators.online',
+        location: 'Europe',
+      },
+      // Innovation Theory (port 3636, 3 services)
+      'arkeopub1addwnpepqfn52r6xng2wwfrgz2tm5yvscq42k3yu3ky9cg3kw5s6p0qg7tfx75uwq3z': {
+        name: 'Innovation Theory Node',
+        description: 'Blockchain node infrastructure',
+        website: 'https://innovationtheory.com',
+        location: 'Americas',
+      },
     };
     
     // Apply known provider metadata
@@ -1717,8 +1745,10 @@
         }
       }
       
-      // Mark as verified if in KNOWN_PROVIDERS or has valid metadata
-      info.verified = !!KNOWN_PROVIDERS[pubkey];
+      // Mark as verified if in KNOWN_PROVIDERS (exact or prefix match)
+      info.verified = !!KNOWN_PROVIDERS[pubkey] || Object.keys(KNOWN_PROVIDERS).some(k => 
+        k.startsWith(pubkey.slice(0, 40)) || pubkey.startsWith(k.slice(0, 40))
+      );
       
       if (!info.metadataUri) return;
       
