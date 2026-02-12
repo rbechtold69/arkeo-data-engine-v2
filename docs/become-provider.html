@@ -887,6 +887,28 @@
         </div>
       </div>
 
+      <!-- Endpoint Failover Monitor -->
+      <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin: 1.5rem 0;">
+        <h3 style="margin-bottom: 1rem;">🔄 Automatic Endpoint Failover</h3>
+        <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
+          If you're using a community endpoint, install this monitor script. It checks your primary Arkeo endpoint every 2 minutes and automatically switches to a backup if it goes down.
+        </p>
+        <div style="background: #0d1117; border-radius: 0.5rem; padding: 1rem; font-family: monospace; font-size: 0.8rem; overflow-x: auto; position: relative;">
+          <button onclick="navigator.clipboard.writeText(this.parentElement.querySelector('pre').textContent); this.textContent='✓ Copied!'; setTimeout(()=>this.textContent='📋 Copy',2000);"
+            style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">📋 Copy</button>
+<pre style="color: #10b981; margin: 0; white-space: pre-wrap;"># Download the failover monitor
+curl -o /usr/local/bin/arkeo-failover.sh \
+  https://raw.githubusercontent.com/rbechtold69/arkeo-data-engine-v2/main/docs/scripts/arkeo-endpoint-monitor.sh
+chmod +x /usr/local/bin/arkeo-failover.sh
+
+# Add to cron (runs every 2 minutes)
+(crontab -l 2>/dev/null; echo "*/2 * * * * /usr/local/bin/arkeo-failover.sh /root/.arkeo/config.yaml >> /var/log/arkeo-failover.log 2>&1") | crontab -</pre>
+        </div>
+        <p style="color: var(--text-dim); font-size: 0.8rem; margin-top: 0.75rem;">
+          ℹ️ If you run your own Arkeo node, you don't need this — you control your own uptime.
+        </p>
+      </div>
+
       <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
         <a href="index.html" class="btn btn-primary">View Marketplace</a>
         <a href="subscribe.html" class="btn btn-secondary">Test Your Provider</a>
