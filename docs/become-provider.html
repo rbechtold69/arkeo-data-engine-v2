@@ -2993,11 +2993,11 @@ services:
             const provResp = await fetch(`${CONFIG.REST_API}/arkeo/provider/${state.walletPubkeyBech32}/arkeo-mainnet-fullnode`);
             if (provResp.ok) {
               providerData = (await provResp.json()).provider;
-              if (!serviceName) serviceName = providerData.service || '2';
+              if (!serviceName) serviceName = 'arkeo-mainnet-fullnode';
             }
           } catch (e) { console.warn('Could not fetch provider from chain:', e); }
         }
-        if (!serviceName) serviceName = '2'; // fallback to arkeo-mainnet-fullnode
+        if (!serviceName) serviceName = 'arkeo-mainnet-fullnode';
 
         const accountInfo = await getAccountInfo(state.walletAddress);
         
