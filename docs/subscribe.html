@@ -2769,6 +2769,15 @@
     
     async function generateSigningKey() {
       try {
+        // Wait for noble libraries to load (async module imports)
+        if (!window.nobleSecp256k1) {
+          for (let i = 0; i < 50; i++) {
+            await new Promise(r => setTimeout(r, 100));
+            if (window.nobleSecp256k1) break;
+          }
+          if (!window.nobleSecp256k1) throw new Error('Crypto libraries failed to load. Please refresh and try again.');
+        }
+
         // Generate 32 random bytes as private key
         const privateKeyBytes = crypto.getRandomValues(new Uint8Array(32));
         const privateKeyHex = Array.from(privateKeyBytes, b => b.toString(16).padStart(2, '0')).join('');
@@ -2803,6 +2812,13 @@
     }
     
     async function parseExistingKey() {
+      // Wait for noble libraries
+      if (!window.nobleSecp256k1) {
+        for (let i = 0; i < 50; i++) {
+          await new Promise(r => setTimeout(r, 100));
+          if (window.nobleSecp256k1) break;
+        }
+      }
       const input = document.getElementById('existingKeyInput').value.trim();
       const display = document.getElementById('parsedKeyDisplay');
       
