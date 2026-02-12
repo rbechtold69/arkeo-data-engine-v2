@@ -54,6 +54,14 @@ const KNOWN_PROVIDERS = {
     health: 'healthy',
   },
 
+  'arkeopub1addwnpepqfuk5cy2ey6h3pfpwerkhfps0d4vqt6men4j2wx56zfn5nrfk8n9ymnj327': {
+    name: 'Red_5 Arkeo',
+    description: 'Arkeo mainnet full node — reliable RPC infrastructure',
+    website: 'https://red5-arkeo.duckdns.org',
+    location: 'North America',
+    health: 'healthy',
+  },
+
   // ⚠️ UNHEALTHY — sentinel not responding as of last check
   'arkeopub1addwnpepqdc6phgk8vqky8v7vyyyk0zck0696nne4lpg66r0ju9yvh98ksgm76dh5ez': {
     name: 'Innovation Theory',
