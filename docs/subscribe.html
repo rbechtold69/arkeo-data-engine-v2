@@ -573,12 +573,19 @@
       <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
       <span>Arkeo</span> Marketplace
     </a>
-    <a href="index.html" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--arkeo); color: #000; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer; text-decoration: none;">
+    <a href="index.html" onclick="clearState()" style="padding: 0.5rem 1rem; font-size: 0.85rem; background: var(--arkeo); color: #000; border: none; border-radius: 0.5rem; font-weight: 600; cursor: pointer; text-decoration: none;">
       ← Return to Marketplace
     </a>
   </nav>
 
   <div class="container">
+    <!-- Start Over Link -->
+    <div style="text-align: right; margin-bottom: 0.5rem;">
+      <a href="#" onclick="event.preventDefault(); if(confirm('Clear all progress and start over?')) { clearState(); findAnother(); }" style="font-size: 0.85rem; color: var(--text-dim); text-decoration: none;">
+        🔄 Start Over
+      </a>
+    </div>
+    
     <!-- Progress Bar -->
     <div class="progress-container">
       <div class="progress-steps">
@@ -846,7 +853,7 @@
         <label class="form-label">Uptime Protection</label>
         <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
           <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
-            <input type="checkbox" id="enableFailover" checked style="margin-top: 0.25rem; width: 18px; height: 18px; accent-color: var(--arkeo);">
+            <input type="checkbox" id="enableFailover" checked onchange="failoverEnabled = this.checked; saveState();" style="margin-top: 0.25rem; width: 18px; height: 18px; accent-color: var(--arkeo);">
             <div>
               <div style="font-weight: 600; margin-bottom: 0.25rem;">🛡️ Enable Auto-Failover</div>
               <div style="font-size: 0.85rem; color: var(--text-dim); line-height: 1.4;">
@@ -1257,7 +1264,177 @@
     let currentStep = 1;
     let paymentMethod = 'arkeo'; // Default to ARKEO for discount
     let walletAddress = null;
+    let walletPubkeyBytes = null;
     let failoverEnabled = true; // Default to enabled
+    
+    // State persistence constants
+    const STATE_KEY = 'arkeo_subscribe_state';
+    
+    // ============================================================
+    // STATE PERSISTENCE
+    // ============================================================
+    function saveState() {
+      try {
+        const state = {
+          currentStep,
+          selectedChain,
+          selectedProvider,
+          contractDurationBlocks,
+          depositAmount: document.getElementById('depositAmount')?.value || '10',
+          paymentMethod,
+          signingKey,
+          walletAddress,
+          walletPubkeyBytes: walletPubkeyBytes ? Array.from(walletPubkeyBytes) : null,
+          failoverEnabled,
+          timestamp: Date.now()
+        };
+        sessionStorage.setItem(STATE_KEY, JSON.stringify(state));
+        console.log('State saved:', state);
+      } catch (err) {
+        console.error('Failed to save state:', err);
+      }
+    }
+    
+    function restoreState() {
+      try {
+        const savedState = sessionStorage.getItem(STATE_KEY);
+        if (!savedState) return false;
+        
+        const state = JSON.parse(savedState);
+        console.log('Restoring state:', state);
+        
+        // Check for URL provider override - if provider param exists AND differs from saved, don't restore
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlProvider = urlParams.get('provider');
+        if (urlProvider && state.selectedProvider?.pubkey !== urlProvider) {
+          console.log('URL provider differs from saved state - clearing saved state');
+          clearState();
+          return false;
+        }
+        
+        // Restore variables
+        if (state.selectedChain) selectedChain = state.selectedChain;
+        if (state.selectedProvider) selectedProvider = state.selectedProvider;
+        if (state.contractDurationBlocks) contractDurationBlocks = state.contractDurationBlocks;
+        if (state.paymentMethod) paymentMethod = state.paymentMethod;
+        if (state.signingKey) signingKey = state.signingKey;
+        if (state.walletAddress) walletAddress = state.walletAddress;
+        if (state.walletPubkeyBytes) walletPubkeyBytes = new Uint8Array(state.walletPubkeyBytes);
+        if (typeof state.failoverEnabled === 'boolean') failoverEnabled = state.failoverEnabled;
+        
+        // Restore deposit amount
+        if (state.depositAmount) {
+          const depositInput = document.getElementById('depositAmount');
+          if (depositInput) depositInput.value = state.depositAmount;
+        }
+        
+        // Restore payment method UI
+        if (state.paymentMethod) {
+          selectPayment(state.paymentMethod);
+        }
+        
+        // Restore failover checkbox
+        const failoverCheckbox = document.getElementById('enableFailover');
+        if (failoverCheckbox) failoverCheckbox.checked = failoverEnabled;
+        
+        // Restore signing key display
+        if (signingKey && signingKey.privateKeyHex) {
+          const privateKeyDisplay = document.getElementById('privateKeyDisplay');
+          const publicKeyDisplay = document.getElementById('publicKeyDisplay');
+          const addressDisplay = document.getElementById('addressDisplay');
+          const generatedKeyDisplay = document.getElementById('generatedKeyDisplay');
+          
+          if (privateKeyDisplay) privateKeyDisplay.textContent = signingKey.privateKeyHex;
+          if (publicKeyDisplay) publicKeyDisplay.textContent = signingKey.publicKeyBech32;
+          if (addressDisplay) addressDisplay.textContent = signingKey.address;
+          if (generatedKeyDisplay) generatedKeyDisplay.style.display = 'block';
+        } else if (signingKey && signingKey.publicKeyBech32) {
+          // Existing key mode
+          selectKeyMode('existing');
+          const existingKeyInput = document.getElementById('existingKeyInput');
+          if (existingKeyInput) existingKeyInput.value = signingKey.publicKeyBech32;
+          
+          const existingPubKeyDisplay = document.getElementById('existingPubKeyDisplay');
+          const existingAddressDisplay = document.getElementById('existingAddressDisplay');
+          const parsedKeyDisplay = document.getElementById('parsedKeyDisplay');
+          
+          if (existingPubKeyDisplay) existingPubKeyDisplay.textContent = signingKey.publicKeyBech32;
+          if (existingAddressDisplay) existingAddressDisplay.textContent = signingKey.address;
+          if (parsedKeyDisplay) parsedKeyDisplay.style.display = 'block';
+        }
+        
+        // Restore wallet connection UI (but don't actually connect - Keplr needs user interaction)
+        if (walletAddress) {
+          const walletSection = document.getElementById('walletSection');
+          const openBtn = document.getElementById('openContractBtn');
+          
+          walletSection.innerHTML = `
+            <div style="text-align: center;">
+              <div style="color: var(--warning);">
+                <div>⚠️ Wallet was connected</div>
+                <div style="font-weight: 600; margin-top: 0.25rem;">${walletAddress.slice(0, 12)}...${walletAddress.slice(-6)}</div>
+                <div style="color: var(--text-dim); font-size: 0.85rem; margin-top: 0.5rem;">
+                  Please reconnect to continue
+                </div>
+                <button class="connect-wallet-btn" style="margin-top: 0.75rem;" onclick="connectWallet()">
+                  🔗 Reconnect Keplr Wallet
+                </button>
+              </div>
+            </div>
+          `;
+        }
+        
+        // Restore step-specific UI
+        if (state.currentStep >= 2 && selectedChain) {
+          // Highlight selected chain
+          setTimeout(() => {
+            document.querySelectorAll('.chain-option').forEach(el => {
+              const chainName = el.querySelector('.chain-name')?.textContent;
+              if (chainName === selectedChain.name) {
+                el.classList.add('selected');
+              }
+            });
+            document.getElementById('nextBtn1').disabled = false;
+            document.getElementById('selectedChainName').textContent = selectedChain.name;
+          }, 100);
+        }
+        
+        if (state.currentStep >= 3 && selectedProvider) {
+          // Highlight selected provider and update summary
+          setTimeout(() => {
+            document.querySelectorAll('.provider-card').forEach(el => {
+              if (el.getAttribute('data-pubkey') === selectedProvider.pubkey) {
+                el.classList.add('selected');
+              }
+            });
+            document.getElementById('nextBtn2').disabled = false;
+            document.getElementById('summaryChain').textContent = selectedChain?.name || 'Selected Chain';
+            document.getElementById('summaryProvider').textContent = selectedProvider.name;
+            document.getElementById('summaryRate').textContent = selectedProvider.rate + ' ARKEO/request';
+          }, 100);
+        }
+        
+        // Navigate to saved step
+        if (state.currentStep && state.currentStep > 1) {
+          currentStep = state.currentStep;
+          setTimeout(() => goToStep(state.currentStep), 150);
+        }
+        
+        return true;
+      } catch (err) {
+        console.error('Failed to restore state:', err);
+        return false;
+      }
+    }
+    
+    function clearState() {
+      try {
+        sessionStorage.removeItem(STATE_KEY);
+        console.log('State cleared');
+      } catch (err) {
+        console.error('Failed to clear state:', err);
+      }
+    }
     
     // Configuration
     const CONFIG = {
@@ -1382,8 +1559,16 @@
 
     // Initialize
     async function init() {
+      // Restore state first (before loading data)
+      const stateRestored = restoreState();
+      
       await loadRealData();
       checkKeplr();
+      
+      // If state was restored, re-render UI after data loads
+      if (stateRestored) {
+        console.log('State restored successfully');
+      }
     }
     
     // Fetch all contracts with pagination
@@ -1692,6 +1877,9 @@
       
       document.getElementById('nextBtn1').disabled = false;
       document.getElementById('selectedChainName').textContent = name;
+      
+      // Save state after chain selection
+      saveState();
     }
 
     function renderProviders() {
@@ -1767,6 +1955,9 @@
       document.getElementById('summaryChain').textContent = selectedChain?.name || 'Selected Chain';
       document.getElementById('summaryProvider').textContent = name;
       document.getElementById('summaryRate').textContent = rate + ' ARKEO/request';
+      
+      // Save state after provider selection
+      saveState();
     }
 
     function goToStep(step) {
@@ -1811,6 +2002,9 @@
       if (step === 3) {
         updateEstimate();
       }
+      
+      // Save state after step change
+      saveState();
     }
 
     function selectPayment(method) {
@@ -1855,6 +2049,9 @@
         x402Info.style.display = 'block';
       }
       updateEstimate();
+      
+      // Save state after payment method change
+      saveState();
     }
     
     // Duration picker
@@ -1888,6 +2085,9 @@
       document.querySelectorAll('.duration-preset').forEach(b => b.classList.remove('active'));
       event.target.classList.add('active');
       updateDuration();
+      
+      // Save state after duration preset selection
+      saveState();
     }
 
     function updateDuration() {
@@ -1902,6 +2102,9 @@
         (overMax ? `<br><span style="color:var(--error);">⚠️ Exceeds provider max of ${maxDur.toLocaleString()} blocks (${blocksToHumanTime(maxDur)})</span>` : '');
       // Clear active preset if custom
       document.querySelectorAll('.duration-preset').forEach(b => b.classList.remove('active'));
+      
+      // Save state after duration change
+      saveState();
     }
 
     function updateEstimate() {
@@ -1923,6 +2126,9 @@
         const requests = Math.floor((amount / rate) * 1.25);
         document.getElementById('depositEstimate').innerHTML = `≈ <strong>${requests.toLocaleString()}</strong> requests <span style="color: #10b981;">(+25% bonus!)</span>`;
       }
+      
+      // Save state after deposit amount changes
+      saveState();
     }
 
     // ============================================================
@@ -1967,6 +2173,7 @@
         if (accounts.length === 0) throw new Error('No accounts found');
         
         walletAddress = accounts[0].address;
+        walletPubkeyBytes = accounts[0].pubkey;
         
         // Get balance
         const balanceResp = await fetch(`${CONFIG.REST_API}/cosmos/bank/v1beta1/balances/${walletAddress}`);
@@ -1986,6 +2193,9 @@
           </div>
         `;
         openBtn.classList.remove('hidden');
+        
+        // Save state after wallet connection
+        saveState();
         
         // Update nav wallet button
         const navBtn = document.getElementById('navWalletBtn');
@@ -2352,7 +2562,11 @@
           securityWarning.querySelector('span').textContent = '🔒';
         }
         
-        setTimeout(() => goToStep(4), 1000);
+        // Clear state after successful contract opening
+        setTimeout(() => {
+          clearState();
+          goToStep(4);
+        }, 1000);
       } catch (err) {
         console.error('Contract error:', err);
         document.getElementById('contractStatus').innerHTML = `
@@ -2376,6 +2590,9 @@
     }
 
     function findAnother() {
+      // Clear state when finding another provider
+      clearState();
+      
       selectedChain = null;
       selectedProvider = null;
       document.querySelectorAll('.chain-option').forEach(el => el.classList.remove('selected'));
@@ -2576,6 +2793,9 @@
         document.getElementById('generatedKeyDisplay').style.display = 'block';
         
         console.log('Generated signing key:', signingKey);
+        
+        // Save state after signing key generation
+        saveState();
       } catch (err) {
         console.error('Key generation failed:', err);
         alert('Failed to generate key: ' + err.message);
@@ -2638,6 +2858,9 @@
         display.style.display = 'block';
         
         console.log('Parsed existing key:', signingKey);
+        
+        // Save state after parsing existing key
+        saveState();
       } catch (err) {
         console.error('Key parsing failed:', err);
         display.style.display = 'none';
