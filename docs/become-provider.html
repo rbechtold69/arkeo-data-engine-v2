@@ -2758,8 +2758,9 @@ services:
       const domain = (document.getElementById('sentinelDomain')?.value || '').trim();
       const urlInput = document.getElementById('sentinelPublicUrl');
       if (domain && urlInput) {
-        urlInput.value = 'https://' + domain;
-        state.sentinelUrl = 'https://' + domain;
+        const cleanDomain = domain.replace(/^https?:\/\//, '');
+        urlInput.value = 'https://' + cleanDomain;
+        state.sentinelUrl = 'https://' + cleanDomain;
       }
       
       updateSentinelConfig();
@@ -2776,7 +2777,9 @@ services:
     }
     
     function onSentinelPublicUrlChange() {
-      const url = document.getElementById('sentinelPublicUrl').value.trim();
+      let url = document.getElementById('sentinelPublicUrl').value.trim();
+      // Fix double protocol
+      url = url.replace(/^https?:\/\/https?:\/\//, 'https://');
       state.sentinelUrl = url;
       updateSentinelConfig();
       updateMetadataJson();
