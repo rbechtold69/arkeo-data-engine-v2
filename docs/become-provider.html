@@ -752,6 +752,9 @@
           <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">
             The maximum length of time a subscriber can lock in a contract with you.
           </p>
+          <div style="background: rgba(59,224,255,0.08); border: 1px solid rgba(59,224,255,0.2); border-radius: 0.5rem; padding: 0.6rem 0.75rem; margin-bottom: 0.75rem; font-size: 0.82rem; color: var(--text-dim);">
+            ℹ️ <strong style="color: var(--arkeo);">Arkeo chain limit:</strong> Max contract duration cannot exceed <strong>5,256,000 blocks (~8 months)</strong>. This is a network-wide parameter set by governance.
+          </div>
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
             <button type="button" class="duration-preset" data-blocks="151200" onclick="setMaxDuration(151200, '1 Week')">1 Week</button>
             <button type="button" class="duration-preset" data-blocks="648000" onclick="setMaxDuration(648000, '1 Month')">1 Month</button>
