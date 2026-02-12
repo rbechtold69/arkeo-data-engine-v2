@@ -753,7 +753,8 @@
     // Unbond provider
     async function unbondProvider(pubkey, serviceName, currentBond) {
       const bondArkeo = (currentBond / CONFIG.ARKEO_DIVISOR).toFixed(2);
-      if (!confirm(`Unbond ${bondArkeo} ARKEO from service "${serviceName}"?\n\nThis will remove your provider bond and return the ARKEO to your wallet.`)) return;
+      if (!confirm(`⚠️ WARNING: This will PERMANENTLY REMOVE your provider from the Arkeo marketplace!\n\nYou are about to unbond ${bondArkeo} ARKEO from "${serviceName}". Your provider will be deleted from the network and you will need to re-register from scratch.\n\nThe ${bondArkeo} ARKEO will be returned to your wallet.\n\nAre you absolutely sure?`)) return;
+      if (!confirm(`FINAL CONFIRMATION: Remove your provider and unbond ${bondArkeo} ARKEO?\n\nThis cannot be undone.`)) return;
 
       try {
         const msg = {
