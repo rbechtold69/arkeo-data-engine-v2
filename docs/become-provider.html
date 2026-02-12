@@ -757,12 +757,12 @@
             <button type="button" class="duration-preset" data-blocks="648000" onclick="setMaxDuration(648000, '1 Month')">1 Month</button>
             <button type="button" class="duration-preset" data-blocks="1944000" onclick="setMaxDuration(1944000, '3 Months')">3 Months</button>
             <button type="button" class="duration-preset" data-blocks="3888000" onclick="setMaxDuration(3888000, '6 Months')">6 Months</button>
-            <button type="button" class="duration-preset active" data-blocks="7884000" onclick="setMaxDuration(7884000, '1 Year')">1 Year</button>
+            <button type="button" class="duration-preset active" data-blocks="5256000" onclick="setMaxDuration(5256000, '~8 Months (chain max)')">Max (~8 Months)</button>
             <button type="button" class="duration-preset" onclick="setMaxDurationCustom()">Custom</button>
           </div>
           <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
             <input type="number" class="form-input" id="maxContractDuration" 
-                   value="7884000" min="10" step="1000" 
+                   value="5256000" min="10" step="1000" max="5256000" 
                    style="width: 180px; padding: 0.6rem 1rem; font-size: 0.95rem;"
                    oninput="updateMaxDurationDisplay()">
             <span style="color: var(--text-dim); font-size: 0.9rem;">blocks</span>
@@ -1462,7 +1462,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       arkeoHubUri: 'https://rest-seed.arkeo.network',
       arkeoFallbacks: [],
       maxQpm: 100,
-      maxContractDuration: 7884000,  // 1 year in blocks (~4s per block)
+      maxContractDuration: 5256000,  // ~8 months in blocks (chain max)
       minContractDuration: 10,       // 10 blocks default
     };
 
@@ -2466,7 +2466,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
             metadataNonce: '1',
             status: 1, // ONLINE = 1
             minContractDuration: String(state.minContractDuration || 10),
-            maxContractDuration: String(state.maxContractDuration || 7884000),
+            maxContractDuration: String(Math.min(state.maxContractDuration || 5256000, 5256000)),
             subscriptionRate: [{ denom: CONFIG.ARKEO_DENOM, amount: '1' }],  // Must be positive
             payAsYouGoRate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate || '1') }],
             settlementDuration: '10',
