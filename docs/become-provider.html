@@ -387,6 +387,29 @@
       color: var(--warning);
     }
     
+    /* Duration Preset Buttons */
+    .duration-preset {
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .duration-preset:hover {
+      border-color: var(--arkeo);
+      color: var(--text);
+    }
+    .duration-preset.active {
+      background: var(--arkeo-dim);
+      border-color: var(--arkeo);
+      color: var(--arkeo);
+      font-weight: 600;
+    }
+    
     /* Mobile */
     @media (max-width: 600px) {
       .nav { padding: 0.75rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
@@ -712,6 +735,68 @@
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             <span style="color: var(--success); font-size: 1.1rem;">✅</span>
             <span>With 10 subscribers: max <strong id="protTotal">1,000</strong> requests/min to your node</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Contract Duration Limits -->
+      <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="margin-bottom: 0.5rem;">⏱️ Contract Duration Limits</h3>
+        <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
+          Set how long subscribers can open contracts with you. ~4 seconds per block.
+        </p>
+        
+        <!-- Max Contract Duration -->
+        <div class="form-group" style="margin-bottom: 1.5rem;">
+          <label class="form-label">Max Contract Duration</label>
+          <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">
+            The maximum length of time a subscriber can lock in a contract with you.
+          </p>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="duration-preset" data-blocks="151200" onclick="setMaxDuration(151200, '1 Week')">1 Week</button>
+            <button type="button" class="duration-preset" data-blocks="648000" onclick="setMaxDuration(648000, '1 Month')">1 Month</button>
+            <button type="button" class="duration-preset" data-blocks="1944000" onclick="setMaxDuration(1944000, '3 Months')">3 Months</button>
+            <button type="button" class="duration-preset" data-blocks="3888000" onclick="setMaxDuration(3888000, '6 Months')">6 Months</button>
+            <button type="button" class="duration-preset active" data-blocks="7884000" onclick="setMaxDuration(7884000, '1 Year')">1 Year</button>
+            <button type="button" class="duration-preset" onclick="setMaxDurationCustom()">Custom</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <input type="number" class="form-input" id="maxContractDuration" 
+                   value="7884000" min="10" step="1000" 
+                   style="width: 180px; padding: 0.6rem 1rem; font-size: 0.95rem;"
+                   oninput="updateMaxDurationDisplay()">
+            <span style="color: var(--text-dim); font-size: 0.9rem;">blocks</span>
+          </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem; font-size: 0.85rem;">
+            <span style="color: var(--text-dim);">≈ </span>
+            <strong id="maxDurationHuman" style="color: var(--arkeo);">1 year</strong>
+            <span style="color: var(--text-dim);"> at ~4s/block</span>
+          </div>
+        </div>
+        
+        <!-- Min Contract Duration -->
+        <div class="form-group" style="margin-bottom: 0;">
+          <label class="form-label">Min Contract Duration</label>
+          <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">
+            The minimum commitment required for subscribers. Prevents spam contracts.
+          </p>
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <button type="button" class="duration-preset active" data-blocks="10" onclick="setMinDuration(10, '10 blocks')">10 blocks</button>
+            <button type="button" class="duration-preset" data-blocks="900" onclick="setMinDuration(900, '1 Hour')">1 Hour</button>
+            <button type="button" class="duration-preset" data-blocks="21600" onclick="setMinDuration(21600, '1 Day')">1 Day</button>
+            <button type="button" class="duration-preset" onclick="setMinDurationCustom()">Custom</button>
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <input type="number" class="form-input" id="minContractDuration" 
+                   value="10" min="1" step="10"
+                   style="width: 180px; padding: 0.6rem 1rem; font-size: 0.95rem;"
+                   oninput="updateMinDurationDisplay()">
+            <span style="color: var(--text-dim); font-size: 0.9rem;">blocks</span>
+          </div>
+          <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem; font-size: 0.85rem;">
+            <span style="color: var(--text-dim);">≈ </span>
+            <strong id="minDurationHuman" style="color: var(--arkeo);">~40 seconds</strong>
+            <span style="color: var(--text-dim);"> at ~4s/block</span>
           </div>
         </div>
       </div>
@@ -1377,6 +1462,8 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       arkeoHubUri: 'https://rest-seed.arkeo.network',
       arkeoFallbacks: [],
       maxQpm: 100,
+      maxContractDuration: 7884000,  // 1 year in blocks (~4s per block)
+      minContractDuration: 10,       // 10 blocks default
     };
 
     // ============================================================
@@ -1962,6 +2049,93 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       document.getElementById('protQpm').textContent = qpm.toLocaleString();
       document.getElementById('protTotal').textContent = (qpm * 10).toLocaleString();
     }
+    
+    // ============================================================
+    // CONTRACT DURATION FUNCTIONS
+    // ============================================================
+    function setMaxDuration(blocks, label) {
+      state.maxContractDuration = blocks;
+      document.getElementById('maxContractDuration').value = blocks;
+      updateMaxDurationDisplay();
+      
+      // Update active button state
+      document.querySelectorAll('.duration-preset[onclick^="setMaxDuration"]').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-blocks') == blocks) {
+          btn.classList.add('active');
+        }
+      });
+    }
+    
+    function setMaxDurationCustom() {
+      const input = document.getElementById('maxContractDuration');
+      input.focus();
+      document.querySelectorAll('.duration-preset[onclick^="setMaxDuration"]').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+    }
+    
+    function updateMaxDurationDisplay() {
+      const blocks = parseInt(document.getElementById('maxContractDuration').value) || 0;
+      state.maxContractDuration = blocks;
+      const humanEl = document.getElementById('maxDurationHuman');
+      if (humanEl) {
+        humanEl.textContent = blocksToHuman(blocks);
+      }
+    }
+    
+    function setMinDuration(blocks, label) {
+      state.minContractDuration = blocks;
+      document.getElementById('minContractDuration').value = blocks;
+      updateMinDurationDisplay();
+      
+      // Update active button state
+      document.querySelectorAll('.duration-preset[onclick^="setMinDuration"]').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-blocks') == blocks) {
+          btn.classList.add('active');
+        }
+      });
+    }
+    
+    function setMinDurationCustom() {
+      const input = document.getElementById('minContractDuration');
+      input.focus();
+      document.querySelectorAll('.duration-preset[onclick^="setMinDuration"]').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      event.target.classList.add('active');
+    }
+    
+    function updateMinDurationDisplay() {
+      const blocks = parseInt(document.getElementById('minContractDuration').value) || 0;
+      state.minContractDuration = blocks;
+      const humanEl = document.getElementById('minDurationHuman');
+      if (humanEl) {
+        humanEl.textContent = blocksToHuman(blocks);
+      }
+    }
+    
+    function blocksToHuman(blocks) {
+      const SECONDS_PER_BLOCK = 4;
+      const seconds = blocks * SECONDS_PER_BLOCK;
+      
+      const years = Math.floor(seconds / (365.25 * 24 * 3600));
+      const months = Math.floor(seconds / (30.44 * 24 * 3600));
+      const weeks = Math.floor(seconds / (7 * 24 * 3600));
+      const days = Math.floor(seconds / (24 * 3600));
+      const hours = Math.floor(seconds / 3600);
+      const minutes = Math.floor(seconds / 60);
+      
+      if (years >= 1) return `${years} year${years > 1 ? 's' : ''}`;
+      if (months >= 1) return `${months} month${months > 1 ? 's' : ''}`;
+      if (weeks >= 1) return `${weeks} week${weeks > 1 ? 's' : ''}`;
+      if (days >= 1) return `${days} day${days > 1 ? 's' : ''}`;
+      if (hours >= 1) return `${hours} hour${hours > 1 ? 's' : ''}`;
+      if (minutes >= 1) return `${minutes} minute${minutes > 1 ? 's' : ''}`;
+      return `~${seconds} seconds`;
+    }
 
     // First updateSummary removed — see second definition below which includes price calculator
 
@@ -2291,8 +2465,8 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
             metadataUri: metadataUrl,
             metadataNonce: '1',
             status: 1, // ONLINE = 1
-            minContractDuration: '10',
-            maxContractDuration: '1000000',
+            minContractDuration: String(state.minContractDuration || 10),
+            maxContractDuration: String(state.maxContractDuration || 7884000),
             subscriptionRate: [{ denom: CONFIG.ARKEO_DENOM, amount: '1' }],  // Must be positive
             payAsYouGoRate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate || '1') }],
             settlementDuration: '10',
