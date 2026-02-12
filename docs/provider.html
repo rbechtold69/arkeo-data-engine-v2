@@ -333,6 +333,13 @@
   <script>
     // KNOWN_PROVIDERS loaded from js/providers.js
     
+    // Escape HTML to prevent XSS
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text || '';
+      return div.innerHTML;
+    }
+    
     function findKnown(pk) {
       if (typeof KNOWN_PROVIDERS === 'undefined') return null;
       if (KNOWN_PROVIDERS[pk]) return KNOWN_PROVIDERS[pk];

@@ -1337,14 +1337,14 @@
     
     // KNOWN_PROVIDERS loaded from js/providers.js (included via script tag)
     
-    // Helper to find known provider by pubkey (handles prefix matching)
-    function findKnown(pk) {
+    // Helper to find known provider by pubkey (use canonical function from providers.js if available)
+    const findKnown = typeof findKnownProvider === 'function' ? findKnownProvider : function(pk) {
       if (typeof KNOWN_PROVIDERS === 'undefined') return null;
       if (KNOWN_PROVIDERS[pk]) return KNOWN_PROVIDERS[pk];
       const match = Object.keys(KNOWN_PROVIDERS).find(k =>
         k.startsWith(pk.slice(0, 40)) || pk.startsWith(k.slice(0, 40)));
       return match ? KNOWN_PROVIDERS[match] : null;
-    }
+    };
     
     // Display name mapping for services
     const CHAIN_DISPLAY_NAMES = {
@@ -2353,15 +2353,6 @@
         
         // Save state after wallet connection
         saveState();
-        
-        // Update nav wallet button
-        const navBtn = document.getElementById('navWalletBtn');
-        if (navBtn) {
-          navBtn.innerHTML = `✅ ${walletAddress.slice(0, 8)}...${walletAddress.slice(-4)}`;
-          navBtn.style.background = 'rgba(16, 185, 129, 0.2)';
-          navBtn.style.borderColor = '#10b981';
-          navBtn.onclick = null;
-        }
         
       } catch (err) {
         console.error('Wallet connection failed:', err);
