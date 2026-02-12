@@ -1,6 +1,6 @@
 // Shared KNOWN_PROVIDERS config — single source of truth
 // Used by index.html, subscribe.html, provider.html
-// Last health check: 2026-02-11 21:30 UTC
+// Last health check: 2026-02-12 09:37 UTC
 
 const KNOWN_PROVIDERS = {
   // ✅ HEALTHY — sentinel responding

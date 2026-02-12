@@ -899,149 +899,132 @@
     <!-- Step 6: Configure Sentinel -->
     <div class="wizard-card hidden" id="step6">
       <h2 class="wizard-title">🛡️ Set Up Your Sentinel</h2>
-      <p class="wizard-subtitle">Follow these steps to get your sentinel running. This is the last step before you're live.</p>
+      <p class="wizard-subtitle">One command installs everything. Then come back here to verify.</p>
 
-      <!-- Sub-step 1: Install -->
+      <!-- Hidden inputs for config generation -->
+      <input type="hidden" id="sentinelConfigRpcUrl" value="">
+
+      <!-- Sub-step 1: Domain (optional) -->
       <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
           <span style="background: var(--arkeo); color: #000; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">1</span>
-          Install Sentinel
+          Do you have a domain name for your sentinel?
         </h3>
         <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
-          SSH into your server and run one of these commands:
+          A domain gives you free HTTPS. No domain? No problem — the installer will use your server's IP address.
         </p>
         
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <div>
-            <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem;">Option A: Docker <span style="color: var(--text-dim); font-weight: 400;">(easiest)</span></div>
-            <div style="background: #0d1117; border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; position: relative;">
-              <button onclick="navigator.clipboard.writeText('docker pull ghcr.io/arkeonetwork/sentinel:latest'); this.textContent='✓'; setTimeout(()=>this.textContent='📋',2000);"
-                style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.2rem 0.4rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.7rem;">📋</button>
-              <span style="color: #10b981;">docker pull ghcr.io/arkeonetwork/sentinel:latest</span>
-            </div>
-          </div>
-          <div>
-            <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem;">Option B: Binary</div>
-            <div style="background: #0d1117; border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; position: relative;">
-              <button onclick="navigator.clipboard.writeText('go install github.com/arkeonetwork/arkeo/sentinel@latest'); this.textContent='✓'; setTimeout(()=>this.textContent='📋',2000);"
-                style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.2rem 0.4rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.7rem;">📋</button>
-              <span style="color: #10b981;">go install github.com/arkeonetwork/arkeo/sentinel@latest</span>
-            </div>
-          </div>
+        <div class="form-group" style="margin-bottom: 0.5rem;">
+          <input type="text" class="form-input" id="sentinelDomain"
+                 placeholder="e.g. my-node.duckdns.org (leave empty to skip)" oninput="updateInstallScript()">
         </div>
+        
+        <details style="margin-top: 0.5rem;">
+          <summary style="cursor: pointer; color: var(--arkeo); font-size: 0.85rem; font-weight: 600;">
+            🤔 How do I get a free domain?
+          </summary>
+          <div style="margin-top: 0.5rem; color: var(--text-dim); font-size: 0.85rem; line-height: 1.8;">
+            <ol style="padding-left: 1.25rem;">
+              <li>Go to <a href="https://www.duckdns.org" target="_blank" style="color: var(--arkeo);">duckdns.org</a> and sign in with Google/GitHub</li>
+              <li>Create a subdomain (e.g. <code style="background: var(--bg-card); padding: 0.1rem 0.3rem; border-radius: 0.2rem;">my-arkeo-node</code>)</li>
+              <li>Point it to your server's IP address</li>
+              <li>Enter it above (e.g. <code style="background: var(--bg-card); padding: 0.1rem 0.3rem; border-radius: 0.2rem;">my-arkeo-node.duckdns.org</code>)</li>
+            </ol>
+            <p style="margin-top: 0.25rem;">The installer handles SSL/HTTPS automatically. Total cost: $0.</p>
+          </div>
+        </details>
       </div>
 
-      <!-- Sub-step 2: Save config -->
+      <!-- Sub-step 2: One-click install -->
       <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
           <span style="background: var(--arkeo); color: #000; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">2</span>
-          Save Your Config
+          Run This Command On Your Server
         </h3>
         <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
-          Copy this config and save it to <code style="background: var(--bg-card); padding: 0.15rem 0.4rem; border-radius: 0.25rem;">~/.arkeo/config.yaml</code> on your server.
+          SSH into your server and paste this single command. It installs Docker, configures your sentinel, sets up HTTPS, and starts everything.
         </p>
-
-        <!-- Hidden input for RPC URL pre-fill -->
-        <input type="hidden" id="sentinelConfigRpcUrl" value="">
         
-        <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; overflow-x: auto;">
-          <pre id="sentinelConfigYaml" style="color: #e6edf3; margin: 0; white-space: pre-wrap;"></pre>
+        <div style="background: #0d1117; border: 2px solid var(--arkeo); border-radius: 0.75rem; padding: 1.25rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; overflow-x: auto; position: relative;">
+          <button onclick="copyInstallScript()" id="copyInstallBtn"
+            style="position: absolute; top: 0.75rem; right: 0.75rem; background: var(--arkeo); color: #000; border: none; padding: 0.4rem 0.75rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.8rem; font-weight: 600;">📋 Copy</button>
+          <pre id="installCommand" style="color: #10b981; margin: 0; white-space: pre-wrap; padding-right: 5rem;"></pre>
         </div>
-        <button class="btn btn-primary" style="margin-top: 0.75rem; width: 100%;" onclick="copySentinelConfig()">
-          📋 Copy Config
-        </button>
         
-        <div style="margin-top: 1rem;">
-          <label class="form-label" style="font-size: 0.85rem;">Generated metadata.json</label>
-          <p style="color: var(--text-dim); font-size: 0.8rem; margin-bottom: 0.5rem;">Save to <code style="background: var(--bg-card); padding: 0.15rem 0.4rem; border-radius: 0.25rem;">~/.arkeo/metadata.json</code></p>
-          <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: monospace; font-size: 0.8rem; overflow-x: auto;">
-            <pre id="metadataJsonPreview" style="color: #e6edf3; margin: 0; white-space: pre-wrap;"></pre>
+        <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem; color: var(--text-dim);">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--success);">✓</span> Installs Docker (if not already installed)
           </div>
-          <button class="btn btn-secondary" style="margin-top: 0.5rem; width: 100%;" onclick="copyMetadataJson()">
-            📋 Copy metadata.json
-          </button>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--success);">✓</span> Writes your config with your provider key and pricing
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--success);">✓</span> Sets up HTTPS with nginx + Let's Encrypt (if domain provided)
+          </div>
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span style="color: var(--success);">✓</span> Starts the sentinel and verifies it's working
+          </div>
         </div>
       </div>
 
-      <!-- Sub-step 3: Start sentinel -->
+      <!-- Sub-step 3: Test -->
       <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
         <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
           <span style="background: var(--arkeo); color: #000; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">3</span>
-          Start Your Sentinel
+          Verify From Here
         </h3>
         <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
-          Run the sentinel on your server:
-        </p>
-        
-        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-          <div>
-            <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem;">Docker:</div>
-            <div style="background: #0d1117; border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.75rem; position: relative; overflow-x: auto;">
-              <button onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent); this.textContent='✓'; setTimeout(()=>this.textContent='📋',2000);"
-                style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.2rem 0.4rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.7rem;">📋</button>
-<pre style="color: #10b981; margin: 0;">docker run -d --name arkeo-sentinel \
-  -p 3636:3636 \
-  -v ~/.arkeo:/root/.arkeo \
-  --restart unless-stopped \
-  ghcr.io/arkeonetwork/sentinel:latest</pre>
-            </div>
-          </div>
-          <div>
-            <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem;">Binary:</div>
-            <div style="background: #0d1117; border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; position: relative;">
-              <button onclick="navigator.clipboard.writeText('sentinel --config ~/.arkeo/config.yaml'); this.textContent='✓'; setTimeout(()=>this.textContent='📋',2000);"
-                style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.2rem 0.4rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.7rem;">📋</button>
-              <span style="color: #10b981;">sentinel --config ~/.arkeo/config.yaml</span>
-            </div>
-          </div>
-        </div>
-        
-        <div style="margin-top: 1rem; padding: 0.75rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem; font-size: 0.85rem;">
-          🔒 <strong>HTTPS recommended:</strong> Put nginx in front of your sentinel with SSL. Free with <a href="https://www.duckdns.org" target="_blank" style="color: var(--arkeo);">DuckDNS</a> + <a href="https://certbot.eff.org" target="_blank" style="color: var(--arkeo);">Certbot</a>. See Infrastructure Best Practices below.
-        </div>
-      </div>
-
-      <!-- Sub-step 4: Test -->
-      <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
-        <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
-          <span style="background: var(--arkeo); color: #000; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">4</span>
-          Test Your Sentinel
-        </h3>
-        <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
-          Enter your sentinel's public URL and we'll check if it's responding.
+          After the installer finishes, enter your sentinel URL below and we'll confirm it's working.
         </p>
         
         <div class="form-group" style="margin-bottom: 1rem;">
-          <label class="form-label">Your Sentinel's Public URL</label>
+          <label class="form-label">Your Sentinel URL</label>
           <input type="url" class="form-input" id="sentinelPublicUrl"
-                 placeholder="https://your-server.com:3636" oninput="onSentinelPublicUrlChange()">
-          <p class="form-hint">The public URL where your sentinel is now running.</p>
+                 placeholder="https://my-node.duckdns.org" oninput="onSentinelPublicUrlChange()">
+          <p class="form-hint">The installer will show this URL when it finishes.</p>
         </div>
         
         <button class="btn btn-primary" id="selfTestBtn" onclick="runSelfTest()" style="width: 100%;">
           🔍 Test My Sentinel
         </button>
         <div id="selfTestResults" style="margin-top: 1rem;"></div>
-        
-        <!-- Curl fallback -->
-        <div style="margin-top: 1rem;">
-          <div style="font-size: 0.8rem; font-weight: 600; margin-bottom: 0.25rem; color: var(--text-dim);">Or test from your server terminal:</div>
-          <div style="background: #0d1117; border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.75rem; word-break: break-all; position: relative;">
-            <pre id="curlTestCmd" style="color: #10b981; margin: 0; white-space: pre-wrap;"></pre>
-            <button onclick="navigator.clipboard.writeText(document.getElementById('curlTestCmd').textContent); this.textContent='✓'; setTimeout(()=>this.textContent='📋',2000);"
-              style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.2rem 0.4rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.7rem;">📋</button>
+      </div>
+
+      <!-- Advanced: Manual config (collapsible) -->
+      <details style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; margin-bottom: 1.5rem;">
+        <summary style="padding: 1.25rem 1.5rem; cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: 0.9rem;">
+          🔧 Advanced: View raw config files
+        </summary>
+        <div style="padding: 0 1.5rem 1.5rem;">
+          <div style="margin-bottom: 1rem;">
+            <label class="form-label" style="font-size: 0.85rem;">config.yaml</label>
+            <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: monospace; font-size: 0.75rem; overflow-x: auto;">
+              <pre id="sentinelConfigYaml" style="color: #e6edf3; margin: 0; white-space: pre-wrap;"></pre>
+            </div>
+            <button class="btn btn-secondary" style="margin-top: 0.5rem; width: 100%; font-size: 0.85rem;" onclick="copySentinelConfig()">
+              📋 Copy config.yaml
+            </button>
+          </div>
+          <div>
+            <label class="form-label" style="font-size: 0.85rem;">metadata.json</label>
+            <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: monospace; font-size: 0.75rem; overflow-x: auto;">
+              <pre id="metadataJsonPreview" style="color: #e6edf3; margin: 0; white-space: pre-wrap;"></pre>
+            </div>
+            <button class="btn btn-secondary" style="margin-top: 0.5rem; width: 100%; font-size: 0.85rem;" onclick="copyMetadataJson()">
+              📋 Copy metadata.json
+            </button>
           </div>
         </div>
-      </div>
+      </details>
 
       <!-- Optional: Failover monitor -->
       <details style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; margin-bottom: 1.5rem;">
-        <summary style="padding: 1.25rem 1.5rem; cursor: pointer; color: var(--arkeo); font-weight: 600;">
+        <summary style="padding: 1.25rem 1.5rem; cursor: pointer; color: var(--text-dim); font-weight: 600; font-size: 0.9rem;">
           🔄 Optional: Automatic Endpoint Failover
         </summary>
         <div style="padding: 0 1.5rem 1.5rem;">
           <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
-            If you're using a community Arkeo endpoint, this script auto-switches to a backup if your primary goes down.
+            If you're using a community Arkeo endpoint, this script auto-switches to a backup if it goes down.
           </p>
           <div style="background: #0d1117; border-radius: 0.5rem; padding: 1rem; font-family: monospace; font-size: 0.8rem; overflow-x: auto; position: relative;">
             <button onclick="navigator.clipboard.writeText(this.parentElement.querySelector('pre').textContent); this.textContent='✓ Copied!'; setTimeout(()=>this.textContent='📋 Copy',2000);"
@@ -2040,6 +2023,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         if (state.sentinelUrl) {
           document.getElementById('sentinelPublicUrl').value = state.sentinelUrl;
         }
+        updateInstallScript();
         updateSentinelConfig();
         updateMetadataJson();
       }
@@ -2553,6 +2537,65 @@ services:
     rpc_url: ${rpcUrl}`;
     }
 
+    function generateInstallScript() {
+      const pubkey = state.walletPubkey || 'YOUR_PUBKEY';
+      const rpcUrl = state.rpcUrl || 'http://localhost:26657';
+      const serviceName = state.selectedService?.name || 'arkeo-mainnet-fullnode';
+      const domain = (document.getElementById('sentinelDomain')?.value || '').trim();
+      const hubUri = state.arkeoHubUri || 'https://rest-seed.arkeo.network';
+      const fallbacks = (state.arkeoFallbacks || []).join(',');
+      const moniker = (state.providerName || 'My Arkeo Provider').replace(/'/g, "\\'");
+      const desc = (state.providerDesc || '').replace(/'/g, "\\'");
+      const location = state.providerLocation || '';
+      const freeRate = 10;
+      const contractRate = state.maxQpm || 100;
+      
+      // Build env vars for the install script
+      const envVars = [
+        `PROVIDER_PUBKEY='${pubkey}'`,
+        `SOURCE_CHAIN='${CONFIG.CHAIN_ID}'`,
+        `HUB_URI='${hubUri}'`,
+        `HUB_FALLBACKS='${fallbacks}'`,
+        `SERVICE_NAME='${serviceName}'`,
+        `RPC_URL='${rpcUrl}'`,
+        `FREE_RATE_LIMIT='${freeRate}'`,
+        `CONTRACT_RATE_LIMIT='${contractRate}'`,
+        `MONIKER='${moniker}'`,
+        `DESCRIPTION='${desc}'`,
+        `LOCATION='${location}'`,
+        `DOMAIN='${domain}'`,
+      ].join(' \\\n  ');
+      
+      const scriptUrl = 'https://raw.githubusercontent.com/rbechtold69/arkeo-data-engine-v2/main/docs/scripts/sentinel-install.sh';
+      
+      return `curl -sL ${scriptUrl} | \\\n  ${envVars} \\\n  bash`;
+    }
+    
+    function updateInstallScript() {
+      const el = document.getElementById('installCommand');
+      if (el) el.textContent = generateInstallScript();
+      
+      // Auto-fill sentinel URL from domain
+      const domain = (document.getElementById('sentinelDomain')?.value || '').trim();
+      const urlInput = document.getElementById('sentinelPublicUrl');
+      if (domain && urlInput) {
+        urlInput.value = 'https://' + domain;
+        state.sentinelUrl = 'https://' + domain;
+      }
+      
+      updateSentinelConfig();
+      updateMetadataJson();
+      updateCurlTestCmd();
+    }
+    
+    function copyInstallScript() {
+      const script = generateInstallScript();
+      navigator.clipboard.writeText(script);
+      const btn = document.getElementById('copyInstallBtn');
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => btn.textContent = '📋 Copy', 2000);
+    }
+    
     function onSentinelPublicUrlChange() {
       const url = document.getElementById('sentinelPublicUrl').value.trim();
       state.sentinelUrl = url;
