@@ -12,10 +12,11 @@ if (secp.etc && secp.etc.hmacSha256Sync === undefined) {
 
 var CONTRACT_ID = process.argv[2] || '940';
 var PRIVATE_KEY = process.argv[3] || '';
+var START_NONCE = parseInt(process.argv[4] || '0');
 var SENTINEL = 'https://red5-arkeo.duckdns.org';
 var SERVICE = 'arkeo-mainnet-fullnode';
 
-if (!PRIVATE_KEY) { console.log('Usage: node quick-test.mjs <contract_id> <private_key_hex>'); process.exit(1); }
+if (!PRIVATE_KEY) { console.log('Usage: node quick-test.mjs <contract_id> <private_key_hex> [start_nonce]'); console.log('Example: node quick-test.mjs 940 a1b2c3... 4'); process.exit(1); }
 
 function hexToBytes(hex) { var b = new Uint8Array(hex.length / 2); for (var i = 0; i < b.length; i++) b[i] = parseInt(hex.substr(i * 2, 2), 16); return b; }
 function bytesToHex(bytes) { return Array.from(bytes, function(b) { return b.toString(16).padStart(2, '0'); }).join(''); }
@@ -57,7 +58,18 @@ async function query(path, nonce) {
   return { status: resp.status, data: await resp.json() };
 }
 
-for (var nonce = 1; nonce <= 3; nonce++) {
+// Auto-fetch current nonce from chain if not provided
+if (START_NONCE === 0) {
+  try {
+    var contractResp = await fetch('https://rest-seed.arkeo.network/arkeo/contract/' + CONTRACT_ID);
+    var contractData = await contractResp.json();
+    START_NONCE = parseInt(contractData.contract.nonce || '0') + 1;
+    if (START_NONCE < 1) START_NONCE = 1;
+    console.log('Auto-detected start nonce:', START_NONCE);
+  } catch(e) { START_NONCE = 1; }
+}
+
+for (var nonce = START_NONCE; nonce <= START_NONCE + 2; nonce++) {
   console.log('Query ' + nonce + ': /status');
   try {
     var r = await query('/status', nonce);
