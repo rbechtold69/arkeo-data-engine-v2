@@ -488,6 +488,53 @@
     <div class="wizard-card hidden" id="step2">
       <h2 class="wizard-title">Infrastructure Setup</h2>
       <p class="wizard-subtitle">Configure your <span id="selectedChainName">blockchain</span> node and sentinel.</p>
+
+      <!-- Arkeo Network Connection -->
+      <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+          🌐 Arkeo Network Connection
+        </h3>
+        <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
+          Your sentinel needs access to the Arkeo blockchain to verify subscriber contracts and process payments. Choose how to connect:
+        </p>
+        
+        <div style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1rem;">
+          <!-- Option A -->
+          <label style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem; background: var(--bg-card); border: 2px solid var(--arkeo); border-radius: 0.5rem; cursor: pointer;" id="arkeoOptionA">
+            <input type="radio" name="arkeoConnection" value="public" checked 
+                   onchange="updateArkeoConnection()" style="margin-top: 0.25rem; accent-color: var(--arkeo);">
+            <div>
+              <div style="font-weight: 600; color: var(--text);">Use a public endpoint <span style="font-size: 0.75rem; background: var(--success); color: #fff; padding: 0.15rem 0.5rem; border-radius: 0.25rem; margin-left: 0.5rem;">Recommended</span></div>
+              <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">Free, no setup required. Connects to Arkeo's public infrastructure. Best for most providers.</div>
+            </div>
+          </label>
+          
+          <!-- Option B -->
+          <label style="display: flex; align-items: flex-start; gap: 0.75rem; padding: 1rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.5rem; cursor: pointer;" id="arkeoOptionB">
+            <input type="radio" name="arkeoConnection" value="custom" 
+                   onchange="updateArkeoConnection()" style="margin-top: 0.25rem; accent-color: var(--arkeo);">
+            <div>
+              <div style="font-weight: 600; color: var(--text);">Use your own Arkeo node</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">If you run an Arkeo validator or full node, point to your own endpoint for maximum decentralization.</div>
+            </div>
+          </label>
+        </div>
+        
+        <!-- Custom URL input (hidden by default) -->
+        <div id="arkeoCustomUrl" class="hidden">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label">Your Arkeo Node REST API URL</label>
+            <input type="url" class="form-input" id="arkeoNodeUrl" 
+                   placeholder="https://your-arkeo-node:1317" oninput="validateArkeoUrl()">
+            <p class="form-hint">REST API endpoint of your Arkeo node (typically port 1317).</p>
+          </div>
+          <div id="arkeoUrlStatus"></div>
+        </div>
+        
+        <div id="arkeoConnectionStatus" class="status-box" style="margin-top: 0.75rem; background: var(--success-dim); border: 1px solid var(--success); border-radius: 0.5rem; padding: 0.75rem; font-size: 0.85rem;">
+          ✅ Will connect via <strong>rest-seed.arkeo.network</strong> (Arkeo public endpoint)
+        </div>
+      </div>
       
       <!-- Node RPC -->
       <div class="form-group">
@@ -1142,7 +1189,83 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       providerLocation: '',
       paygRate: 1,
       currentStep: 1,
+      arkeoHubUri: 'https://rest-seed.arkeo.network',
     };
+
+    // ============================================================
+    // ARKEO NETWORK CONNECTION
+    // ============================================================
+    function updateArkeoConnection() {
+      const choice = document.querySelector('input[name="arkeoConnection"]:checked').value;
+      const customDiv = document.getElementById('arkeoCustomUrl');
+      const statusDiv = document.getElementById('arkeoConnectionStatus');
+      const optA = document.getElementById('arkeoOptionA');
+      const optB = document.getElementById('arkeoOptionB');
+      
+      if (choice === 'public') {
+        customDiv.classList.add('hidden');
+        state.arkeoHubUri = 'https://rest-seed.arkeo.network';
+        statusDiv.style.background = 'var(--success-dim)';
+        statusDiv.style.borderColor = 'var(--success)';
+        statusDiv.innerHTML = '✅ Will connect via <strong>rest-seed.arkeo.network</strong> (Arkeo public endpoint)';
+        optA.style.borderColor = 'var(--arkeo)';
+        optB.style.borderColor = 'var(--border)';
+      } else {
+        customDiv.classList.remove('hidden');
+        optA.style.borderColor = 'var(--border)';
+        optB.style.borderColor = 'var(--arkeo)';
+        const url = document.getElementById('arkeoNodeUrl').value.trim();
+        if (!url) {
+          statusDiv.style.background = 'var(--arkeo-dim)';
+          statusDiv.style.borderColor = 'var(--arkeo)';
+          statusDiv.innerHTML = '⏳ Enter your Arkeo node URL above';
+        }
+      }
+    }
+    
+    async function validateArkeoUrl() {
+      const url = document.getElementById('arkeoNodeUrl').value.trim();
+      const statusDiv = document.getElementById('arkeoConnectionStatus');
+      
+      if (!url) {
+        statusDiv.style.background = 'var(--arkeo-dim)';
+        statusDiv.style.borderColor = 'var(--arkeo)';
+        statusDiv.innerHTML = '⏳ Enter your Arkeo node URL above';
+        return;
+      }
+      
+      statusDiv.style.background = 'var(--arkeo-dim)';
+      statusDiv.style.borderColor = 'var(--arkeo)';
+      statusDiv.innerHTML = '🔍 Testing connection...';
+      
+      try {
+        const testUrl = url.replace(/\/$/, '') + '/cosmos/base/tendermint/v1beta1/node_info';
+        const resp = await fetch(testUrl, { signal: AbortSignal.timeout(5000) });
+        if (resp.ok) {
+          const data = await resp.json();
+          const moniker = data?.default_node_info?.moniker || 'Unknown';
+          const network = data?.default_node_info?.network || '';
+          if (network === 'arkeo-main-v1') {
+            state.arkeoHubUri = url.replace(/\/$/, '');
+            statusDiv.style.background = 'var(--success-dim)';
+            statusDiv.style.borderColor = 'var(--success)';
+            statusDiv.innerHTML = `✅ Connected to <strong>${moniker}</strong> (${network})`;
+          } else {
+            statusDiv.style.background = 'rgba(239,68,68,0.1)';
+            statusDiv.style.borderColor = 'var(--error)';
+            statusDiv.innerHTML = `❌ Node is on network "${network}" — expected "arkeo-main-v1"`;
+          }
+        } else {
+          statusDiv.style.background = 'rgba(239,68,68,0.1)';
+          statusDiv.style.borderColor = 'var(--error)';
+          statusDiv.innerHTML = '❌ Could not connect. Check the URL and make sure CORS is enabled.';
+        }
+      } catch (e) {
+        statusDiv.style.background = 'rgba(239,68,68,0.1)';
+        statusDiv.style.borderColor = 'var(--error)';
+        statusDiv.innerHTML = '❌ Connection failed. Check the URL and try again.';
+      }
+    }
 
     // ============================================================
     // KEPLR INTEGRATION
@@ -2152,6 +2275,7 @@ host: 0.0.0.0
 port: 3636
 provider_pubkey: ${pubkey}
 source_chain: ${CONFIG.CHAIN_ID}
+hub_provider_uri: ${state.arkeoHubUri}
 event_stream_host: wss://rpc-seed.arkeo.network/websocket
 free_rate_limit: 10
 free_rate_limit_duration: 1m
