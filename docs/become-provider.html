@@ -563,7 +563,44 @@
         <label class="form-label">Your Node's RPC URL (internal)</label>
         <input type="url" class="form-input" id="rpcUrl" 
                placeholder="http://localhost:26657" oninput="validateRpcUrl()">
-        <p class="form-hint">This is your local node's RPC endpoint. The sentinel will proxy requests to it.</p>
+        <p class="form-hint" id="rpcHint">This is your node's RPC endpoint — where the sentinel sends requests to get blockchain data.</p>
+        
+        <!-- Expandable help -->
+        <details style="margin-top: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem;">
+          <summary style="cursor: pointer; color: var(--arkeo); font-size: 0.85rem; font-weight: 600;">
+            🤔 How do I find my RPC URL?
+          </summary>
+          <div style="margin-top: 0.75rem; color: var(--text-dim); font-size: 0.85rem; line-height: 1.8;">
+            <p style="margin-bottom: 0.5rem;">Your RPC URL depends on where your node runs relative to the sentinel:</p>
+            <table style="width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-bottom: 0.75rem;">
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 0.4rem; font-weight: 600; color: var(--text);">Same server</td>
+                <td style="padding: 0.4rem; font-family: monospace;">http://localhost:PORT</td>
+                <td style="padding: 0.4rem;">Most common setup</td>
+              </tr>
+              <tr style="border-bottom: 1px solid var(--border);">
+                <td style="padding: 0.4rem; font-weight: 600; color: var(--text);">Different server</td>
+                <td style="padding: 0.4rem; font-family: monospace;">http://INTERNAL_IP:PORT</td>
+                <td style="padding: 0.4rem;">Use your node's internal/private IP</td>
+              </tr>
+              <tr>
+                <td style="padding: 0.4rem; font-weight: 600; color: var(--text);">Docker</td>
+                <td style="padding: 0.4rem; font-family: monospace;">http://host.docker.internal:PORT</td>
+                <td style="padding: 0.4rem;">If sentinel runs in Docker</td>
+              </tr>
+            </table>
+            <p style="margin-bottom: 0.5rem;"><strong>Common default ports by chain:</strong></p>
+            <div style="display: flex; flex-wrap: wrap; gap: 0.4rem;">
+              <span style="background: var(--bg-input); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.75rem;">Cosmos/Arkeo: 26657</span>
+              <span style="background: var(--bg-input); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.75rem;">Ethereum: 8545</span>
+              <span style="background: var(--bg-input); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.75rem;">Bitcoin: 8332</span>
+              <span style="background: var(--bg-input); padding: 0.2rem 0.5rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.75rem;">Solana: 8899</span>
+            </div>
+            <p style="margin-top: 0.75rem;">
+              📂 <strong>Check your node's config:</strong> For Cosmos chains, look in <code style="background: var(--bg-input); padding: 0.1rem 0.3rem; border-radius: 0.2rem;">config.toml</code> under <code style="background: var(--bg-input); padding: 0.1rem 0.3rem; border-radius: 0.2rem;">[rpc] → laddr</code>
+            </p>
+          </div>
+        </details>
       </div>
       
       <div id="rpcStatus"></div>
