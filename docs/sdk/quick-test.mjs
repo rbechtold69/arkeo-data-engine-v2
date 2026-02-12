@@ -69,7 +69,7 @@ function bech32Encode(prefix, data) {
 
 // --- Key Derivation ---
 const privKeyBytes = hexToBytes(PRIVATE_KEY);
-const pubKeyBytes = secp.getPublicKey(privKeyBytes, true);
+const pubKeyBytes = secp.getPublicKey(privKeyBytes);
 
 // arkeopub bech32 (amino prefix + compressed pubkey)
 const amino = new Uint8Array([0xeb, 0x5a, 0xe9, 0x87, 0x21, ...pubKeyBytes]);
@@ -99,8 +99,8 @@ async function query(path, nonce) {
   });
 
   const hash = sha256(new TextEncoder().encode(signDoc));
-  const sig = secp.sign(hash, privKeyBytes, { lowS: true });
-  const sigHex = bytesToHex(sig.toCompactRawBytes());
+  const sig = await secp.sign(hash, privKeyBytes, { canonical: true });
+  const sigHex = bytesToHex(sig);
 
   const arkauth = `${CONTRACT_ID}:${pubKeyBech32}:${nonce}:${sigHex}`;
   const url = `${SENTINEL}/${SERVICE}${path}?arkauth=${encodeURIComponent(arkauth)}`;
