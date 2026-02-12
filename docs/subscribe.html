@@ -803,7 +803,7 @@
           <button type="button" class="duration-preset" data-blocks="21600" onclick="setDuration(1, 'days')">1 Day</button>
           <button type="button" class="duration-preset" data-blocks="151200" onclick="setDuration(1, 'weeks')">1 Week</button>
           <button type="button" class="duration-preset active" data-blocks="648000" onclick="setDuration(1, 'months')">1 Month</button>
-          <button type="button" class="duration-preset" data-blocks="7884000" onclick="setDuration(1, 'years')">1 Year</button>
+          <button type="button" class="duration-preset" data-blocks="5256000" onclick="setDuration(5256000, 'blocks')">Max (~8 Months)</button>
         </div>
         <div style="display: flex; align-items: center; gap: 0.5rem;">
           <input type="number" class="deposit-input" id="durationValue" value="1" min="1" style="width: 80px;" oninput="updateDuration()">
@@ -1610,8 +1610,9 @@
       const provInfo = chainProviders.find(p => p.pubkey === pubkey);
       const metadataUri = provInfo?.metadataUri || '';
       const settlementDuration = provInfo?.settlementDuration || '10';
+      const CHAIN_MAX_DURATION = 5256000; // Arkeo governance limit
       const minDuration = provInfo?.minDuration || 10;
-      const maxDuration = provInfo?.maxDuration || 432000;
+      const maxDuration = Math.min(provInfo?.maxDuration || CHAIN_MAX_DURATION, CHAIN_MAX_DURATION);
       selectedProvider = { id: pubkey, name, rate, pubkey, serviceId: serviceId || selectedChain?.id, metadataUri, settlementDuration, minDuration, maxDuration };
       
       // Update duration presets — hide any that exceed provider's max
@@ -1748,6 +1749,7 @@
         months: value * 2592000, // 30 days
         years: value * 31536000, // 365 days
       };
+      if (unit === 'blocks') return value;
       return Math.round((seconds[unit] || 0) / BLOCK_TIME_SECONDS);
     }
 
