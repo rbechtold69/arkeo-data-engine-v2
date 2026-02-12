@@ -716,27 +716,27 @@
         </div>
       </div>
       
-      <!-- Metadata Section -->
-      <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin: 1.5rem 0;">
-        <h3 style="margin-bottom: 1rem;">📄 Provider Metadata</h3>
+      <!-- Provider Profile -->
+      <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+        <h3 style="margin-bottom: 0.5rem;">📄 Your Provider Profile</h3>
         <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
-          Your metadata tells users about your service. Host this JSON file at a public URL.
+          This is how you'll appear in the marketplace. Your sentinel will serve this info automatically.
         </p>
         
         <div class="form-group">
           <label class="form-label">Provider Name</label>
           <input type="text" class="form-input" id="providerName" 
-                 placeholder="My Arkeo Provider" oninput="updateMetadataPreview()">
+                 placeholder="e.g. Red_5, Polkachu, My Node" oninput="updateMetadataPreview()">
         </div>
         
         <div class="form-group">
-          <label class="form-label">Description (optional)</label>
+          <label class="form-label">Description <span style="color: var(--text-dim); font-weight: 400;">(optional)</span></label>
           <input type="text" class="form-input" id="providerDesc" 
-                 placeholder="High-performance RPC node" oninput="updateMetadataPreview()">
+                 placeholder="e.g. High-performance Cosmos RPC with 99.9% uptime" oninput="updateMetadataPreview()">
         </div>
         
         <div class="form-group">
-          <label class="form-label">Location (optional)</label>
+          <label class="form-label">Region <span style="color: var(--text-dim); font-weight: 400;">(optional)</span></label>
           <select class="form-input" id="providerLocation" onchange="updateMetadataPreview()">
             <option value="">Select region...</option>
             <option value="NA">North America</option>
@@ -746,28 +746,6 @@
             <option value="AF">Africa</option>
             <option value="OC">Oceania</option>
           </select>
-        </div>
-        
-        <div style="background: #1a1f2e; border-radius: 0.5rem; padding: 1rem; margin: 1rem 0; font-family: monospace; font-size: 0.8rem; overflow-x: auto;">
-          <div style="color: var(--text-dim); margin-bottom: 0.5rem;">// metadata.json - host this at a public URL:</div>
-          <pre id="metadataPreview" style="color: #10b981; margin: 0; white-space: pre-wrap;">{
-  "moniker": "My Arkeo Provider",
-  "description": "",
-  "location": "",
-  "website": "",
-  "sentinel_url": ""
-}</pre>
-        </div>
-        
-        <button class="btn btn-secondary" style="font-size: 0.8rem;" onclick="copyMetadata()">
-          📋 Copy Metadata JSON
-        </button>
-        
-        <div class="form-group" style="margin-top: 1rem;">
-          <label class="form-label">Metadata URL</label>
-          <input type="url" class="form-input" id="metadataUrl" 
-                 placeholder="https://your-server.com/metadata.json" oninput="validateMetadataUrl()">
-          <p class="form-hint">Where you'll host the metadata.json file. Can be GitHub, your server, IPFS, etc.</p>
         </div>
       </div>
       
@@ -957,6 +935,18 @@
         </div>
         <button class="btn btn-primary" style="margin-top: 1rem; width: 100%; font-size: 1.1rem; padding: 1rem;" onclick="copySentinelConfig()">
           📋 Copy Config
+        </button>
+      </div>
+
+      <!-- Generated metadata.json -->
+      <div style="position: relative; margin: 1.5rem 0;">
+        <label class="form-label">Generated metadata.json</label>
+        <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">Your sentinel serves this automatically. Save it alongside your config.</p>
+        <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.25rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.8rem; overflow-x: auto;">
+          <pre id="metadataJsonPreview" style="color: #e6edf3; margin: 0; white-space: pre-wrap;"></pre>
+        </div>
+        <button class="btn btn-secondary" style="margin-top: 0.75rem; width: 100%;" onclick="copyMetadataJson()">
+          📋 Copy metadata.json
         </button>
       </div>
 
@@ -1923,13 +1913,8 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
     }
     
     function validateMetadataUrl() {
-      const url = document.getElementById('metadataUrl').value;
-      try {
-        new URL(url);
-        state.metadataUrl = url;
-      } catch {
-        state.metadataUrl = null;
-      }
+      // Metadata URL now auto-generated from sentinel URL in Step 6
+      // Kept for compatibility
     }
     
     function updateProtectionSummary() {
@@ -2000,6 +1985,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
           document.getElementById('sentinelPublicUrl').value = state.sentinelUrl;
         }
         updateSentinelConfig();
+        updateMetadataJson();
       }
     }
     
@@ -2515,7 +2501,40 @@ services:
       const url = document.getElementById('sentinelPublicUrl').value.trim();
       state.sentinelUrl = url;
       updateSentinelConfig();
+      updateMetadataJson();
       updateCurlTestCmd();
+    }
+
+    function updateMetadataJson() {
+      const el = document.getElementById('metadataJsonPreview');
+      if (!el) return;
+      const meta = {
+        moniker: state.providerName || 'My Arkeo Provider',
+        description: state.providerDesc || '',
+        location: state.providerLocation || '',
+        website: '',
+        sentinel_url: state.sentinelUrl || '',
+        port: '3636',
+        source_chain: CONFIG.CHAIN_ID,
+        provider_pubkey: state.walletPubkey ? 
+          'arkeopub1addwnpep' + state.walletPubkey : '',
+        free_tier_rate_limit: 10,
+        services: [{
+          name: state.selectedService?.name || '',
+          id: state.selectedService?.id || '',
+          type: 'rpc'
+        }]
+      };
+      el.textContent = JSON.stringify(meta, null, 2);
+    }
+
+    function copyMetadataJson() {
+      const el = document.getElementById('metadataJsonPreview');
+      navigator.clipboard.writeText(el.textContent);
+      const btn = event.target.closest('button');
+      const orig = btn.textContent;
+      btn.textContent = '✓ Copied!';
+      setTimeout(() => btn.textContent = orig, 2000);
     }
 
     function updateSentinelConfig() {
