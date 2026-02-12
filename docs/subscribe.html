@@ -2006,14 +2006,20 @@
         // Contract ID will come from tx response in production
         document.getElementById('finalContractId').textContent = txHash ? txHash.slice(0, 12) + '...' : 'Pending...';
         
-        // Build the actual RPC endpoint from provider's metadata URI
-        // Provider metadata URI points to sentinel — strip /metadata.json to get base URL
+        // Build the actual RPC endpoint from provider's metadata URI or known website
         const providerInfo = Object.values(providersByChain).flat().find(p => p.pubkey === selectedProvider.pubkey);
         let sentinelBaseUrl = '';
-        if (providerInfo?.metadataUri) {
-          sentinelBaseUrl = providerInfo.metadataUri.replace(/\/metadata\.json$/, '');
-        } else if (selectedProvider.metadataUri) {
-          sentinelBaseUrl = selectedProvider.metadataUri.replace(/\/metadata\.json$/, '');
+        // Try metadata URI first
+        const mdUri = providerInfo?.metadataUri || selectedProvider.metadataUri || '';
+        if (mdUri) {
+          sentinelBaseUrl = mdUri.replace(/\/metadata\.json$/, '');
+        }
+        // Fallback: use KNOWN_PROVIDERS website (sentinel typically runs on same domain)
+        if (!sentinelBaseUrl && typeof findKnownProvider === 'function') {
+          const known = findKnownProvider(selectedProvider.pubkey);
+          if (known?.website) {
+            sentinelBaseUrl = known.website.replace(/\/$/, '');
+          }
         }
         const svcName = serviceName || SERVICE_ID_TO_NAME[selectedProvider.serviceId] || selectedProvider.serviceId || '';
         const endpointUrl = sentinelBaseUrl ? `${sentinelBaseUrl}/${svcName}` : `Provider sentinel URL not found`;
