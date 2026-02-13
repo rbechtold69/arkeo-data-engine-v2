@@ -661,6 +661,11 @@
         return;
       }
 
+      if (nonce === 0) {
+        showToast('No queries have been made on this contract yet — nothing to claim.', 'error');
+        return;
+      }
+
       // Resolve sentinel URL for this provider
       const providerPubkey = contract.provider;
       let sentinelUrl = null;
