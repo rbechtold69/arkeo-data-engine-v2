@@ -989,6 +989,9 @@
         
         <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
           <button class="btn btn-primary" onclick="goToStep(6)">Next: Configure Sentinel →</button>
+          <button class="btn btn-secondary" onclick="goToStep(7)" style="border: 2px solid #8b5cf6; color: #a78bfa;">
+            ⚡ Enable x402 Payments (Optional)
+          </button>
           <a href="index.html" class="btn btn-secondary">View Marketplace</a>
         </div>
       </div>
@@ -1264,6 +1267,157 @@ sudo systemctl enable fail2ban
           </ul>
         </div>
 
+      </div>
+    </div>
+
+    <!-- Step 7: Enable x402 Payments (Optional) -->
+    <div class="wizard-card hidden" id="step7">
+      <h2 class="wizard-title">⚡ Enable x402 Payments</h2>
+      <p class="wizard-subtitle">Accept USDC micropayments via Arkeo's centralized x402 proxy (optional)</p>
+
+      <div style="background: rgba(139,92,246,0.08); border: 1px solid rgba(139,92,246,0.4); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <div style="font-weight: 600; margin-bottom: 0.5rem; color: #a78bfa;">What is x402?</div>
+        <div style="color: var(--text-dim); font-size: 0.9rem; line-height: 1.7;">
+          x402 is Coinbase's open standard for HTTP-native payments. It lets clients pay per request with USDC on Base (low fees) — no accounts, no API keys. Perfect for AI agents. 
+          <a href="https://x402.org" target="_blank" style="color: var(--arkeo);">Learn more →</a>
+        </div>
+      </div>
+
+      <div id="x402SetupFlow">
+        <!-- Prerequisites Check -->
+        <div id="x402Prerequisites">
+          <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="margin-bottom: 0.75rem;">✅ Prerequisites</h3>
+            <div id="x402PrereqCheck" style="font-size: 0.9rem; color: var(--text-dim);">
+              <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+                <span>Checking provider registration...</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 1: Create Backing Contract -->
+        <div id="x402Step1" style="display: none;">
+          <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="background: var(--arkeo); color: #000; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">1</span>
+              Create Backing ARKEO Contract
+            </h3>
+            <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
+              The x402 proxy needs an active ARKEO contract to bill against. This contract backs your x402 endpoint.
+            </p>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Deposit Amount (ARKEO)</label>
+              <input type="number" class="form-input" id="x402DepositAmount" value="10" min="0.01" step="0.01">
+              <p class="form-hint">Minimum 0.01 ARKEO. This will be consumed as clients make requests via x402.</p>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 1rem;">
+              <label class="form-label">Contract Duration</label>
+              <select class="form-input" id="x402Duration">
+                <option value="900">1 Hour</option>
+                <option value="21600">1 Day</option>
+                <option value="151200">1 Week</option>
+                <option value="648000" selected>1 Month</option>
+                <option value="5256000">Max (~8 Months)</option>
+              </select>
+            </div>
+
+            <button class="btn btn-primary" id="x402CreateContractBtn" onclick="createX402BackingContract()" style="width: 100%;">
+              🔗 Connect Keplr & Create Contract
+            </button>
+            <div id="x402ContractStatus" style="margin-top: 1rem;"></div>
+          </div>
+        </div>
+
+        <!-- Step 2: Generate Delegate Key -->
+        <div id="x402Step2" style="display: none;">
+          <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="background: var(--arkeo); color: #000; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">2</span>
+              Generate x402 Signing Key
+            </h3>
+            <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
+              This delegate key allows the x402 proxy to sign requests on your behalf.
+            </p>
+
+            <button class="btn btn-primary" id="x402GenerateKeyBtn" onclick="generateX402Key()" style="width: 100%; margin-bottom: 1rem;">
+              🔑 Generate New Signing Key
+            </button>
+
+            <div id="x402KeyDisplay" style="display: none;">
+              <div style="background: var(--bg-card); border: 2px solid var(--success); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
+                <div style="font-weight: 600; color: var(--success); margin-bottom: 0.75rem;">✅ Key Generated!</div>
+                
+                <div style="margin-bottom: 0.75rem;">
+                  <div style="font-weight: 500; font-size: 0.85rem; margin-bottom: 0.25rem;">Public Key (Bech32):</div>
+                  <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem; font-family: monospace; font-size: 0.75rem; word-break: break-all;">
+                    <span id="x402PublicKey">-</span>
+                  </div>
+                </div>
+
+                <div style="margin-bottom: 0.75rem;">
+                  <div style="font-weight: 500; font-size: 0.85rem; margin-bottom: 0.25rem;">Address:</div>
+                  <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem; font-family: monospace; font-size: 0.75rem; word-break: break-all;">
+                    <span id="x402Address">-</span>
+                  </div>
+                </div>
+
+                <div style="background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.75rem;">
+                  <div style="color: var(--error); font-weight: 600; font-size: 0.85rem; margin-bottom: 0.25rem;">⚠️ Private Key (Save This!)</div>
+                  <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem; font-family: monospace; font-size: 0.7rem; word-break: break-all; color: #ff7b72;">
+                    <span id="x402PrivateKey">-</span>
+                  </div>
+                  <div style="font-size: 0.75rem; color: var(--text-dim); margin-top: 0.5rem;">
+                    Copy this private key and store it securely. You'll need to provide it to the Arkeo admin to enable your x402 endpoint.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: Endpoint Info & Test -->
+        <div id="x402Step3" style="display: none;">
+          <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 1.5rem;">
+            <h3 style="margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem;">
+              <span style="background: var(--arkeo); color: #000; width: 1.5rem; height: 1.5rem; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700;">3</span>
+              Your x402 Endpoint
+            </h3>
+            <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">
+              Share this endpoint with clients. The centralized x402 proxy handles payments automatically.
+            </p>
+
+            <div style="margin-bottom: 1rem;">
+              <div style="font-weight: 500; font-size: 0.85rem; margin-bottom: 0.5rem;">x402 Endpoint URL:</div>
+              <div style="background: var(--bg-card); border: 2px solid var(--arkeo); border-radius: 0.5rem; padding: 0.75rem; font-family: monospace; font-size: 0.85rem; word-break: break-all; display: flex; align-items: center; gap: 0.5rem;">
+                <span id="x402EndpointUrl" style="flex: 1; color: var(--arkeo);">https://x402.arkeo.red5/YOUR_PUBKEY/service</span>
+                <button onclick="copyX402Endpoint()" style="background: var(--arkeo); color: #000; border: none; padding: 0.35rem 0.75rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.8rem; font-weight: 600; white-space: nowrap;">
+                  📋 Copy
+                </button>
+              </div>
+            </div>
+
+            <div style="background: rgba(245,158,11,0.1); border: 1px solid var(--warning); border-radius: 0.5rem; padding: 1rem; margin-bottom: 1rem;">
+              <div style="color: var(--warning); font-weight: 600; margin-bottom: 0.5rem;">⚠️ Setup Required</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim);">
+                Contact the Arkeo admin with your provider pubkey and x402 delegate private key to complete setup. Once configured, your endpoint will be live.
+              </div>
+            </div>
+
+            <button class="btn btn-secondary" id="x402TestBtn" onclick="testX402Endpoint()" style="width: 100%;">
+              🧪 Test Endpoint
+            </button>
+            <div id="x402TestResult" style="margin-top: 1rem;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-group" style="margin-top: 2rem;">
+        <button class="btn btn-secondary" onclick="goToStep(6)">← Back to Sentinel Setup</button>
+        <a href="index.html" class="btn btn-primary">Done - View Marketplace →</a>
       </div>
     </div>
   </div>
@@ -2166,13 +2320,19 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
     // ============================================================
     function goToStep(step) {
       // Hide all steps
-      for (let i = 1; i <= 6; i++) {
+      for (let i = 1; i <= 7; i++) {
         const el = document.getElementById('step' + i);
         if (el) el.classList.add('hidden');
         if (i <= 4) {
-          document.getElementById('dot' + i).classList.remove('active', 'complete');
-          document.getElementById('dot' + i).innerHTML = i;
-          document.getElementById('label' + i).classList.remove('active');
+          const dot = document.getElementById('dot' + i);
+          const label = document.getElementById('label' + i);
+          if (dot) {
+            dot.classList.remove('active', 'complete');
+            dot.innerHTML = i;
+          }
+          if (label) {
+            label.classList.remove('active');
+          }
         }
       }
       
@@ -2225,6 +2385,10 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         updateInstallScript();
         updateSentinelConfig();
         updateMetadataJson();
+      }
+      if (step === 7) {
+        // Initialize x402 setup wizard
+        checkX402Prerequisites();
       }
     }
     
@@ -3183,6 +3347,368 @@ services:
         console.log('[State] Cleared');
       } catch (err) {
         console.error('[State] Clear failed:', err);
+      }
+    }
+    
+    // ============================================================
+    // X402 SETUP WIZARD
+    // ============================================================
+    let x402ContractId = null;
+    let x402SigningKey = null;
+    
+    async function checkX402Prerequisites() {
+      const checkDiv = document.getElementById('x402PrereqCheck');
+      
+      try {
+        checkDiv.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+            <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+            <span>Checking provider registration...</span>
+          </div>
+        `;
+        
+        // Check if user has a registered provider
+        if (!state.registeredPubkey) {
+          checkDiv.innerHTML = `
+            <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+              <div style="color: var(--error); font-weight: 600; margin-bottom: 0.25rem;">❌ Not Registered</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim);">
+                You must complete provider registration first. Go back to Step 1 and register as a provider.
+              </div>
+            </div>
+          `;
+          return;
+        }
+        
+        checkDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: var(--success-dim); border: 1px solid var(--success); border-radius: 0.5rem; margin-bottom: 0.5rem;">
+            <div style="color: var(--success); font-weight: 600; margin-bottom: 0.25rem;">✅ Provider Registered</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">
+              Provider: ${state.registeredPubkey.slice(0, 20)}...
+            </div>
+          </div>
+          <div style="padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.5rem;">
+            <div style="font-weight: 500; margin-bottom: 0.25rem;">✅ Wallet Connected</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">
+              ${state.walletAddress ? state.walletAddress.slice(0, 20) + '...' : 'Ready'}
+            </div>
+          </div>
+        `;
+        
+        // Show Step 1
+        document.getElementById('x402Step1').style.display = 'block';
+        
+      } catch (error) {
+        console.error('x402 prerequisite check failed:', error);
+        checkDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600; margin-bottom: 0.25rem;">❌ Check Failed</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">
+              ${error.message}
+            </div>
+          </div>
+        `;
+      }
+    }
+    
+    async function createX402BackingContract() {
+      const btn = document.getElementById('x402CreateContractBtn');
+      const statusDiv = document.getElementById('x402ContractStatus');
+      
+      btn.disabled = true;
+      btn.textContent = 'Creating Contract...';
+      
+      statusDiv.innerHTML = `
+        <div style="padding: 0.75rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+            <span>Connecting to Keplr...</span>
+          </div>
+        </div>
+      `;
+      
+      try {
+        // Connect wallet if not already connected
+        if (!state.walletConnected) {
+          await connectWallet();
+        }
+        
+        const depositAmount = parseFloat(document.getElementById('x402DepositAmount').value) || 10;
+        const depositUarkeo = String(Math.floor(depositAmount * 100000000));
+        const durationBlocks = parseInt(document.getElementById('x402Duration').value) || 648000;
+        
+        statusDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+              <span>Preparing transaction...</span>
+            </div>
+          </div>
+        `;
+        
+        // Initialize Keplr
+        await window.arkeoTx.init();
+        
+        // Get account info
+        const accountResp = await fetch(`${CONFIG.REST_API}/cosmos/auth/v1beta1/accounts/${state.walletAddress}`);
+        const accountData = await accountResp.json();
+        const account = accountData.account?.base_account || accountData.account || {};
+        
+        // Get wallet pubkey
+        const offlineSigner = window.keplr.getOfflineSigner(CONFIG.CHAIN_ID);
+        const accounts = await offlineSigner.getAccounts();
+        const walletPubkeyBytes = accounts[0].pubkey;
+        const clientPubkey = pubkeyToBech32(walletPubkeyBytes, 'arkeopub');
+        
+        // Build MsgOpenContract for x402 backing
+        const msg = {
+          typeUrl: '/arkeo.arkeo.MsgOpenContract',
+          value: {
+            creator: state.walletAddress,
+            provider: state.registeredPubkey,
+            service: state.selectedService?.name || 'eth-mainnet-fullnode',
+            client: clientPubkey,
+            delegate: clientPubkey, // Will be updated with x402 key later
+            contractType: 1, // PAY_AS_YOU_GO
+            duration: String(durationBlocks),
+            rate: { denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate || 25000) },
+            deposit: depositUarkeo,
+            settlementDuration: '10',
+            authorization: 0, // STRICT
+            queriesPerMinute: '100',
+          }
+        };
+        
+        console.log('Creating x402 backing contract:', msg);
+        
+        statusDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+              <span>Awaiting signature in Keplr...</span>
+            </div>
+          </div>
+        `;
+        
+        // Build and sign transaction
+        const bodyBytes = window.arkeoTx.buildTxBody([msg], 'x402 backing contract');
+        const authInfoBytes = window.arkeoTx.buildAuthInfo(walletPubkeyBytes, parseInt(account.sequence || 0), '10000', 300000);
+        
+        const signDoc = {
+          bodyBytes: bodyBytes,
+          authInfoBytes: authInfoBytes,
+          chainId: CONFIG.CHAIN_ID,
+          accountNumber: account.account_number || '0'
+        };
+        
+        const signResponse = await window.keplr.signDirect(CONFIG.CHAIN_ID, state.walletAddress, signDoc);
+        
+        statusDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+              <span>Broadcasting transaction...</span>
+            </div>
+          </div>
+        `;
+        
+        // Build TxRaw and broadcast
+        const signatureBytes = window.arkeoTx.base64ToBytes(signResponse.signature.signature);
+        const txRawBytes = window.arkeoTx.buildTxRaw(signResponse.signed.bodyBytes, signResponse.signed.authInfoBytes, [signatureBytes]);
+        const txBytesBase64 = window.arkeoTx.bytesToBase64(txRawBytes);
+        
+        const broadcastResponse = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tx_bytes: txBytesBase64, mode: 'BROADCAST_MODE_SYNC' }),
+        });
+        
+        const result = await broadcastResponse.json();
+        console.log('Broadcast result:', result);
+        
+        if (result.tx_response?.code !== 0) {
+          throw new Error(result.tx_response?.raw_log || 'Transaction failed');
+        }
+        
+        const txHash = result.tx_response.txhash;
+        
+        // Wait for confirmation
+        statusDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+              <span>Waiting for confirmation...</span>
+            </div>
+          </div>
+        `;
+        
+        let confirmed = false;
+        for (let i = 0; i < 10; i++) {
+          await new Promise(r => setTimeout(r, 3000));
+          try {
+            const txRes = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs/${txHash}`);
+            const txData = await txRes.json();
+            if (txData.tx_response) {
+              if (txData.tx_response.code !== 0) {
+                throw new Error(txData.tx_response.raw_log || 'Transaction failed on-chain');
+              }
+              confirmed = true;
+              // Try to extract contract ID from logs
+              const logs = JSON.parse(txData.tx_response.raw_log || '[]');
+              for (const log of logs) {
+                for (const event of (log.events || [])) {
+                  if (event.type === 'arkeo.arkeo.EventOpenContract') {
+                    const contractIdAttr = event.attributes.find(a => a.key === 'contract_id');
+                    if (contractIdAttr) {
+                      x402ContractId = contractIdAttr.value;
+                    }
+                  }
+                }
+              }
+              break;
+            }
+          } catch (e) {
+            if (e.message.includes('failed on-chain')) throw e;
+          }
+        }
+        
+        if (!confirmed) {
+          throw new Error('Transaction not confirmed within expected time');
+        }
+        
+        statusDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: var(--success-dim); border: 1px solid var(--success); border-radius: 0.5rem;">
+            <div style="color: var(--success); font-weight: 600; margin-bottom: 0.5rem;">✅ Contract Created!</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">
+              TX: <a href="${CONFIG.EXPLORER_TX}${txHash}" target="_blank" style="color: var(--arkeo);">${txHash.slice(0, 16)}...</a>
+              ${x402ContractId ? `<br>Contract ID: ${x402ContractId}` : ''}
+            </div>
+          </div>
+        `;
+        
+        // Show Step 2
+        document.getElementById('x402Step2').style.display = 'block';
+        
+      } catch (error) {
+        console.error('x402 contract creation failed:', error);
+        statusDiv.innerHTML = `
+          <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600; margin-bottom: 0.25rem;">❌ Contract Creation Failed</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">
+              ${error.message}
+            </div>
+          </div>
+        `;
+        btn.disabled = false;
+        btn.textContent = '🔗 Connect Keplr & Create Contract';
+      }
+    }
+    
+    function generateX402Key() {
+      try {
+        // Generate a new random private key (32 bytes)
+        const privateKeyBytes = new Uint8Array(32);
+        crypto.getRandomValues(privateKeyBytes);
+        const privateKeyHex = Array.from(privateKeyBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        x402SigningKey = {
+          privateKeyHex
+        };
+        
+        // Display the key
+        document.getElementById('x402PublicKey').textContent = '(derived by admin from private key)';
+        document.getElementById('x402Address').textContent = '(derived by admin from private key)';
+        document.getElementById('x402PrivateKey').textContent = privateKeyHex;
+        document.getElementById('x402KeyDisplay').style.display = 'block';
+        
+        // Show Step 3
+        document.getElementById('x402Step3').style.display = 'block';
+        
+        // Update endpoint URL
+        const serviceName = (state.selectedService?.name || 'eth').replace(/-mainnet.*/, '');
+        const endpointUrl = `https://x402.arkeo.red5/${state.registeredPubkey}/${serviceName}`;
+        document.getElementById('x402EndpointUrl').textContent = endpointUrl;
+        
+      } catch (error) {
+        console.error('Key generation failed:', error);
+        alert('Key generation failed: ' + error.message);
+      }
+    }
+    
+    function copyX402Endpoint() {
+      const url = document.getElementById('x402EndpointUrl').textContent;
+      navigator.clipboard.writeText(url).then(() => {
+        alert('Endpoint URL copied to clipboard!');
+      });
+    }
+    
+    async function testX402Endpoint() {
+      const btn = document.getElementById('x402TestBtn');
+      const result = document.getElementById('x402TestResult');
+      
+      btn.disabled = true;
+      btn.textContent = '⏳ Testing...';
+      
+      result.innerHTML = `
+        <div style="padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div>
+            <span style="font-size: 0.85rem; color: var(--text-dim);">Testing endpoint...</span>
+          </div>
+        </div>
+      `;
+      
+      try {
+        const serviceName = (state.selectedService?.name || 'eth').replace(/-mainnet.*/, '');
+        const url = `https://x402.arkeo.red5/${state.registeredPubkey}/${serviceName}`;
+        
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 })
+        }).catch(e => ({ status: 0, error: e.message }));
+        
+        if (response.status === 402) {
+          result.innerHTML = `
+            <div style="padding: 0.75rem; background: var(--success-dim); border: 1px solid var(--success); border-radius: 0.5rem;">
+              <div style="color: var(--success); font-weight: 600; margin-bottom: 0.25rem;">✅ Endpoint is Live!</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim);">
+                Received proper 402 Payment Required response. Your x402 endpoint is configured correctly!
+              </div>
+            </div>
+          `;
+        } else if (response.status === 0) {
+          result.innerHTML = `
+            <div style="padding: 0.75rem; background: rgba(245,158,11,0.1); border: 1px solid var(--warning); border-radius: 0.5rem;">
+              <div style="color: var(--warning); font-weight: 600; margin-bottom: 0.25rem;">⚠️ Not Yet Configured</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim);">
+                Endpoint not reachable. Contact Arkeo admin to complete x402 proxy setup with your delegate key.
+              </div>
+            </div>
+          `;
+        } else {
+          result.innerHTML = `
+            <div style="padding: 0.75rem; background: rgba(245,158,11,0.1); border: 1px solid var(--warning); border-radius: 0.5rem;">
+              <div style="color: var(--warning); font-weight: 600; margin-bottom: 0.25rem;">⚠️ Unexpected Response</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim);">
+                Expected HTTP 402, got ${response.status}. The endpoint may not be configured yet.
+              </div>
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Test failed:', error);
+        result.innerHTML = `
+          <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600; margin-bottom: 0.25rem;">❌ Test Failed</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">
+              ${error.message}
+            </div>
+          </div>
+        `;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🧪 Test Endpoint';
       }
     }
 

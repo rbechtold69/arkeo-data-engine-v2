@@ -959,17 +959,33 @@
             No contract needed. Pay per request with USDC using the <a href="https://x402.org" target="_blank" style="color: var(--arkeo);">x402 protocol</a> — Coinbase's open HTTP payment standard. Perfect for <strong>AI agents</strong> and programmatic access.
           </div>
 
-          <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(139,92,246,0.1); border-radius: 0.5rem;">
-            <div style="font-weight: 600; margin-bottom: 0.5rem;">💰 Estimated Cost</div>
-            <div style="color: var(--text-dim); font-size: 0.85rem;">~$0.0001 per request (paid in USDC on Base network)</div>
+          <!-- Provider x402 support check -->
+          <div id="x402CheckStatus" style="margin-bottom: 1rem; padding: 0.75rem; background: var(--bg-input); border-radius: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem;">
+              <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+              <span style="color: var(--text-dim); font-size: 0.85rem;">Checking if provider supports x402...</span>
+            </div>
           </div>
 
-          <div style="margin-bottom: 1rem;">
-            <div style="font-weight: 600; margin-bottom: 0.5rem;">📦 Quick Start</div>
-            <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.8rem; overflow-x: auto; position: relative;">
-              <button onclick="navigator.clipboard.writeText(this.parentElement.querySelector('pre').textContent); this.textContent='✓ Copied!'; setTimeout(()=>this.textContent='📋',2000);"
-                style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">📋</button>
-<pre style="color: #e6edf3; margin: 0; white-space: pre-wrap;"><span style="color: #7ee787;">import</span> { wrapFetch } <span style="color: #7ee787;">from</span> <span style="color: #a5d6ff;">"@anthropic-ai/x402-fetch"</span>;
+          <div id="x402Content" style="display: none;">
+            <div style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(139,92,246,0.1); border-radius: 0.5rem;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">💰 Estimated Cost</div>
+              <div style="color: var(--text-dim); font-size: 0.85rem;">~$0.0001 per request (paid in USDC on Base network)</div>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">🌐 Provider x402 Endpoint</div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.85rem; word-break: break-all;">
+                <span id="x402Endpoint" style="color: var(--arkeo);">https://x402.arkeo.red5</span>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">📦 Quick Start (Node.js)</div>
+              <div style="background: #0d1117; border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace; font-size: 0.8rem; overflow-x: auto; position: relative;">
+                <button onclick="copyX402Code()" id="x402CopyBtn"
+                  style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.25rem 0.5rem; border-radius: 0.25rem; cursor: pointer; font-size: 0.75rem;">📋</button>
+<pre id="x402CodeBlock" style="color: #e6edf3; margin: 0; white-space: pre-wrap;"><span style="color: #7ee787;">import</span> { wrapFetch } <span style="color: #7ee787;">from</span> <span style="color: #a5d6ff;">"@anthropic-ai/x402-fetch"</span>;
 
 <span style="color: #8b949e;">// Wrap fetch with x402 payment support</span>
 <span style="color: #7ee787;">const</span> paidFetch = wrapFetch(fetch, {
@@ -979,7 +995,7 @@
 
 <span style="color: #8b949e;">// Make a paid RPC request — payment happens automatically</span>
 <span style="color: #7ee787;">const</span> response = <span style="color: #7ee787;">await</span> paidFetch(
-  <span style="color: #a5d6ff;">"https://sentinel.provider.io/eth"</span>,
+  <span style="color: #a5d6ff;">"<span id="x402CodeUrl">https://x402.arkeo.red5</span>"</span>,
   {
     <span style="color: #79c0ff;">method</span>: <span style="color: #a5d6ff;">"POST"</span>,
     <span style="color: #79c0ff;">body</span>: JSON.stringify({
@@ -989,20 +1005,38 @@
       <span style="color: #79c0ff;">id</span>: <span style="color: #79c0ff;">1</span>
     })
   }
-);</pre>
+);
+
+<span style="color: #7ee787;">const</span> data = <span style="color: #7ee787;">await</span> response.json();
+console.log(data);</pre>
+              </div>
             </div>
-          </div>
 
-          <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
-            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🤖 AI Agent Ready</span>
-            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🔗 No Account Needed</span>
-            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">💸 Pay Per Request</span>
-            <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🔵 Base Network</span>
-          </div>
+            <!-- Test Request Section -->
+            <div style="margin-bottom: 1rem;">
+              <div style="font-weight: 600; margin-bottom: 0.5rem;">🧪 Test the x402 Endpoint</div>
+              <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
+                <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.75rem;">
+                  Click below to make a test request. You'll see the 402 Payment Required response with payment details.
+                </p>
+                <button onclick="testX402Request()" id="testX402Btn" style="background: var(--arkeo); color: #000; border: none; padding: 0.65rem 1.25rem; border-radius: 0.5rem; font-weight: 600; cursor: pointer; font-size: 0.9rem; width: 100%;">
+                  🚀 Send Test Request
+                </button>
+                <div id="x402TestResult" style="margin-top: 0.75rem; display: none;"></div>
+              </div>
+            </div>
 
-          <div style="font-size: 0.8rem; color: var(--text-dim);">
-            <a href="https://x402.org" target="_blank" style="color: var(--arkeo);">Learn more about x402 →</a> · 
-            <a href="https://www.npmjs.com/package/@anthropic-ai/x402-fetch" target="_blank" style="color: var(--arkeo);">npm package →</a>
+            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+              <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🤖 AI Agent Ready</span>
+              <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🔗 No Account Needed</span>
+              <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">💸 Pay Per Request</span>
+              <span style="padding: 0.35rem 0.75rem; background: rgba(139,92,246,0.15); border-radius: 1rem; font-size: 0.75rem; color: #a78bfa;">🔵 Base Network</span>
+            </div>
+
+            <div style="font-size: 0.8rem; color: var(--text-dim);">
+              <a href="https://x402.org" target="_blank" style="color: var(--arkeo);">Learn more about x402 →</a> · 
+              <a href="https://www.npmjs.com/package/@anthropic-ai/x402-fetch" target="_blank" style="color: var(--arkeo);">npm package →</a>
+            </div>
           </div>
         </div>
         <!-- How payments work (collapsible) -->
@@ -2308,11 +2342,177 @@
         x402Btn.style.boxShadow = '0 0 15px rgba(139,92,246,0.2)';
         suffix.textContent = 'USDC';
         x402Info.style.display = 'block';
+        // Check x402 support when this payment method is selected
+        checkX402Support();
       }
       updateEstimate();
       
       // Save state after payment method change
       saveState();
+    }
+    
+    // ============================================================
+    // X402 SUPPORT
+    // ============================================================
+    async function checkX402Support() {
+      const checkStatus = document.getElementById('x402CheckStatus');
+      const content = document.getElementById('x402Content');
+      
+      if (!selectedProvider) {
+        checkStatus.innerHTML = `
+          <div style="padding: 0.75rem; background: rgba(245,158,11,0.1); border: 1px solid var(--warning); border-radius: 0.5rem;">
+            <span style="color: var(--warning);">⚠️ Please select a provider first</span>
+          </div>
+        `;
+        return;
+      }
+      
+      try {
+        // Build x402 endpoint URL
+        // Format: https://x402.arkeo.red5/<provider_pubkey>/<service>
+        const serviceName = selectedChain?.name || 'eth';
+        const x402Url = `https://x402.arkeo.red5/${selectedProvider.pubkey}/${serviceName.toLowerCase()}`;
+        
+        checkStatus.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+            <span style="color: var(--text-dim); font-size: 0.85rem;">Testing x402 endpoint...</span>
+          </div>
+        `;
+        
+        // Update code example with actual URL
+        document.getElementById('x402Endpoint').textContent = x402Url;
+        document.getElementById('x402CodeUrl').textContent = x402Url;
+        
+        // Try to make a test request to see if x402 is supported
+        const testResponse = await fetch(x402Url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 })
+        }).catch(e => ({ status: 0, error: e.message }));
+        
+        if (testResponse.status === 402 || (testResponse.headers && testResponse.headers.get('www-authenticate')?.includes('x402'))) {
+          // x402 is supported!
+          checkStatus.innerHTML = `
+            <div style="padding: 0.75rem; background: var(--success-dim); border: 1px solid var(--success); border-radius: 0.5rem;">
+              <span style="color: var(--success);">✅ This provider supports x402 payments!</span>
+            </div>
+          `;
+          content.style.display = 'block';
+        } else {
+          // Provider doesn't support x402
+          checkStatus.innerHTML = `
+            <div style="padding: 0.75rem; background: rgba(245,158,11,0.1); border: 1px solid var(--warning); border-radius: 0.5rem;">
+              <div style="color: var(--warning); font-weight: 600; margin-bottom: 0.25rem;">⚠️ x402 Not Supported</div>
+              <div style="color: var(--text-dim); font-size: 0.85rem;">
+                This provider hasn't enabled x402 payments yet. Try selecting a different provider or use ARKEO payment instead.
+              </div>
+            </div>
+          `;
+          content.style.display = 'none';
+        }
+      } catch (error) {
+        console.error('x402 check failed:', error);
+        checkStatus.innerHTML = `
+          <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600; margin-bottom: 0.25rem;">❌ Check Failed</div>
+            <div style="color: var(--text-dim); font-size: 0.85rem;">
+              Could not verify x402 support. Error: ${error.message}
+            </div>
+          </div>
+        `;
+        content.style.display = 'none';
+      }
+    }
+    
+    async function testX402Request() {
+      const btn = document.getElementById('testX402Btn');
+      const result = document.getElementById('x402TestResult');
+      
+      btn.disabled = true;
+      btn.textContent = '⏳ Sending request...';
+      
+      result.style.display = 'block';
+      result.innerHTML = `
+        <div style="padding: 0.75rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div class="spinner" style="width: 14px; height: 14px; border-width: 2px;"></div>
+            <span style="color: var(--text-dim); font-size: 0.85rem;">Making test request...</span>
+          </div>
+        </div>
+      `;
+      
+      try {
+        const serviceName = selectedChain?.name || 'eth';
+        const x402Url = `https://x402.arkeo.red5/${selectedProvider.pubkey}/${serviceName.toLowerCase()}`;
+        
+        const response = await fetch(x402Url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 })
+        });
+        
+        const headers = {};
+        response.headers.forEach((value, key) => { headers[key] = value; });
+        
+        if (response.status === 402) {
+          // Parse payment details from headers
+          const authHeader = headers['www-authenticate'] || '';
+          const paymentInfo = {
+            price: authHeader.match(/price="([^"]+)"/)?.[1] || 'N/A',
+            network: authHeader.match(/network="([^"]+)"/)?.[1] || 'base',
+            payTo: authHeader.match(/payto="([^"]+)"/)?.[1] || 'N/A',
+          };
+          
+          result.innerHTML = `
+            <div style="padding: 0.75rem; background: var(--success-dim); border: 1px solid var(--success); border-radius: 0.5rem;">
+              <div style="color: var(--success); font-weight: 600; margin-bottom: 0.5rem;">✅ 402 Payment Required (Success!)</div>
+              <div style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 0.5rem;">
+                The endpoint returned a valid 402 response. Here's how to pay:
+              </div>
+              <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.375rem; padding: 0.5rem; font-family: monospace; font-size: 0.75rem; margin-bottom: 0.5rem;">
+                <div><strong>Price:</strong> $${paymentInfo.price}</div>
+                <div><strong>Network:</strong> ${paymentInfo.network}</div>
+                <div><strong>Pay to:</strong> ${paymentInfo.payTo.slice(0, 16)}...</div>
+              </div>
+              <div style="color: var(--text-dim); font-size: 0.75rem;">
+                Use the @anthropic-ai/x402-fetch package to handle payments automatically.
+              </div>
+            </div>
+          `;
+        } else {
+          result.innerHTML = `
+            <div style="padding: 0.75rem; background: rgba(245,158,11,0.1); border: 1px solid var(--warning); border-radius: 0.5rem;">
+              <div style="color: var(--warning); font-weight: 600; margin-bottom: 0.25rem;">⚠️ Unexpected Response</div>
+              <div style="color: var(--text-dim); font-size: 0.85rem;">
+                Expected HTTP 402, got ${response.status}. This provider may not support x402.
+              </div>
+            </div>
+          `;
+        }
+      } catch (error) {
+        console.error('Test request failed:', error);
+        result.innerHTML = `
+          <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600; margin-bottom: 0.25rem;">❌ Request Failed</div>
+            <div style="color: var(--text-dim); font-size: 0.85rem;">
+              ${error.message}
+            </div>
+          </div>
+        `;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🚀 Send Test Request';
+      }
+    }
+    
+    function copyX402Code() {
+      const codeBlock = document.getElementById('x402CodeBlock');
+      const btn = document.getElementById('x402CopyBtn');
+      navigator.clipboard.writeText(codeBlock.textContent).then(() => {
+        btn.textContent = '✓ Copied!';
+        setTimeout(() => btn.textContent = '📋', 2000);
+      });
     }
     
     // Duration picker
