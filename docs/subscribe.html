@@ -976,7 +976,7 @@
             <div style="margin-bottom: 1rem;">
               <div style="font-weight: 600; margin-bottom: 0.5rem;">🌐 Provider x402 Endpoint</div>
               <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.5rem; padding: 0.75rem; font-family: 'SF Mono', Monaco, monospace; font-size: 0.85rem; word-break: break-all;">
-                <span id="x402Endpoint" style="color: var(--arkeo);">https://x402.arkeo.red5</span>
+                <span id="x402Endpoint" style="color: var(--arkeo);">Detecting provider endpoint...</span>
               </div>
             </div>
 
@@ -995,7 +995,7 @@
 
 <span style="color: #8b949e;">// Make a paid RPC request — payment happens automatically</span>
 <span style="color: #7ee787;">const</span> response = <span style="color: #7ee787;">await</span> paidFetch(
-  <span style="color: #a5d6ff;">"<span id="x402CodeUrl">https://x402.arkeo.red5</span>"</span>,
+  <span style="color: #a5d6ff;">"<span id="x402CodeUrl">PROVIDER_X402_URL</span>"</span>,
   {
     <span style="color: #79c0ff;">method</span>: <span style="color: #a5d6ff;">"POST"</span>,
     <span style="color: #79c0ff;">body</span>: JSON.stringify({
@@ -2368,10 +2368,18 @@ console.log(data);</pre>
       }
       
       try {
-        // Build x402 endpoint URL
-        // Format: https://x402.arkeo.red5/<provider_pubkey>/<service>
+        // Build x402 endpoint URL from provider's sentinel URL + /x402/ path
         const serviceName = selectedChain?.name || 'eth';
-        const x402Url = `https://x402.arkeo.red5/${selectedProvider.pubkey}/${serviceName.toLowerCase()}`;
+        // Get provider's sentinel base URL from metadata or endpoint
+        let providerBaseUrl = '';
+        if (selectedProvider.metadata?.sentinel_url) {
+          providerBaseUrl = selectedProvider.metadata.sentinel_url.replace(/\/+$/, '');
+        } else if (selectedProvider.endpointUrl) {
+          providerBaseUrl = selectedProvider.endpointUrl.replace(/\/[^\/]+$/, '');
+        } else {
+          providerBaseUrl = `https://${selectedProvider.pubkey.slice(0,12)}.arkeo.network`;
+        }
+        const x402Url = `${providerBaseUrl}/x402/${serviceName.toLowerCase()}`;
         
         checkStatus.innerHTML = `
           <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -2444,7 +2452,16 @@ console.log(data);</pre>
       
       try {
         const serviceName = selectedChain?.name || 'eth';
-        const x402Url = `https://x402.arkeo.red5/${selectedProvider.pubkey}/${serviceName.toLowerCase()}`;
+        // Reuse same URL logic as checkX402Support
+        let providerBaseUrl = '';
+        if (selectedProvider.metadata?.sentinel_url) {
+          providerBaseUrl = selectedProvider.metadata.sentinel_url.replace(/\/+$/, '');
+        } else if (selectedProvider.endpointUrl) {
+          providerBaseUrl = selectedProvider.endpointUrl.replace(/\/[^\/]+$/, '');
+        } else {
+          providerBaseUrl = `https://${selectedProvider.pubkey.slice(0,12)}.arkeo.network`;
+        }
+        const x402Url = `${providerBaseUrl}/x402/${serviceName.toLowerCase()}`;
         
         const response = await fetch(x402Url, {
           method: 'POST',
