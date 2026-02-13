@@ -546,10 +546,13 @@
           : '<span class="badge badge-expired">Expired</span>';
 
         let actionBtn = '';
-        if (c.active && c.isClient) {
+        const isAlsoProvider = c.provider === state.walletPubkey;
+        if (c.active && c.isClient && isAlsoProvider) {
+          actionBtn = `<button class="action-btn claim-btn" onclick="claimEarnings(${c.id})">Claim</button> <button class="action-btn close-btn" onclick="closeContract(${c.id})">Close</button>`;
+        } else if (c.active && c.isClient) {
           actionBtn = `<button class="action-btn close-btn" onclick="closeContract(${c.id})">Close</button>`;
         } else if (c.active && !c.isClient) {
-          actionBtn = `<button class="action-btn claim-btn" onclick="claimEarnings(${c.id})" title="Earnings are claimed automatically by your sentinel. Manual claiming coming soon.">Claim</button>`;
+          actionBtn = `<button class="action-btn claim-btn" onclick="claimEarnings(${c.id})">Claim</button>`;
         }
 
         return `<tr>
