@@ -8,7 +8,7 @@
  * @license MIT
  */
 
-import { secp256k1 } from '@noble/secp256k1';
+import * as secp256k1 from '@noble/secp256k1';
 import { sha256 } from '@noble/hashes/sha256';
 import { ripemd160 } from '@noble/hashes/ripemd160';
 import * as bip39 from 'bip39';
@@ -236,15 +236,12 @@ export class ArkeoClient {
   
   /**
    * Sign a message using ADR-036 format
-   * @param {string} preimage - Message to sign: "{contractId}:{pubkey}:{nonce}"
-   * @returns {string} Hex-encoded signature
+   * @param {string} message - Message to sign (will be SHA-256 hashed then signed)
+   * @returns {string} Hex-encoded 64-byte signature (r||s, low-S normalized)
    */
-  async sign(preimage) {
-    // Build ADR-036 StdSignDoc
-    const signDoc = buildADR036SignDoc(this.address, preimage);
-    
-    // Hash the sign doc
-    const hash = sha256(new TextEncoder().encode(signDoc));
+  async sign(message) {
+    // Hash the message with SHA-256 (matches chain's pk.VerifySignature which does sha256 internally)
+    const hash = sha256(new TextEncoder().encode(message));
     
     // Sign the hash
     const sig = await secp256k1.sign(hash, this.privateKey, { lowS: true });
@@ -256,14 +253,17 @@ export class ArkeoClient {
   }
   
   /**
-   * Generate arkauth header
+   * Generate arkauth header for PAYG requests.
+   * Preimage format: "{contractId}:{nonce}:" (matches chain's claim verification)
+   * Header format: "contractId:pubkey:nonce:signature" (4-part, for sentinel parsing)
    * @returns {Promise<string>} arkauth value
    */
   async generateArkAuth() {
-    const preimage = `${this.contractId}:${this.publicKeyBech32}:${this.currentNonce}`;
+    // Chain verifies signature over "{contractId}:{nonce}:" (no chain ID, trailing colon)
+    const preimage = `${this.contractId}:${this.currentNonce}:`;
     const signature = await this.sign(preimage);
     
-    // Format: contractId:pubkey:nonce:signature
+    // 4-part format for sentinel: contractId:pubkey:nonce:signature
     return `${this.contractId}:${this.publicKeyBech32}:${this.currentNonce}:${signature}`;
   }
   
