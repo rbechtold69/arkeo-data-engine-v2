@@ -2832,6 +2832,8 @@
         setTimeout(() => {
           clearState();
           goToStep(4);
+          // Scroll to top so user sees the success page
+          window.scrollTo({ top: 0, behavior: 'smooth' });
         }, 1000);
       } catch (err) {
         console.error('Contract error:', err);
