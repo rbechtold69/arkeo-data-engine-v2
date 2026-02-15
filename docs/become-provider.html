@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
   <!-- Arkeo transaction helper with protobuf encoding -->
   <script src="js/arkeo-tx.js"></script>
+  <script src="js/coingecko-cache.js"></script>
   <style>
     :root {
       --bg-main: #0C0E14;
@@ -410,6 +411,70 @@
       font-weight: 600;
     }
     
+    /* CoinGecko Autocomplete */
+    .coingecko-autocomplete {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--arkeo);
+      border-radius: 0.5rem;
+      max-height: 350px;
+      overflow-y: auto;
+      margin-top: 0.5rem;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .coingecko-item {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .coingecko-item:last-child {
+      border-bottom: none;
+    }
+    .coingecko-item:hover {
+      background: var(--arkeo-dim);
+    }
+    .coingecko-item img {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .coingecko-item-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .coingecko-item-name {
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .coingecko-item-meta {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+    .coingecko-loading {
+      padding: 1rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+    .coingecko-no-results {
+      padding: 1rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+
     /* Mobile */
     @media (max-width: 600px) {
       .nav { padding: 0.75rem 1rem; flex-wrap: wrap; gap: 0.5rem; }
@@ -498,6 +563,39 @@
       
       <input type="text" class="search-box" id="chainSearch" 
              placeholder="Search chains..." oninput="filterChains()">
+      
+      <!-- CoinGecko Chain Autocomplete (Optional Tagging) -->
+      <div style="background: rgba(59, 224, 255, 0.05); border: 1px solid rgba(59, 224, 255, 0.3); border-radius: 0.75rem; padding: 1.25rem; margin-bottom: 1.5rem;">
+        <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+          <span style="font-size: 1.25rem;">🏷️</span>
+          <div>
+            <div style="font-weight: 600;">Link to Verified CoinGecko Chain (Optional)</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim);">Get standardized chain names, logos, and metadata</div>
+          </div>
+        </div>
+        
+        <div style="position: relative;">
+          <input type="text" class="search-box" id="coinGeckoSearch" 
+                 placeholder="Type to search CoinGecko's verified chains..." 
+                 oninput="handleCoinGeckoSearch()" 
+                 onfocus="handleCoinGeckoSearch()"
+                 style="margin-bottom: 0;">
+          <div id="coinGeckoAutocomplete" class="coingecko-autocomplete hidden"></div>
+        </div>
+        
+        <div id="coinGeckoSelected" class="hidden" style="margin-top: 1rem; padding: 1rem; background: var(--bg-card); border: 1px solid var(--success); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+          <div style="display: flex; align-items: center; gap: 0.75rem;">
+            <img id="coinGeckoLogo" src="" style="width: 32px; height: 32px; border-radius: 50%;">
+            <div>
+              <div id="coinGeckoName" style="font-weight: 600;"></div>
+              <div style="font-size: 0.75rem; color: var(--text-dim);">
+                <span id="coinGeckoSymbol"></span> • <a id="coinGeckoLink" href="#" target="_blank" style="color: var(--arkeo);">View on CoinGecko</a>
+              </div>
+            </div>
+          </div>
+          <button onclick="clearCoinGeckoSelection()" style="background: var(--bg-input); border: 1px solid var(--border); color: var(--text-dim); padding: 0.375rem 0.75rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.85rem;">Clear</button>
+        </div>
+      </div>
       
       <div id="loadingChains" class="status-box testing">
         <div class="spinner"></div>
@@ -1632,6 +1730,9 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       maxQpm: 100,
       maxContractDuration: 5256000,  // ~8 months in blocks (chain max)
       minContractDuration: 10,       // 10 blocks default
+      coinGeckoId: null,             // CoinGecko chain ID (optional)
+      coinGeckoName: null,           // CoinGecko chain name (optional)
+      coinGeckoSymbol: null,         // CoinGecko chain symbol (optional)
     };
 
     // ============================================================
@@ -2116,9 +2217,115 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       document.getElementById('nextBtn1').disabled = false;
       document.getElementById('selectedChainName').textContent = getChainDisplayName(name);
       
+      // Try to auto-match CoinGecko ID from service name
+      tryAutoMatchCoinGecko(name);
+      
       // Save state
       saveState();
     }
+
+    // ============================================================
+    // COINGECKO AUTOCOMPLETE
+    // ============================================================
+    
+    let coinGeckoSearchTimeout = null;
+    
+    async function handleCoinGeckoSearch() {
+      clearTimeout(coinGeckoSearchTimeout);
+      
+      const input = document.getElementById('coinGeckoSearch');
+      const dropdown = document.getElementById('coinGeckoAutocomplete');
+      const query = input.value.trim();
+      
+      if (!query || query.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+      
+      // Show loading
+      dropdown.classList.remove('hidden');
+      dropdown.innerHTML = '<div class="coingecko-loading">Searching CoinGecko...</div>';
+      
+      // Debounce search
+      coinGeckoSearchTimeout = setTimeout(async () => {
+        try {
+          await COINGECKO_CACHE.init();
+          const results = COINGECKO_CACHE.search(query, 10);
+          
+          if (results.length === 0) {
+            dropdown.innerHTML = '<div class="coingecko-no-results">No chains found. Try a different search term.</div>';
+            return;
+          }
+          
+          dropdown.innerHTML = results.map(coin => `
+            <div class="coingecko-item" onclick="selectCoinGecko('${escapeHtml(coin.id)}', '${escapeHtml(coin.name)}', '${escapeHtml(coin.symbol)}')">
+              <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--arkeo-dim); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; color: var(--arkeo); flex-shrink: 0;">
+                ${coin.symbol.substring(0, 2).toUpperCase()}
+              </div>
+              <div class="coingecko-item-info">
+                <div class="coingecko-item-name">${escapeHtml(coin.name)}</div>
+                <div class="coingecko-item-meta">
+                  ${escapeHtml(coin.symbol.toUpperCase())} • ${escapeHtml(coin.id)}
+                </div>
+              </div>
+            </div>
+          `).join('');
+        } catch (error) {
+          console.error('CoinGecko search error:', error);
+          dropdown.innerHTML = '<div class="coingecko-no-results">Error loading CoinGecko data. Please try again.</div>';
+        }
+      }, 300);
+    }
+    
+    function selectCoinGecko(coinId, coinName, coinSymbol) {
+      state.coinGeckoId = coinId;
+      state.coinGeckoName = coinName;
+      state.coinGeckoSymbol = coinSymbol.toUpperCase();
+      
+      // Update UI
+      document.getElementById('coinGeckoSearch').value = '';
+      document.getElementById('coinGeckoAutocomplete').classList.add('hidden');
+      
+      const selectedDiv = document.getElementById('coinGeckoSelected');
+      selectedDiv.classList.remove('hidden');
+      
+      // Use initials as logo placeholder (CoinGecko images require numeric ID which we don't have)
+      const logoPlaceholder = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%233BE0FF'/%3E%3Ctext x='16' y='21' font-family='Arial' font-size='12' font-weight='bold' fill='%23000' text-anchor='middle'%3E${coinSymbol.substring(0,2).toUpperCase()}%3C/text%3E%3C/svg%3E`;
+      document.getElementById('coinGeckoLogo').src = logoPlaceholder;
+      document.getElementById('coinGeckoName').textContent = coinName;
+      document.getElementById('coinGeckoSymbol').textContent = coinSymbol.toUpperCase();
+      document.getElementById('coinGeckoLink').href = COINGECKO_CACHE.getCoinGeckoUrl(coinId);
+      
+      saveState();
+    }
+    
+    function clearCoinGeckoSelection() {
+      state.coinGeckoId = null;
+      state.coinGeckoName = null;
+      state.coinGeckoSymbol = null;
+      document.getElementById('coinGeckoSelected').classList.add('hidden');
+      saveState();
+    }
+    
+    function tryAutoMatchCoinGecko(serviceName) {
+      // Try to auto-match based on service name
+      const coinId = COINGECKO_CACHE.serviceToCoinGecko(serviceName);
+      if (coinId) {
+        const coin = COINGECKO_CACHE.getById(coinId);
+        if (coin) {
+          selectCoinGecko(coin.id, coin.name, coin.symbol);
+        }
+      }
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      const search = document.getElementById('coinGeckoSearch');
+      const dropdown = document.getElementById('coinGeckoAutocomplete');
+      if (search && dropdown && !search.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
 
     // ============================================================
     // INFRASTRUCTURE VALIDATION

@@ -15,6 +15,7 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/coingecko-cache.js"></script>
   <style>
     :root {
       --bg-main: #0a0c10;
@@ -1953,10 +1954,20 @@
         const isOnline = p.status === 'ONLINE';
         const serviceCount = p.services?.length || 0;
         
-        // Generate chain tags (limit to 3)
-        const chainTags = p.services?.slice(0, 3).map(s => 
-          `<span class="chain-tag">${escapeHtml(s.name.split('-')[0])}</span>`
-        ).join('') || '';
+        // Generate chain tags with CoinGecko logos when available (limit to 3)
+        const chainTags = p.services?.slice(0, 3).map(s => {
+          const coinId = COINGECKO_CACHE.serviceToCoinGecko(s.name);
+          const coin = coinId ? COINGECKO_CACHE.getById(coinId) : null;
+          const displayName = s.name.split('-')[0];
+          
+          if (coin) {
+            return `<span class="chain-tag" title="${escapeHtml(coin.name)}">
+              <span style="display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: var(--arkeo); color: #000; font-size: 0.5rem; line-height: 14px; text-align: center; font-weight: 700; margin-right: 0.25rem;">${coin.symbol.substring(0,1).toUpperCase()}</span>
+              ${escapeHtml(displayName)}
+            </span>`;
+          }
+          return `<span class="chain-tag">${escapeHtml(displayName)}</span>`;
+        }).join('') || '';
         const moreTags = serviceCount > 3 ? `<span class="chain-tag more">+${serviceCount - 3}</span>` : '';
         
         const repScore = state.reputationScores[p.pubkey]?.total || 0;
@@ -2026,8 +2037,17 @@
         const serviceCount = p.services?.length || 0;
         const pubkeyShort = p.pubkey ? `${p.pubkey.slice(0, 12)}...${p.pubkey.slice(-6)}` : '-';
         
-        // Get list of chain names (limit to 3 displayed)
-        const chainNames = p.services?.slice(0, 3).map(s => s.name).join(', ') || 'No services';
+        // Get list of chain names with CoinGecko links (limit to 3 displayed)
+        const chainNames = p.services?.slice(0, 3).map(s => {
+          const coinId = COINGECKO_CACHE.serviceToCoinGecko(s.name);
+          const coin = coinId ? COINGECKO_CACHE.getById(coinId) : null;
+          const displayName = s.name.split('-')[0];
+          
+          if (coin && coinId) {
+            return `<a href="${COINGECKO_CACHE.getCoinGeckoUrl(coinId)}" target="_blank" style="color: var(--arkeo); text-decoration: none;" title="${escapeHtml(coin.name)}">${escapeHtml(displayName)}</a>`;
+          }
+          return escapeHtml(displayName);
+        }).join(', ') || 'No services';
         const moreChains = serviceCount > 3 ? ` +${serviceCount - 3} more` : '';
         
         // Simulated data

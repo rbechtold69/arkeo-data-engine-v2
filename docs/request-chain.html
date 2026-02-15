@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
   <meta name="description" content="Request chains you want Arkeo providers to support. Vote for chains and help providers see where demand is.">
   <meta name="theme-color" content="#0a0c10">
+  <script src="js/coingecko-cache.js"></script>
   <style>
     :root {
       --bg-main: #0a0c10;
@@ -543,6 +544,49 @@
       color: var(--success);
       font-weight: 600;
     }
+    
+    /* Chain Autocomplete */
+    .chain-autocomplete {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--bg-card);
+      border: 1px solid var(--arkeo);
+      border-radius: 0.5rem;
+      max-height: 350px;
+      overflow-y: auto;
+      margin-top: 0.5rem;
+      z-index: 100;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .chain-autocomplete-item {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .chain-autocomplete-item:last-child {
+      border-bottom: none;
+    }
+    .chain-autocomplete-item:hover {
+      background: var(--arkeo-dim);
+    }
+    .chain-autocomplete-loading {
+      padding: 1rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
+    .chain-autocomplete-no-results {
+      padding: 1rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+    }
   </style>
 </head>
 <body>
@@ -616,45 +660,39 @@
 
       <form id="requestForm" onsubmit="submitRequest(event)">
         <div class="form-group">
-          <label class="form-label">Chain *</label>
-          <select class="form-select" id="chainSelect" required onchange="toggleOtherInput()">
-            <option value="">Select a chain...</option>
-            <optgroup label="Layer 1s">
-              <option value="Solana">☀️ Solana</option>
-              <option value="Sui">🌊 Sui</option>
-              <option value="Aptos">🔷 Aptos</option>
-              <option value="Near">🌐 Near</option>
-              <option value="Avalanche">🔺 Avalanche</option>
-              <option value="Fantom">👻 Fantom</option>
-              <option value="Algorand">◎ Algorand</option>
-              <option value="Tezos">🅣 Tezos</option>
-              <option value="Cardano">₳ Cardano</option>
-              <option value="Polkadot">⚫ Polkadot</option>
-            </optgroup>
-            <optgroup label="Layer 2s">
-              <option value="Base">🔵 Base</option>
-              <option value="Arbitrum">🔷 Arbitrum</option>
-              <option value="Optimism">🔴 Optimism</option>
-              <option value="Polygon">💜 Polygon</option>
-              <option value="zkSync">⚡ zkSync</option>
-              <option value="Starknet">🌟 Starknet</option>
-            </optgroup>
-            <optgroup label="Cosmos Chains">
-              <option value="Celestia">🟣 Celestia</option>
-              <option value="Injective">💉 Injective</option>
-              <option value="Juno">🪐 Juno</option>
-              <option value="Akash">☁️ Akash</option>
-              <option value="Kujira">🐋 Kujira</option>
-            </optgroup>
-            <optgroup label="Other">
-              <option value="Other">Other (specify below)</option>
-            </optgroup>
-          </select>
+          <label class="form-label">Search Verified Chains *</label>
+          <p style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.75rem;">
+            Search CoinGecko's database of 19,000+ verified blockchain projects
+          </p>
+          <div style="position: relative;">
+            <input type="text" class="form-input" id="chainSearch" 
+                   placeholder="Type to search (e.g., Solana, Polygon, Base)..." 
+                   oninput="handleChainSearch()" 
+                   onfocus="handleChainSearch()"
+                   autocomplete="off">
+            <div id="chainAutocomplete" class="chain-autocomplete hidden"></div>
+          </div>
+          
+          <div id="chainSelected" class="hidden" style="margin-top: 1rem; padding: 1rem; background: var(--bg-input); border: 1px solid var(--success); border-radius: 0.5rem; display: flex; align-items: center; justify-content: space-between;">
+            <div style="display: flex; align-items: center; gap: 0.75rem;">
+              <div id="chainLogo" style="width: 32px; height: 32px; border-radius: 50%; background: var(--arkeo-dim); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; color: var(--arkeo);"></div>
+              <div>
+                <div id="chainName" style="font-weight: 600;"></div>
+                <div style="font-size: 0.75rem; color: var(--text-dim);">
+                  <span id="chainSymbol"></span> • <a id="chainLink" href="#" target="_blank" style="color: var(--arkeo);">View on CoinGecko</a>
+                </div>
+              </div>
+            </div>
+            <button type="button" onclick="clearChainSelection()" style="background: var(--bg-card); border: 1px solid var(--border); color: var(--text-dim); padding: 0.375rem 0.75rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.85rem;">Clear</button>
+          </div>
+          
+          <input type="hidden" id="selectedChainId" required>
         </div>
 
-        <div class="form-group hidden" id="otherChainGroup">
-          <label class="form-label">Chain Name *</label>
-          <input type="text" class="form-input" id="otherChainInput" placeholder="Enter chain name...">
+        <div class="form-group">
+          <label class="form-label">Not on CoinGecko? Enter manually</label>
+          <input type="text" class="form-input" id="otherChainInput" placeholder="Enter custom chain name...">
+          <p class="form-hint" style="font-size: 0.8rem; color: var(--text-dim);">Only use this for very new/unlisted chains</p>
         </div>
 
         <div class="form-group">
@@ -830,15 +868,24 @@
         const hasVoted = userVotes.has(chain.name);
         const isTrending = chain.votes >= 10;
         
+        // Use CoinGecko icon if available, otherwise fallback to metadata icon
+        const iconHtml = chain.coinGeckoSymbol 
+          ? `<div style="width: 48px; height: 48px; border-radius: 50%; background: var(--arkeo-dim); display: flex; align-items: center; justify-content: center; font-size: 1rem; font-weight: 600; color: var(--arkeo);">${chain.coinGeckoSymbol.substring(0,2).toUpperCase()}</div>`
+          : `<div class="chain-icon">${meta.icon}</div>`;
+        
+        const categoryBadge = chain.coinGeckoId 
+          ? `<a href="${COINGECKO_CACHE.getCoinGeckoUrl(chain.coinGeckoId)}" target="_blank" style="color: var(--arkeo); text-decoration: none;">✓ Verified on CoinGecko</a>`
+          : meta.category;
+        
         return `
           <div class="chain-card">
             ${isTrending ? '<div class="trending-badge">🔥 Trending</div>' : ''}
             <div class="chain-header">
               <div class="chain-name-section">
-                <div class="chain-icon">${meta.icon}</div>
+                ${iconHtml}
                 <div>
                   <div class="chain-name">${chain.name}</div>
-                  <div class="chain-category">${meta.category}</div>
+                  <div class="chain-category" style="font-size: 0.7rem;">${categoryBadge}</div>
                 </div>
               </div>
               <div class="vote-badge">
@@ -906,37 +953,136 @@
     }
 
     // ============================================================
+    // COINGECKO AUTOCOMPLETE
+    // ============================================================
+    let selectedChain = null;
+    let chainSearchTimeout = null;
+    
+    async function handleChainSearch() {
+      clearTimeout(chainSearchTimeout);
+      
+      const input = document.getElementById('chainSearch');
+      const dropdown = document.getElementById('chainAutocomplete');
+      const query = input.value.trim();
+      
+      if (!query || query.length < 2) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+      
+      dropdown.classList.remove('hidden');
+      dropdown.innerHTML = '<div class="chain-autocomplete-loading">Searching 19,000+ chains...</div>';
+      
+      chainSearchTimeout = setTimeout(async () => {
+        try {
+          await COINGECKO_CACHE.init();
+          const results = COINGECKO_CACHE.search(query, 10);
+          
+          if (results.length === 0) {
+            dropdown.innerHTML = '<div class="chain-autocomplete-no-results">No chains found. Try different keywords or use manual entry below.</div>';
+            return;
+          }
+          
+          dropdown.innerHTML = results.map(coin => `
+            <div class="chain-autocomplete-item" onclick='selectChain(${JSON.stringify(coin)})'>
+              <div style="width: 28px; height: 28px; border-radius: 50%; background: var(--arkeo-dim); display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 600; color: var(--arkeo); flex-shrink: 0;">
+                ${coin.symbol.substring(0, 2).toUpperCase()}
+              </div>
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(coin.name)}</div>
+                <div style="font-size: 0.75rem; color: var(--text-dim);">
+                  ${escapeHtml(coin.symbol.toUpperCase())} • ${escapeHtml(coin.id)}
+                </div>
+              </div>
+            </div>
+          `).join('');
+        } catch (error) {
+          console.error('CoinGecko search error:', error);
+          dropdown.innerHTML = '<div class="chain-autocomplete-no-results">Error loading data. Please try again.</div>';
+        }
+      }, 300);
+    }
+    
+    function selectChain(coin) {
+      selectedChain = coin;
+      
+      document.getElementById('chainSearch').value = '';
+      document.getElementById('chainAutocomplete').classList.add('hidden');
+      document.getElementById('selectedChainId').value = coin.id;
+      
+      const selectedDiv = document.getElementById('chainSelected');
+      selectedDiv.classList.remove('hidden');
+      
+      document.getElementById('chainLogo').textContent = coin.symbol.substring(0,2).toUpperCase();
+      document.getElementById('chainName').textContent = coin.name;
+      document.getElementById('chainSymbol').textContent = coin.symbol.toUpperCase();
+      document.getElementById('chainLink').href = COINGECKO_CACHE.getCoinGeckoUrl(coin.id);
+    }
+    
+    function clearChainSelection() {
+      selectedChain = null;
+      document.getElementById('chainSelected').classList.add('hidden');
+      document.getElementById('selectedChainId').value = '';
+    }
+    
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+    
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      const search = document.getElementById('chainSearch');
+      const dropdown = document.getElementById('chainAutocomplete');
+      if (search && dropdown && !search.contains(e.target) && !dropdown.contains(e.target)) {
+        dropdown.classList.add('hidden');
+      }
+    });
+
+    // ============================================================
     // FORM HANDLING
     // ============================================================
-    function toggleOtherInput() {
-      const select = document.getElementById('chainSelect');
-      const otherGroup = document.getElementById('otherChainGroup');
-      const otherInput = document.getElementById('otherChainInput');
-      
-      if (select.value === 'Other') {
-        otherGroup.classList.remove('hidden');
-        otherInput.required = true;
-      } else {
-        otherGroup.classList.add('hidden');
-        otherInput.required = false;
-      }
-    }
-
     function submitRequest(event) {
       event.preventDefault();
       
-      const selectValue = document.getElementById('chainSelect').value;
-      const chainName = selectValue === 'Other' 
-        ? document.getElementById('otherChainInput').value.trim()
-        : selectValue;
-      const comment = document.getElementById('commentInput').value.trim();
+      // Get chain name from either CoinGecko selection or manual input
+      let chainName = null;
+      let chainData = null;
       
-      if (!chainName) return;
+      if (selectedChain) {
+        chainName = selectedChain.name;
+        chainData = {
+          id: selectedChain.id,
+          symbol: selectedChain.symbol,
+          source: 'coingecko'
+        };
+      } else {
+        const manualInput = document.getElementById('otherChainInput').value.trim();
+        if (manualInput) {
+          chainName = manualInput;
+          chainData = {
+            source: 'manual'
+          };
+        }
+      }
+      
+      if (!chainName) {
+        alert('Please select a chain from CoinGecko or enter a custom chain name');
+        return;
+      }
+      
+      const comment = document.getElementById('commentInput').value.trim();
 
       // Check if chain already exists
       let chain = chainRequests.find(c => c.name.toLowerCase() === chainName.toLowerCase());
       
       if (chain) {
+        // Update chainData if available
+        if (chainData && chainData.source === 'coingecko' && !chain.coinGeckoId) {
+          chain.coinGeckoId = chainData.id;
+          chain.coinGeckoSymbol = chainData.symbol;
+        }
         // Add comment if provided
         if (comment) {
           if (!chain.comments) chain.comments = [];
@@ -952,7 +1098,9 @@
         chain = {
           name: chainName,
           votes: 1,
-          comments: comment ? [comment] : []
+          comments: comment ? [comment] : [],
+          coinGeckoId: chainData && chainData.source === 'coingecko' ? chainData.id : null,
+          coinGeckoSymbol: chainData && chainData.source === 'coingecko' ? chainData.symbol : null
         };
         chainRequests.push(chain);
         userVotes.add(chainName);
@@ -970,7 +1118,8 @@
 
       // Reset form
       document.getElementById('requestForm').reset();
-      document.getElementById('otherChainGroup').classList.add('hidden');
+      clearChainSelection();
+      document.getElementById('otherChainInput').value = '';
 
       // Scroll to leaderboard
       setTimeout(() => {
