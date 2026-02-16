@@ -2066,10 +2066,36 @@ console.log(data);</pre>
         
         // Group ALL ONLINE providers by chain
         providersByChain = {};
+        
+        // Collect unique metadata URIs to fetch provider names
+        const metadataCache = {};
+        const metadataFetches = [];
+        const seenUris = new Set();
+        
+        rawProviders.forEach(p => {
+          const uri = p.metadata_uri || '';
+          if (uri && !seenUris.has(uri) && !uri.includes('127.0.0.1') && !uri.includes('localhost')) {
+            seenUris.add(uri);
+            metadataFetches.push(
+              fetch(uri, { signal: AbortSignal.timeout(3000) })
+                .then(r => r.json())
+                .then(data => { metadataCache[uri] = data; })
+                .catch(() => {})
+            );
+          }
+        });
+        
+        // Fetch all metadata in parallel (with timeout)
+        await Promise.allSettled(metadataFetches);
+        
         rawProviders.forEach(p => {
           const pubkey = p.pub_key;
           const meta = findKnown(pubkey);
-          const providerName = meta?.name || 'Provider ' + pubkey.slice(-8);
+          const mdUri = p.metadata_uri || '';
+          const metadata = metadataCache[mdUri];
+          // Priority: known list > metadata moniker > fallback
+          const providerName = meta?.name || metadata?.config?.moniker || 'Provider ' + pubkey.slice(-8);
+          const providerDesc = meta?.description || metadata?.config?.description || 'Arkeo data provider';
           
           if (!providersByChain[p.service]) providersByChain[p.service] = [];
           
@@ -2085,10 +2111,10 @@ console.log(data);</pre>
             rate: rate || 0.001,
             uptime: 99.9,
             requests: formatNumber(Math.floor(parseInt(p.bond || 0) / 100000000 * 100)),
-            description: meta?.description || 'Arkeo data provider',
+            description: providerDesc,
             pubkey: pubkey,
             verified: !!meta,
-            metadataUri: p.metadata_uri || '',
+            metadataUri: mdUri,
             settlementDuration: p.settlement_duration || '10',
             minDuration: parseInt(p.min_contract_duration || 10),
             maxDuration: parseInt(p.max_contract_duration || 432000),
