@@ -196,33 +196,128 @@
       table { font-size: 0.8rem; }
       th, td { padding: 0.5rem; }
     }
+  
+    /* Mobile Nav - Hamburger Menu */
+    .nav-inner {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 2rem;
+    }
+    .hamburger {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: 1px solid var(--border, #252a36);
+      border-radius: 0.375rem;
+      color: var(--text, #fff);
+      font-size: 1.4rem;
+      padding: 0.4rem 0.6rem;
+      cursor: pointer;
+    }
+    .hamburger:hover { border-color: var(--arkeo, #3BE0FF); color: var(--arkeo, #3BE0FF); }
+    .mobile-menu { display: none; }
+    .nav-buttons {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+    .nav-btn {
+      padding: 0.45rem 0.9rem;
+      border-radius: 0.375rem;
+      font-weight: 500;
+      font-size: 0.8rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: 1px solid var(--border, #252a36);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--text, #fff);
+      background: transparent;
+    }
+    .nav-btn:hover {
+      color: var(--arkeo, #3BE0FF);
+      border-color: var(--arkeo, #3BE0FF);
+      background: rgba(59, 224, 255, 0.05);
+    }
+    .nav-btn-accent {
+      border-color: rgba(59, 224, 255, 0.3);
+      color: var(--arkeo, #3BE0FF);
+    }
+    .nav-btn-accent:hover {
+      background: rgba(59, 224, 255, 0.1);
+      border-color: var(--arkeo, #3BE0FF);
+    }
+    @media (max-width: 768px) {
+      .nav { padding: 0.75rem 1rem; }
+      .nav-links { display: none; }
+      .nav-buttons { display: none; }
+      .hamburger { display: flex !important; }
+      .mobile-menu { display: none !important; flex-direction: column; width: 100%; padding: 0.5rem 0; gap: 0.25rem; }
+      .mobile-menu.open { display: flex !important; }
+      .mobile-menu a { color: var(--text-dim, #8b92a5); text-decoration: none; padding: 0.6rem 0.5rem; border-radius: 0.375rem; font-size: 0.9rem; }
+      .mobile-menu a:hover { color: var(--arkeo, #3BE0FF); background: rgba(59, 224, 255, 0.1); }
+      .nav-inner { flex-wrap: wrap; gap: 0.5rem; }
+      .logo { font-size: 1rem; }
+      .logo img { height: 32px; }
+    }
   </style>
 </head>
 <body>
   <nav class="nav">
-    <a href="index.html" class="logo">
-      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
-      Arkeo <span>Marketplace</span>
-    </a>
-    <div class="nav-links">
-      <a href="index.html" class="nav-link">Home</a>
-      <a href="analytics.html" class="nav-link">Analytics</a>
-      <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
-      <a href="become-provider.html" class="nav-link">Provide Data</a>
-      <a href="subscribe.html" class="nav-link">Use Data</a>
-    </div>
-    <div style="position: relative;">
-      <button class="wallet-btn" id="walletBtn" onclick="toggleWalletMenu()">🔗 Connect Keplr</button>
-      <div id="walletMenu" style="display:none; position:absolute; right:0; top:calc(100% + 0.5rem); background:var(--bg-card); border:1px solid var(--border); border-radius:0.75rem; padding:0.75rem; min-width:280px; z-index:100; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
-        <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:0.25rem;">Connected Wallet</div>
-        <div id="menuAddress" style="font-size:0.85rem; font-family:monospace; word-break:break-all; margin-bottom:0.75rem; color:var(--text);"></div>
-        <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
-          <button onclick="copyAddress()" style="flex:1; padding:0.5rem; background:var(--bg-input); border:1px solid var(--border); border-radius:0.5rem; color:var(--text); font-size:0.8rem; cursor:pointer;">📋 Copy Address</button>
-          <button onclick="viewOnExplorer()" style="flex:1; padding:0.5rem; background:var(--bg-input); border:1px solid var(--border); border-radius:0.5rem; color:var(--text); font-size:0.8rem; cursor:pointer;">🔗 Explorer</button>
-        </div>
-        <div id="menuBalance" style="font-size:0.85rem; color:var(--arkeo); margin-bottom:0.75rem; padding:0.5rem; background:var(--arkeo-dim); border-radius:0.5rem; text-align:center;"></div>
-        <button onclick="disconnectWallet()" style="width:100%; padding:0.5rem; background:rgba(239,68,68,0.1); border:1px solid var(--error); border-radius:0.5rem; color:var(--error); font-size:0.85rem; cursor:pointer; font-weight:600;">Sign Out</button>
+    <div class="nav-inner">
+      <a href="index.html" class="logo">
+        <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+        <span class="logo-text">Arkeo <span>Marketplace</span></span>
+      </a>
+      <div class="nav-links">
+        <a href="analytics.html" class="nav-link">📊 Analytics</a>
+        <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
+        <a href="https://racing.builtonarkeo.com/" target="_blank" class="nav-link">🏇 Racing</a>
+        <a href="https://docs.arkeo.network" target="_blank" class="nav-link">Docs</a>
+        <a href="x402-setup.html" class="nav-link">⚡ x402</a>
       </div>
+      <div class="nav-buttons">
+        <div style="position: relative;">
+          <button class="nav-btn" id="walletBtn" onclick="toggleWalletMenu()">🔗 Connect Keplr</button>
+          <div id="walletMenu" style="display:none; position:absolute; right:0; top:calc(100% + 0.5rem); background:var(--bg-card); border:1px solid var(--border); border-radius:0.75rem; padding:0.75rem; min-width:280px; z-index:100; box-shadow: 0 8px 24px rgba(0,0,0,0.4);">
+            <div style="font-size:0.75rem; color:var(--text-dim); margin-bottom:0.25rem;">Connected Wallet</div>
+            <div id="menuAddress" style="font-size:0.85rem; font-family:monospace; word-break:break-all; margin-bottom:0.75rem; color:var(--text);"></div>
+            <div style="display:flex; gap:0.5rem; margin-bottom:0.5rem;">
+              <button onclick="copyAddress()" style="flex:1; padding:0.5rem; background:var(--bg-input); border:1px solid var(--border); border-radius:0.5rem; color:var(--text); font-size:0.8rem; cursor:pointer;">📋 Copy Address</button>
+              <button onclick="viewOnExplorer()" style="flex:1; padding:0.5rem; background:var(--bg-input); border:1px solid var(--border); border-radius:0.5rem; color:var(--text); font-size:0.8rem; cursor:pointer;">🔗 Explorer</button>
+            </div>
+            <div id="menuBalance" style="font-size:0.85rem; color:var(--arkeo); margin-bottom:0.75rem; padding:0.5rem; background:var(--arkeo-dim); border-radius:0.5rem; text-align:center;"></div>
+            <button onclick="disconnectWallet()" style="width:100%; padding:0.5rem; background:rgba(239,68,68,0.1); border:1px solid var(--error); border-radius:0.5rem; color:var(--error); font-size:0.85rem; cursor:pointer; font-weight:600;">Sign Out</button>
+          </div>
+        </div>
+        <a href="my-contracts.html" class="nav-btn">My Contracts</a>
+        <a href="become-provider.html" class="nav-btn">Provide Data</a>
+        <a href="subscribe.html" class="nav-btn">Use Data</a>
+        <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
+      </div>
+      <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+    </div>
+    <div class="mobile-menu" id="mobileMenu">
+      <a href="index.html">🏠 Home</a>
+      <a href="analytics.html">📊 Analytics</a>
+      <a href="request-chain.html">🗳️ Request Chain</a>
+      <a href="x402-setup.html">⚡ x402</a>
+      <a href="https://docs.arkeo.network" target="_blank">📄 Docs</a>
+      <a href="my-contracts.html">📋 My Contracts</a>
+      <a href="become-provider.html">🚀 Provide Data</a>
+      <a href="subscribe.html">📡 Use Data</a>
+      <a href="https://app.osmosis.zone/pool/2977" target="_blank">💰 Buy ARKEO</a>
+      <a href="https://racing.builtonarkeo.com/" target="_blank">🏇 Racing</a>
     </div>
   </nav>
 
