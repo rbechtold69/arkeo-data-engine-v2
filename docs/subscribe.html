@@ -1404,8 +1404,24 @@ console.log(data);</pre>
         
         <!-- Developer Integration Section -->
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin: 2rem 0; text-align: left;">
-          <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 1rem;">🚀 Start Making Queries</h3>
-          <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Use our SDK to start making authenticated RPC calls from your application.</p>
+          <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">🚀 Start Making Queries</h3>
+          <p style="color: var(--text-dim); margin-bottom: 1.5rem;">Your contract is active and your signing key handles authentication automatically. No popups, no approvals — just data.</p>
+          
+          <!-- Test Your Connection -->
+          <div style="background: linear-gradient(135deg, rgba(59, 224, 255, 0.08), rgba(16, 185, 129, 0.08)); border: 1px solid var(--arkeo); border-radius: 0.75rem; padding: 1.5rem; margin-bottom: 2rem;">
+            <div style="font-weight: 700; font-size: 1.1rem; margin-bottom: 0.5rem;">⚡ Test Your Connection</div>
+            <p style="color: var(--text-dim); font-size: 0.9rem; margin-bottom: 1rem;">Click below to make a live authenticated query through your contract. This proves everything works — your contract, signing key, and the provider's sentinel.</p>
+            <button class="btn btn-primary" id="testConnectionBtn" onclick="testConnection()" style="width: 100%; font-size: 1rem; padding: 0.75rem;">
+              🔍 Test Connection — Query Latest Block
+            </button>
+            <div id="testConnectionResult" style="margin-top: 1rem; display: none;"></div>
+          </div>
+          
+          <!-- Developer Integration -->
+          <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-bottom: 1rem;">
+            <div style="font-weight: 600; font-size: 0.95rem; color: var(--text-dim); margin-bottom: 0.5rem;">👨‍💻 For Developers — Integrate into Your App</div>
+            <p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem;">Copy the SDK code below to make authenticated queries from your own application or AI agent.</p>
+          </div>
           
           <!-- Language tabs -->
           <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 1px solid var(--border);">
@@ -1648,6 +1664,7 @@ console.log(data);</pre>
     let currentStep = 1;
     let paymentMethod = 'arkeo'; // Default to ARKEO
     let walletAddress = null;
+    let contractId = null;
     let walletPubkeyBytes = null;
     let failoverEnabled = true; // Default to enabled
     
@@ -3037,6 +3054,15 @@ console.log(data);</pre>
               if (txData.tx_response.code !== 0) {
                 throw new Error(txData.tx_response.raw_log || 'Transaction failed on-chain');
               }
+              // Extract contract ID from tx events
+              const openEvent = txData.tx_response.events?.find(e => e.type === 'arkeo.arkeo.EventOpenContract');
+              if (openEvent) {
+                const cidAttr = openEvent.attributes?.find(a => a.key === 'contract_id');
+                if (cidAttr) {
+                  contractId = parseInt(cidAttr.value.replace(/"/g, ''));
+                  console.log('Contract ID:', contractId);
+                }
+              }
               confirmed = true;
               break;
             }
@@ -3087,7 +3113,7 @@ console.log(data);</pre>
         document.getElementById('finalDuration').textContent = blocksToHumanTime(contractDurationBlocks);
         document.getElementById('finalRequests').textContent = '~' + requests.toLocaleString();
         // Contract ID will come from tx response in production
-        document.getElementById('finalContractId').textContent = txHash ? txHash.slice(0, 12) + '...' : 'Pending...';
+        document.getElementById('finalContractId').textContent = contractId ? `#${contractId}` : (txHash ? txHash.slice(0, 12) + '...' : 'Pending...');
         
         // Build the actual RPC endpoint from provider's metadata URI or known website
         const providerInfo = Object.values(providersByChain).flat().find(p => p.pubkey === selectedProvider.pubkey);
@@ -3140,14 +3166,14 @@ console.log(data);</pre>
         // Populate SDK integration section with dynamic values
         // Extract base sentinel URL (remove service path if present)
         const sentinelUrl = sentinelBaseUrl || endpointUrl.replace(/\/[^\/]+$/, '');
-        const contractId = txHash ? txHash.slice(0, 12) : 'CONTRACT_ID';
+        const contractIdDisplay = contractId || 'CONTRACT_ID';
         
         // Use the actual signing key if available
         const privateKeyForSDK = signingKey?.privateKeyHex || 'YOUR_SIGNING_KEY_HEX';
         
         // Populate JavaScript example
         document.getElementById('js-endpoint').textContent = `'${sentinelUrl}'`;
-        document.getElementById('js-contract-id').textContent = contractId;
+        document.getElementById('js-contract-id').textContent = contractIdDisplay;
         document.getElementById('js-service').textContent = `'${svcName}'`;
         
         // Update the JavaScript code block to include the private key
@@ -3161,7 +3187,7 @@ console.log(data);</pre>
         
         // Populate Python example
         document.getElementById('py-endpoint').textContent = `'${sentinelUrl}'`;
-        document.getElementById('py-contract-id').textContent = contractId;
+        document.getElementById('py-contract-id').textContent = contractIdDisplay;
         document.getElementById('py-service').textContent = `'${svcName}'`;
         
         // Update the Python code block to include the private key
@@ -3793,6 +3819,135 @@ console.log(data);</pre>
     // ============================================================
     // SDK INTEGRATION HELPERS
     // ============================================================
+    async function testConnection() {
+      const btn = document.getElementById('testConnectionBtn');
+      const resultDiv = document.getElementById('testConnectionResult');
+      
+      if (!signingKey || !signingKey.privateKeyHex) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <div style="padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600;">❌ No Signing Key</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">Generate or import a signing key first. The private key is needed to authenticate queries.</div>
+          </div>`;
+        return;
+      }
+      
+      if (!contractId) {
+        resultDiv.style.display = 'block';
+        resultDiv.innerHTML = `
+          <div style="padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600;">❌ No Active Contract</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">Open a contract first before testing queries.</div>
+          </div>`;
+        return;
+      }
+      
+      btn.disabled = true;
+      btn.textContent = '🔍 Querying...';
+      resultDiv.style.display = 'block';
+      resultDiv.innerHTML = `
+        <div style="padding: 1rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <div class="spinner" style="width: 16px; height: 16px; border-width: 2px;"></div>
+            <span>Making authenticated query to sentinel...</span>
+          </div>
+        </div>`;
+      
+      try {
+        // Build arkauth signature using same method as SDK
+        const nobleSecp = window.nobleSecp256k1;
+        const nobleHashes = window.nobleHashes;
+        if (!nobleSecp || !nobleHashes) throw new Error('Crypto libraries not loaded. Please refresh the page.');
+        
+        const serviceName = selectedProvider?.serviceId ? 
+          (SERVICE_ID_TO_NAME[selectedProvider.serviceId] || selectedProvider.serviceId) : 
+          'arkeo-mainnet-fullnode';
+        
+        // Fetch current nonce from chain
+        let nonce = 1;
+        try {
+          const nonceResp = await fetch(`${CONFIG.REST_API}/arkeo/contract/${contractId}`);
+          if (nonceResp.ok) {
+            const nonceData = await nonceResp.json();
+            nonce = parseInt(nonceData.contract?.nonce || '0') + 1;
+            if (nonce < 1) nonce = 1;
+          }
+        } catch(e) { /* default to 1 */ }
+        
+        // Preimage format matches chain verification: "{contractId}:{nonce}:"
+        const preimage = `${contractId}:${nonce}:`;
+        const msgHash = nobleHashes.sha256(new TextEncoder().encode(preimage));
+        
+        const privKeyBytes = hexToBytes(signingKey.privateKeyHex);
+        const sig = await nobleSecp.signAsync(msgHash, privKeyBytes, { lowS: true });
+        const sigBytes = sig.toCompactRawBytes();
+        const sigHex = Array.from(sigBytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        
+        // arkauth format: "contractId:pubkey:nonce:signature"
+        const spenderPubkey = signingKey.publicKeyBech32;
+        const arkauth = `${contractId}:${spenderPubkey}:${nonce}:${sigHex}`;
+        
+        // Build the sentinel URL with arkauth query parameter
+        const endpoint = selectedProvider?.metadataUri?.replace('/metadata.json', '') || 
+          `https://red5-arkeo.duckdns.org`;
+        const sentinelBase = endpoint.replace(/\/$/, '');
+        const queryPath = '/status';
+        const queryUrl = `${sentinelBase}/${serviceName}${queryPath}?arkauth=${encodeURIComponent(arkauth)}`;
+        
+        const startTime = performance.now();
+        const response = await fetch(queryUrl);
+        const elapsed = Math.round(performance.now() - startTime);
+        
+        if (response.ok) {
+          const data = await response.json();
+          const blockHeight = data?.result?.sync_info?.latest_block_height || 'unknown';
+          const network = data?.result?.node_info?.network || 'unknown';
+          const moniker = data?.result?.node_info?.moniker || 'unknown';
+          
+          resultDiv.innerHTML = `
+            <div style="padding: 1rem; background: rgba(16,185,129,0.1); border: 1px solid #10b981; border-radius: 0.5rem;">
+              <div style="color: #10b981; font-weight: 700; font-size: 1.1rem; margin-bottom: 0.75rem;">✅ Connection Successful!</div>
+              <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; font-size: 0.9rem;">
+                <span style="color: var(--text-dim);">Provider:</span> <span style="font-weight: 600;">${moniker}</span>
+                <span style="color: var(--text-dim);">Network:</span> <span>${network}</span>
+                <span style="color: var(--text-dim);">Block Height:</span> <span style="font-family: monospace;">${blockHeight}</span>
+                <span style="color: var(--text-dim);">Response Time:</span> <span>${elapsed}ms</span>
+                <span style="color: var(--text-dim);">Contract:</span> <span style="font-family: monospace;">#${contractId}</span>
+                <span style="color: var(--text-dim);">Auth:</span> <span style="color: #10b981;">✓ Signed with delegate key</span>
+              </div>
+              <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid rgba(16,185,129,0.2); font-size: 0.85rem; color: var(--text-dim);">
+                🎉 Your contract is working! Every query like this is authenticated automatically by your signing key.
+              </div>
+            </div>`;
+        } else {
+          const errText = await response.text().catch(() => '');
+          resultDiv.innerHTML = `
+            <div style="padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+              <div style="color: var(--error); font-weight: 600;">❌ Query Failed (HTTP ${response.status})</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem; font-family: monospace; word-break: break-all;">${errText.slice(0, 200)}</div>
+            </div>`;
+        }
+      } catch (err) {
+        resultDiv.innerHTML = `
+          <div style="padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
+            <div style="color: var(--error); font-weight: 600;">❌ Error</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">${err.message}</div>
+          </div>`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '🔍 Test Connection — Query Latest Block';
+      }
+    }
+    
+    function hexToBytes(hex) {
+      const bytes = new Uint8Array(hex.length / 2);
+      for (let i = 0; i < hex.length; i += 2) {
+        bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+      }
+      return bytes;
+    }
+
     function switchSDKTab(lang) {
       // Update tab styles
       document.querySelectorAll('.sdk-tab').forEach(tab => {
