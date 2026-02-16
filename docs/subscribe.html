@@ -3815,23 +3815,13 @@ console.log(data);</pre>
     let signingKey = null; // { privateKeyHex, publicKeyHex, publicKeyBech32, address }
     
     function selectKeyMode(mode) {
-      const generateBtn = document.getElementById('generateKeyBtn');
-      const existingBtn = document.getElementById('existingKeyBtn');
       const generateFlow = document.getElementById('generateKeyFlow');
       const existingFlow = document.getElementById('existingKeyFlow');
       
       if (mode === 'generate') {
-        generateBtn.classList.remove('btn-secondary');
-        generateBtn.classList.add('btn-primary');
-        existingBtn.classList.remove('btn-primary');
-        existingBtn.classList.add('btn-secondary');
         generateFlow.style.display = 'block';
         existingFlow.style.display = 'none';
       } else {
-        existingBtn.classList.remove('btn-secondary');
-        existingBtn.classList.add('btn-primary');
-        generateBtn.classList.remove('btn-primary');
-        generateBtn.classList.add('btn-secondary');
         existingFlow.style.display = 'block';
         generateFlow.style.display = 'none';
       }
