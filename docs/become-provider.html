@@ -3677,7 +3677,19 @@ services:
           </div>
         `;
         
-        // Check if user has a registered provider
+        // Check if user has a registered provider (from wizard state or wallet pubkey)
+        if (!state.registeredPubkey && state.walletPubkey) {
+          // Try using the connected wallet's pubkey
+          state.registeredPubkey = state.walletPubkey;
+        }
+        if (!state.registeredPubkey) {
+          // Try getting pubkey from Keplr
+          try {
+            const key = await window.keplr.getKey('arkeo-main-v1');
+            const pubkeyBytes = key.pubKey;
+            state.registeredPubkey = state.walletPubkey || key.bech32Address;
+          } catch(e) {}
+        }
         if (!state.registeredPubkey) {
           checkDiv.innerHTML = `
             <div style="padding: 0.75rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
