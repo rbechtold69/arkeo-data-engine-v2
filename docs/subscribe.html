@@ -3832,11 +3832,14 @@ console.log(data);</pre>
           signingKey.privateKeyHex = inputKey;
           // Derive public key from private key
           try {
-            if (!window._nobleSecp256k1Full) {
-              const mod = await import('https://esm.run/@noble/secp256k1@2.1.0');
-              window._nobleSecp256k1Full = mod;
+            if (!window._nobleSecp) {
+              const secp = await import('https://esm.run/@noble/secp256k1@2.1.0');
+              const { hmac } = await import('https://esm.run/@noble/hashes@1.6.1/hmac');
+              const { sha256 } = await import('https://esm.run/@noble/hashes@1.6.1/sha256');
+              secp.etc.hmacSha256Sync = (k, ...m) => hmac(sha256, k, secp.etc.concatBytes(...m));
+              window._nobleSecp = secp;
             }
-            const pubKeyBytes = window._nobleSecp256k1Full.getPublicKey(hexToBytes(inputKey), true);
+            const pubKeyBytes = window._nobleSecp.getPublicKey(inputKey, true);
             signingKey.publicKeyBech32 = pubkeyToBech32(pubKeyBytes, 'arkeopub');
           } catch(e) {
             resultDiv.style.display = 'block';
@@ -3909,15 +3912,16 @@ console.log(data);</pre>
         const preimage = `${contractId}:${nonce}:`;
         const msgHash = await window.nobleSha256(new TextEncoder().encode(preimage));
         
-        // ECDSA secp256k1 signing using the noble library loaded from SDK
-        // Load noble/secp256k1 if not already loaded
-        if (!window._nobleSecp256k1Full) {
-          const mod = await import('https://esm.run/@noble/secp256k1@2.1.0');
-          window._nobleSecp256k1Full = mod;
+        // Sign using noble/secp256k1 loaded from CDN
+        if (!window._nobleSecp) {
+          const secp = await import('https://esm.run/@noble/secp256k1@2.1.0');
+          const { hmac } = await import('https://esm.run/@noble/hashes@1.6.1/hmac');
+          const { sha256 } = await import('https://esm.run/@noble/hashes@1.6.1/sha256');
+          secp.etc.hmacSha256Sync = (k, ...m) => hmac(sha256, k, secp.etc.concatBytes(...m));
+          window._nobleSecp = secp;
         }
-        const secp = window._nobleSecp256k1Full;
+        const secp = window._nobleSecp;
         
-        // noble v2 accepts hex strings directly
         const sig = secp.sign(new Uint8Array(msgHash), signingKey.privateKeyHex, { lowS: true });
         const sigBytes = sig.toCompactRawBytes();
         const sigHex = Array.from(sigBytes).map(b => b.toString(16).padStart(2, '0')).join('');
