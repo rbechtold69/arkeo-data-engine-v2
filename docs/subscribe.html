@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; connect-src *; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
   <title>Find a Provider | Arkeo Marketplace</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
   <style>
@@ -1703,7 +1704,7 @@ console.log(data);</pre>
           timestamp: Date.now()
         };
         sessionStorage.setItem(STATE_KEY, JSON.stringify(state));
-        console.log('State saved:', state);
+        if (CONFIG.DEBUG_MODE) console.log('State saved:', state);
       } catch (err) {
         console.error('Failed to save state:', err);
       }
@@ -1715,7 +1716,7 @@ console.log(data);</pre>
         if (!savedState) return false;
         
         const state = JSON.parse(savedState);
-        console.log('Restoring state:', state);
+        if (CONFIG.DEBUG_MODE) console.log('Restoring state:', state);
         
         // Check for URL provider override - if provider param exists AND differs from saved, don't restore
         const urlParams = new URLSearchParams(window.location.search);
@@ -1850,13 +1851,15 @@ console.log(data);</pre>
     function clearState() {
       try {
         sessionStorage.removeItem(STATE_KEY);
-        console.log('State cleared');
+        if (CONFIG.DEBUG_MODE) console.log('State cleared');
       } catch (err) {
         console.error('Failed to clear state:', err);
       }
     }
     
-    // Configuration
+    // Configuration — intentionally self-contained (does not load js/config.js)
+    // This page operates standalone without requiring the shared config module.
+    // If updating endpoints, also update js/config.js to stay in sync.
     const CONFIG = {
       REST_API: 'https://rest-seed.arkeo.network',
       RPC_API: 'https://rpc-seed.arkeo.network',
@@ -1864,6 +1867,7 @@ console.log(data);</pre>
       ARKEO_DENOM: 'uarkeo',
       ARKEO_DIVISOR: 100_000_000,
       EXPLORER_TX: 'https://explorer.arkeo.network/arkeo/tx/',
+      DEBUG_MODE: false,
     };
     
     // Arkeo chain configuration for Keplr
@@ -1977,6 +1981,35 @@ console.log(data);</pre>
       return div.innerHTML;
     }
 
+    // ---- INPUT VALIDATION ----
+    const Validate = {
+      contractId(id) {
+        const n = parseInt(id, 10);
+        return Number.isInteger(n) && n > 0 && String(n) === String(id).trim();
+      },
+      privateKeyHex(key) {
+        return typeof key === 'string' && /^[0-9a-fA-F]{64}$/.test(key.trim());
+      },
+      pubkey(pk) {
+        return typeof pk === 'string' && /^arkeopub1[a-z0-9]{38,}$/.test(pk.trim());
+      },
+      positiveAmount(val) {
+        const n = parseFloat(val);
+        return !isNaN(n) && n > 0 && n < 1e12;
+      },
+      httpsUrl(url) {
+        try { const u = new URL(url); return u.protocol === 'https:'; } catch { return false; }
+      },
+      notPrivateUrl(url) {
+        try {
+          const u = new URL(url);
+          const h = u.hostname;
+          if (/^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|0\.|localhost$|::1$|\[::1\]$)/i.test(h)) return false;
+          return true;
+        } catch { return false; }
+      }
+    };
+
     // Initialize
     async function init() {
       // Restore state first (before loading data)
@@ -1987,7 +2020,7 @@ console.log(data);</pre>
       
       // If state was restored, re-render UI after data loads
       if (stateRestored) {
-        console.log('State restored successfully');
+        if (CONFIG.DEBUG_MODE) console.log('State restored successfully');
       }
     }
     
@@ -2010,7 +2043,7 @@ console.log(data);</pre>
           break;
         }
       } while (nextKey && page < 20);
-      console.log(`Loaded ${allContracts.length} contracts across ${page} pages`);
+      if (CONFIG.DEBUG_MODE) console.log(`Loaded ${allContracts.length} contracts across ${page} pages`);
       return allContracts;
     }
     
@@ -2103,7 +2136,7 @@ console.log(data);</pre>
         
         rawProviders.forEach(p => {
           const uri = p.metadata_uri || '';
-          if (uri && !seenUris.has(uri) && !uri.includes('127.0.0.1') && !uri.includes('localhost')) {
+          if (uri && !seenUris.has(uri) && Validate.httpsUrl(uri) && Validate.notPrivateUrl(uri)) {
             seenUris.add(uri);
             metadataFetches.push(
               fetch(uri, { signal: AbortSignal.timeout(3000) })
@@ -2266,9 +2299,9 @@ console.log(data);</pre>
     
     async function checkKeplr() {
       if (window.keplr) {
-        console.log('Keplr detected');
+        if (CONFIG.DEBUG_MODE) console.log('Keplr detected');
       } else {
-        console.log('Keplr not installed');
+        if (CONFIG.DEBUG_MODE) console.log('Keplr not installed');
       }
     }
 
@@ -2810,7 +2843,7 @@ console.log(data);</pre>
         
         // If wallet changed, clear old signing key — it belongs to the previous wallet
         if (walletAddress && walletAddress !== newWalletAddress && signingKey) {
-          console.log('Wallet changed from', walletAddress, 'to', newWalletAddress, '— clearing old signing key');
+          if (CONFIG.DEBUG_MODE) console.log('Wallet changed from', walletAddress, 'to', newWalletAddress, '— clearing old signing key');
           signingKey = null;
           const generatedKeyDisplay = document.getElementById('generatedKeyDisplay');
           if (generatedKeyDisplay) generatedKeyDisplay.style.display = 'none';
@@ -2949,7 +2982,7 @@ console.log(data);</pre>
         
         // Convert pubkey to arkeopub bech32 format (needed for client field)
         const clientPubkey = pubkeyToBech32(walletPubkeyBytes, 'arkeopub');
-        console.log('Client pubkey:', clientPubkey);
+        if (CONFIG.DEBUG_MODE) console.log('Client pubkey:', clientPubkey);
         
         // Validate duration against provider's min/max
         const minDur = parseInt(selectedProvider.minDuration || 5);
@@ -2965,7 +2998,7 @@ console.log(data);</pre>
         const serviceId = selectedProvider.serviceId || selectedChain.id;
         // Look up the actual service name from ID, or use the ID if it's already a name
         const serviceName = SERVICE_ID_TO_NAME[serviceId] || (isNaN(serviceId) ? serviceId : null);
-        console.log('Service ID:', serviceId, 'Service Name:', serviceName, 'Chain:', selectedChain);
+        if (CONFIG.DEBUG_MODE) console.log('Service ID:', serviceId);
         
         if (!serviceName) {
           throw new Error('No service name found. Please select a provider again.');
@@ -2993,7 +3026,7 @@ console.log(data);</pre>
           }
         };
         
-        console.log('Opening contract:', msg);
+        if (CONFIG.DEBUG_MODE) console.log('Opening contract:', msg);
         
         statusDiv.innerHTML = `
           <div class="status-box" style="background: var(--arkeo-dim); border: 1px solid var(--arkeo);">
@@ -3041,7 +3074,7 @@ console.log(data);</pre>
         });
         
         const result = await broadcastResponse.json();
-        console.log('Broadcast result:', result);
+        if (CONFIG.DEBUG_MODE) console.log('Broadcast result:', result);
         
         if (result.tx_response?.code !== 0) {
           throw new Error(result.tx_response?.raw_log || 'Transaction failed');
@@ -3073,7 +3106,7 @@ console.log(data);</pre>
                 const cidAttr = openEvent.attributes?.find(a => a.key === 'contract_id');
                 if (cidAttr) {
                   contractId = parseInt(cidAttr.value.replace(/"/g, ''));
-                  console.log('Contract ID:', contractId);
+                  if (CONFIG.DEBUG_MODE) console.log('Contract ID:', contractId);
                 }
               }
               confirmed = true;
@@ -3104,18 +3137,26 @@ console.log(data);</pre>
         
         // Show signing key reminder if one was generated
         if (signingKey && signingKey.privateKeyHex) {
-          statusDiv.innerHTML += `
-            <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 0.5rem; padding: 1rem; margin-top: 1rem;">
+          const keyReminderDiv = document.createElement('div');
+          keyReminderDiv.style.cssText = 'background: rgba(239, 68, 68, 0.1); border: 1px solid #ef4444; border-radius: 0.5rem; padding: 1rem; margin-top: 1rem;';
+          keyReminderDiv.innerHTML = `
               <div style="font-weight: 600; margin-bottom: 0.5rem; color: #ef4444;">⚠️ Don't Forget Your Signing Key!</div>
               <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.5rem;">
                 Your contract is configured with a dedicated signing key. Make sure you've saved the private key — it's shown in the SDK examples below.
               </div>
-              <button onclick="navigator.clipboard.writeText('${signingKey.privateKeyHex}'); event.target.textContent='✓ Copied!'; setTimeout(() => event.target.textContent='📋 Copy Private Key Again', 2000);" 
-                style="padding: 0.5rem 1rem; background: var(--arkeo); color: #000; border: none; border-radius: 0.375rem; font-weight: 600; cursor: pointer;">
-                📋 Copy Private Key Again
-              </button>
-            </div>
           `;
+          const copyKeyBtn = document.createElement('button');
+          copyKeyBtn.textContent = '📋 Copy Private Key Again';
+          copyKeyBtn.style.cssText = 'padding: 0.5rem 1rem; background: var(--arkeo); color: #000; border: none; border-radius: 0.375rem; font-weight: 600; cursor: pointer;';
+          // Store key in closure, never in DOM attributes
+          const _pkHex = signingKey.privateKeyHex;
+          copyKeyBtn.addEventListener('click', function() {
+            navigator.clipboard.writeText(_pkHex);
+            this.textContent = '✓ Copied!';
+            setTimeout(() => this.textContent = '📋 Copy Private Key Again', 2000);
+          });
+          keyReminderDiv.appendChild(copyKeyBtn);
+          statusDiv.appendChild(keyReminderDiv);
         }
         
         // Update final values
@@ -3189,13 +3230,21 @@ console.log(data);</pre>
         document.getElementById('js-contract-id').textContent = contractIdDisplay;
         document.getElementById('js-service').textContent = `'${svcName}'`;
         
-        // Update the JavaScript code block to include the private key
+        // Replace private key placeholder with a click-to-reveal element
         const jsCodeBlock = document.querySelector('#sdk-js pre');
         if (jsCodeBlock && signingKey?.privateKeyHex) {
           jsCodeBlock.innerHTML = jsCodeBlock.innerHTML.replace(
             /'YOUR_SIGNING_KEY_HEX'/g,
-            `'${privateKeyForSDK}'`
+            `'<span class="pk-reveal" style="cursor:pointer; background:rgba(239,68,68,0.2); padding:0 4px; border-radius:3px;" title="Click to reveal key">🔒 CLICK_TO_REVEAL</span>'`
           );
+          jsCodeBlock.querySelectorAll('.pk-reveal').forEach(el => {
+            el.addEventListener('click', function() {
+              this.textContent = privateKeyForSDK;
+              this.style.background = 'rgba(16,185,129,0.2)';
+              this.title = 'Click to copy';
+              this.addEventListener('click', function() { navigator.clipboard.writeText(privateKeyForSDK); }, { once: true });
+            }, { once: true });
+          });
         }
         
         // Populate Python example
@@ -3203,13 +3252,21 @@ console.log(data);</pre>
         document.getElementById('py-contract-id').textContent = contractIdDisplay;
         document.getElementById('py-service').textContent = `'${svcName}'`;
         
-        // Update the Python code block to include the private key
+        // Replace private key placeholder with click-to-reveal in Python block
         const pyCodeBlock = document.querySelector('#sdk-python pre');
         if (pyCodeBlock && signingKey?.privateKeyHex) {
           pyCodeBlock.innerHTML = pyCodeBlock.innerHTML.replace(
             /'YOUR_SIGNING_KEY_HEX'/g,
-            `'${privateKeyForSDK}'`
+            `'<span class="pk-reveal" style="cursor:pointer; background:rgba(239,68,68,0.2); padding:0 4px; border-radius:3px;" title="Click to reveal key">🔒 CLICK_TO_REVEAL</span>'`
           );
+          pyCodeBlock.querySelectorAll('.pk-reveal').forEach(el => {
+            el.addEventListener('click', function() {
+              this.textContent = privateKeyForSDK;
+              this.style.background = 'rgba(16,185,129,0.2)';
+              this.title = 'Click to copy';
+              this.addEventListener('click', function() { navigator.clipboard.writeText(privateKeyForSDK); }, { once: true });
+            }, { once: true });
+          });
         }
         
         // Update security message if signing key is used
@@ -3226,6 +3283,11 @@ console.log(data);</pre>
           securityWarning.querySelector('span').textContent = '🔒';
         }
         
+        // Clear private key from global signingKey object — it's already captured in closures where needed
+        if (signingKey) {
+          delete signingKey.privateKeyHex;
+        }
+        
         // Clear state after successful contract opening
         setTimeout(() => {
           clearState();
@@ -3238,7 +3300,7 @@ console.log(data);</pre>
         document.getElementById('contractStatus').innerHTML = `
           <div class="status-box error">
             <span>❌</span>
-            <span>Failed: ${err.message}</span>
+            <span>Failed: ${escapeHtml(err.message)}</span>
           </div>
         `;
         btn.disabled = false;
@@ -3298,7 +3360,7 @@ console.log(data);</pre>
         const resp = await fetch('https://lcd.osmosis.zone/osmosis/poolmanager/v2/pools/2977');
         const data = await resp.json();
         // Parse pool assets to derive price if possible
-        console.log('Osmosis pool data:', data);
+        if (CONFIG.DEBUG_MODE) console.log('Osmosis pool data:', data);
       } catch (e) { console.warn('Osmosis price fetch also failed:', e); }
       // Hard fallback
       arkeoPrice = null;
@@ -3432,7 +3494,7 @@ console.log(data);</pre>
         const accounts = await offlineSigner.getAccounts();
         nobleAddress = accounts[0].address;
         
-        console.log('Noble wallet initialized:', nobleAddress);
+        if (CONFIG.DEBUG_MODE) console.log('Noble wallet initialized:', nobleAddress);
         
         // Update balances
         await updateSkipGoBalances();
@@ -3516,7 +3578,7 @@ console.log(data);</pre>
           cumulative_affiliate_fee_bps: '0',
         };
         
-        console.log('Requesting Skip Go route:', routeReq);
+        if (CONFIG.DEBUG_MODE) console.log('Requesting Skip Go route:', routeReq);
         
         const resp = await fetch(`${SKIP_GO_API}/v2/fungible/route`, {
           method: 'POST',
@@ -3530,7 +3592,7 @@ console.log(data);</pre>
         }
         
         const quote = await resp.json();
-        console.log('Skip Go quote:', quote);
+        if (CONFIG.DEBUG_MODE) console.log('Skip Go quote:', quote);
         
         if (!quote.amount_out) {
           throw new Error('No route found. ARKEO may not be available on Skip Go yet.');
@@ -3617,7 +3679,7 @@ console.log(data);</pre>
           operations: skipGoQuote.operations || skipGoQuote.required_chain_addresses,
         };
         
-        console.log('Requesting Skip Go messages:', msgsReq);
+        if (CONFIG.DEBUG_MODE) console.log('Requesting Skip Go messages:', msgsReq);
         
         const msgsResp = await fetch(`${SKIP_GO_API}/v2/fungible/msgs`, {
           method: 'POST',
@@ -3631,7 +3693,7 @@ console.log(data);</pre>
         }
         
         const msgsData = await msgsResp.json();
-        console.log('Skip Go messages response:', msgsData);
+        if (CONFIG.DEBUG_MODE) console.log('Skip Go messages response:', msgsData);
         
         if (!msgsData.msgs || msgsData.msgs.length === 0) {
           throw new Error('No transaction messages received from Skip Go');
@@ -3694,12 +3756,12 @@ console.log(data);</pre>
             memo: memo,
           };
           
-          console.log('Signing doc:', signDoc);
+          if (CONFIG.DEBUG_MODE) console.log('Signing doc:', signDoc);
           
           // Sign with Keplr
           const signResponse = await window.keplr.signAmino(chainId, chainAddress, signDoc);
           
-          console.log('Signed transaction:', signResponse);
+          if (CONFIG.DEBUG_MODE) console.log('Signed transaction:', signResponse);
           
           statusDiv.innerHTML = `
             <div style="background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem; padding: 0.75rem; margin-top: 0.75rem;">
@@ -3724,7 +3786,7 @@ console.log(data);</pre>
           });
           
           const broadcastData = await broadcastResp.json();
-          console.log('Broadcast response:', broadcastData);
+          if (CONFIG.DEBUG_MODE) console.log('Broadcast response:', broadcastData);
           
           if (broadcastData.tx_response?.code !== 0) {
             throw new Error(broadcastData.tx_response?.raw_log || 'Transaction broadcast failed');
@@ -3873,9 +3935,9 @@ console.log(data);</pre>
                 <span>Loading crypto library...</span>
               </div>
             </div>`;
-          const secp = await import('https://esm.run/@noble/secp256k1@2.1.0');
-          const { hmac } = await import('https://esm.run/@noble/hashes@1.6.1/hmac');
-          const { sha256 } = await import('https://esm.run/@noble/hashes@1.6.1/sha256');
+          const secp = await import('https://cdn.jsdelivr.net/npm/@noble/secp256k1@2.1.0/+esm');
+          const { hmac } = await import('https://cdn.jsdelivr.net/npm/@noble/hashes@1.6.1/hmac/+esm');
+          const { sha256 } = await import('https://cdn.jsdelivr.net/npm/@noble/hashes@1.6.1/sha256/+esm');
           secp.etc.hmacSha256Sync = (k, ...m) => hmac(sha256, k, secp.etc.concatBytes(...m));
           window._nobleSecp = secp;
           window._nobleSha256Sign = sha256;
@@ -3958,14 +4020,14 @@ console.log(data);</pre>
           resultDiv.innerHTML = `
             <div style="padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
               <div style="color: var(--error); font-weight: 600;">❌ Query Failed (HTTP ${response.status})</div>
-              <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem; font-family: monospace; word-break: break-all;">${errText.slice(0, 200)}</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem; font-family: monospace; word-break: break-all;">${escapeHtml(errText.slice(0, 200))}</div>
             </div>`;
         }
       } catch (err) {
         resultDiv.innerHTML = `
           <div style="padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
             <div style="color: var(--error); font-weight: 600;">❌ Error</div>
-            <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">${err.message}</div>
+            <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem;">${escapeHtml(err.message)}</div>
           </div>`;
       } finally {
         btn.disabled = false;
@@ -4066,7 +4128,7 @@ console.log(data);</pre>
         document.getElementById('addressDisplay').textContent = address;
         document.getElementById('generatedKeyDisplay').style.display = 'block';
         
-        console.log('Generated signing key:', signingKey);
+        if (typeof CONFIG !== 'undefined' && CONFIG.DEBUG_MODE) console.log('Generated signing key (pubkey only):', signingKey.publicKeyBech32);
         
         // Save state after signing key generation
         saveState();
@@ -4138,7 +4200,7 @@ console.log(data);</pre>
         document.getElementById('existingAddressDisplay').textContent = address;
         display.style.display = 'block';
         
-        console.log('Parsed existing key:', signingKey);
+        if (CONFIG.DEBUG_MODE) console.log('Parsed existing key (pubkey):', signingKey.publicKeyBech32);
         
         // Save state after parsing existing key
         saveState();
@@ -4149,13 +4211,7 @@ console.log(data);</pre>
       }
     }
     
-    function hexToBytes(hex) {
-      const bytes = new Uint8Array(hex.length / 2);
-      for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-      }
-      return bytes;
-    }
+    // hexToBytes defined earlier (~line 3976) — removed duplicate
     
     function bech32Decode(bech32Str) {
       const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';

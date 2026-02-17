@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; connect-src *; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
   <title>Arkeo Data Marketplace</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
   <meta name="description" content="Decentralized RPC infrastructure marketplace. Connect to blockchain data providers with pay-as-you-go pricing.">
@@ -1886,15 +1887,9 @@
       if (flywheelBonded) flywheelBonded.textContent = formatArkeo(totalBond);
     }
 
+    // formatArkeo() — delegates to Format.arkeo() from js/utils.js
     function formatArkeo(uarkeo, decimals = 2) {
-      // Use utility if available, fallback to local
-      if (typeof Format !== 'undefined') {
-        return Format.arkeo(uarkeo, decimals);
-      }
-      const val = parseInt(uarkeo || 0) / CONFIG.ARKEO_DIVISOR;
-      if (val >= 1000000) return (val / 1000000).toFixed(1) + 'M';
-      if (val >= 1000) return (val / 1000).toFixed(1) + 'K';
-      return val.toFixed(decimals);
+      return Format.arkeo(uarkeo, decimals);
     }
 
     function getServiceName(serviceId) {
@@ -2262,11 +2257,7 @@
       window.location.href = 'provider.html?pubkey=' + encodeURIComponent(pubkey);
     }
 
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text || '';
-      return div.innerHTML;
-    }
+    // escapeHtml() — using version from js/utils.js (loaded via script tag)
 
     // ============================================================
     // EARNINGS CHART

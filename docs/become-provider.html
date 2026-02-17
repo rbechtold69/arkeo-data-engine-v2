@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' cdn.jsdelivr.net; connect-src *; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
   <title>Become a Provider | Arkeo Marketplace v2</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
   <!-- Arkeo transaction helper with protobuf encoding -->
@@ -1733,12 +1734,16 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
     // ============================================================
     // CONFIGURATION
     // ============================================================
+    // Configuration — intentionally self-contained (does not load js/config.js)
+    // This page operates standalone without requiring the shared config module.
+    // If updating endpoints, also update js/config.js to stay in sync.
     const CONFIG = {
       REST_API: 'https://rest-seed.arkeo.network',
       RPC_API: 'https://rpc-seed.arkeo.network',
       CHAIN_ID: 'arkeo-main-v1',
       ARKEO_DENOM: 'uarkeo',
       ARKEO_DIVISOR: 100_000_000,
+      DEBUG_MODE: false,
       MIN_BOND: '100000000', // 1 ARKEO in uarkeo
       DEFAULT_GAS: '200000',
       GAS_PRICE: '0.001uarkeo',
@@ -1992,6 +1997,17 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         return;
       }
       
+      // Warn about non-HTTPS URLs (except localhost)
+      try {
+        const parsedUrl = new URL(url);
+        if (parsedUrl.protocol === 'http:' && !['localhost', '127.0.0.1', '::1'].includes(parsedUrl.hostname)) {
+          statusDiv.style.background = 'rgba(245,158,11,0.1)';
+          statusDiv.style.borderColor = 'var(--warning)';
+          statusDiv.innerHTML = '⚠️ Warning: Using HTTP instead of HTTPS. Your RPC endpoint should use HTTPS in production to prevent MITM attacks.';
+          // Continue with validation but show warning
+        }
+      } catch(e) {}
+      
       statusDiv.style.background = 'var(--arkeo-dim)';
       statusDiv.style.borderColor = 'var(--arkeo)';
       statusDiv.innerHTML = '🔍 Testing connection...';
@@ -2008,11 +2024,11 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
             state.arkeoFallbacks = [];
             statusDiv.style.background = 'var(--success-dim)';
             statusDiv.style.borderColor = 'var(--success)';
-            statusDiv.innerHTML = `✅ Connected to <strong>${moniker}</strong> (${network})<br><span style="font-size: 0.8rem; color: var(--text-dim);">🔒 Fully independent — no third-party dependency</span>`;
+            statusDiv.innerHTML = `✅ Connected to <strong>${escapeHtml(moniker)}</strong> (${escapeHtml(network)})<br><span style="font-size: 0.8rem; color: var(--text-dim);">🔒 Fully independent — no third-party dependency</span>`;
           } else {
             statusDiv.style.background = 'rgba(239,68,68,0.1)';
             statusDiv.style.borderColor = 'var(--error)';
-            statusDiv.innerHTML = `❌ Node is on network "${network}" — expected "arkeo-main-v1"`;
+            statusDiv.innerHTML = `❌ Node is on network "${escapeHtml(network)}" — expected "arkeo-main-v1"`;
           }
         } else {
           statusDiv.style.background = 'rgba(239,68,68,0.1)';
@@ -2067,8 +2083,8 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         // Convert pubkey to arkeopub1... format
         state.walletPubkeyBech32 = pubkeyToBech32(accounts[0].pubkey, 'arkeopub');
         
-        console.log('Wallet pubkey (base64):', state.walletPubkey);
-        console.log('Wallet pubkey (bech32):', state.walletPubkeyBech32);
+        if (CONFIG.DEBUG_MODE) console.log('Wallet pubkey (base64):', state.walletPubkey);
+        if (CONFIG.DEBUG_MODE) console.log('Wallet pubkey (bech32):', state.walletPubkeyBech32);
         
         // Update UI
         btn.textContent = `${state.walletAddress.slice(0, 10)}...${state.walletAddress.slice(-6)}`;
@@ -2079,7 +2095,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
           updateStep4UI();
         }
         
-        console.log('Wallet connected:', state.walletAddress);
+        if (CONFIG.DEBUG_MODE) console.log('Wallet connected:', state.walletAddress);
         
       } catch (err) {
         console.error('Wallet connection failed:', err);
@@ -2124,7 +2140,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
           },
         });
       } catch (err) {
-        console.log('Chain suggestion failed (may already exist):', err.message);
+        if (CONFIG.DEBUG_MODE) console.log('Chain suggestion failed:', err.message);
       }
     }
 
@@ -2148,7 +2164,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         page++;
       } while (nextKey && page < maxPages);
       
-      console.log(`Loaded ${allContracts.length} contracts across ${page} pages`);
+      if (CONFIG.DEBUG_MODE) console.log(`Loaded ${allContracts.length} contracts across ${page} pages`);
       return allContracts;
     }
     
@@ -2914,7 +2930,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
           }
         };
         
-        console.log('Bond message:', JSON.stringify(bondMsg, null, 2));
+        if (CONFIG.DEBUG_MODE) console.log('Bond message:', JSON.stringify(bondMsg, null, 2));
         
         const bondResult = await signAndBroadcastDirect(bondMsg, accountInfo1);
         
@@ -2972,9 +2988,9 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
           }
         };
         
-        console.log('Metadata URL:', metadataUrl);
+        if (CONFIG.DEBUG_MODE) console.log('Metadata URL:', metadataUrl);
         
-        console.log('Mod message:', JSON.stringify(modMsg, null, 2));
+        if (CONFIG.DEBUG_MODE) console.log('Mod message:', JSON.stringify(modMsg, null, 2));
         
         const modResult = await signAndBroadcastDirect(modMsg, accountInfo2);
         
@@ -3057,8 +3073,8 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       // Initialize the Arkeo TX helper
       await window.arkeoTx.init();
       
-      console.log('Signing message:', msg);
-      console.log('Account info:', accountInfo);
+      if (CONFIG.DEBUG_MODE) console.log('Signing message:', msg);
+      if (CONFIG.DEBUG_MODE) console.log('Account info:', accountInfo);
       
       // Get pubkey bytes from state
       const pubkeyBytes = state.walletPubkeyBytes;
@@ -3068,7 +3084,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       
       // Build TxBody
       const bodyBytes = window.arkeoTx.buildTxBody([msg], 'Registered via Arkeo Marketplace');
-      console.log('TxBody bytes:', bodyBytes);
+      if (CONFIG.DEBUG_MODE) console.log('TxBody bytes:', bodyBytes);
       
       // Build AuthInfo
       const authInfoBytes = window.arkeoTx.buildAuthInfo(
@@ -3077,7 +3093,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         '10000',  // fee amount
         300000    // gas limit
       );
-      console.log('AuthInfo bytes:', authInfoBytes);
+      if (CONFIG.DEBUG_MODE) console.log('AuthInfo bytes:', authInfoBytes);
       
       // Create SignDoc for Keplr
       const signDoc = {
@@ -3087,7 +3103,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         accountNumber: accountInfo.accountNumber
       };
       
-      console.log('SignDoc:', signDoc);
+      if (CONFIG.DEBUG_MODE) console.log('SignDoc:', signDoc);
       
       // Sign with Keplr's signDirect
       const signResponse = await window.keplr.signDirect(
@@ -3096,7 +3112,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         signDoc
       );
       
-      console.log('Sign response:', signResponse);
+      if (CONFIG.DEBUG_MODE) console.log('Sign response:', signResponse);
       
       // Build TxRaw with signature
       const signatureBytes = window.arkeoTx.base64ToBytes(signResponse.signature.signature);
@@ -3106,11 +3122,11 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         [signatureBytes]
       );
       
-      console.log('TxRaw bytes length:', txRawBytes.length);
+      if (CONFIG.DEBUG_MODE) console.log('TxRaw bytes length:', txRawBytes.length);
       
       // Convert to base64 for broadcast
       const txBytesBase64 = window.arkeoTx.bytesToBase64(txRawBytes);
-      console.log('TX bytes (base64):', txBytesBase64.substring(0, 100) + '...');
+      if (CONFIG.DEBUG_MODE) console.log('TX bytes (base64):', txBytesBase64.substring(0, 100) + '...');
       
       // Broadcast via REST
       const broadcastResponse = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs`, {
@@ -3123,7 +3139,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       });
       
       const result = await broadcastResponse.json();
-      console.log('Broadcast result:', result);
+      if (CONFIG.DEBUG_MODE) console.log('Broadcast result:', result);
       
       if (result.tx_response) {
         if (result.tx_response.code !== 0) {
@@ -3369,18 +3385,18 @@ services:
 
       let metaOk = false;
       try {
-        console.log('Testing metadata URL:', metaUrl);
+        if (CONFIG.DEBUG_MODE) console.log('Testing metadata URL:', metaUrl);
         const resp = await fetch(metaUrl, { signal: AbortSignal.timeout(10000) });
         if (resp.ok) {
           metaOk = true;
           resultsDiv.innerHTML = `<div class="status-box success"><span>✅</span><span>Metadata endpoint responding! (${metaUrl})</span></div>`;
         } else {
           const body = await resp.text().catch(() => '');
-          resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Metadata returned HTTP ${resp.status}: ${body.slice(0, 100)}</span></div>`;
+          resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Metadata returned HTTP ${resp.status}: ${escapeHtml(body.slice(0, 100))}</span></div>`;
         }
       } catch (e) {
         console.error('Metadata fetch error:', e);
-        resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Could not reach metadata endpoint (${metaUrl}). Error: ${e.message || 'Unknown'}. Check the URL and try again.</span></div>`;
+        resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Could not reach metadata endpoint (${escapeHtml(metaUrl)}). Error: ${escapeHtml(e.message || 'Unknown')}. Check the URL and try again.</span></div>`;
       }
 
       // Show "Set Metadata URI On-Chain" button after metadata test passes
@@ -3491,7 +3507,7 @@ services:
           }
         };
         
-        console.log('MsgModProvider (metadata update):', modMsg);
+        if (CONFIG.DEBUG_MODE) console.log('MsgModProvider (metadata update):', modMsg);
         
         statusDiv.innerHTML = `
           <div class="status-box testing">
@@ -3556,7 +3572,7 @@ services:
           timestamp: Date.now()
         };
         sessionStorage.setItem(STATE_KEY, JSON.stringify(savedState));
-        console.log('[State] Saved:', savedState.currentStep);
+        if (CONFIG.DEBUG_MODE) console.log('[State] Saved:', savedState.currentStep);
       } catch (err) {
         console.error('[State] Save failed:', err);
       }
@@ -3568,7 +3584,7 @@ services:
         if (!saved) return false;
         
         const savedState = JSON.parse(saved);
-        console.log('[State] Restoring:', savedState);
+        if (CONFIG.DEBUG_MODE) console.log('[State] Restoring step:', savedState.currentStep);
         
         // Restore state variables
         if (savedState.selectedService) state.selectedService = savedState.selectedService;
@@ -3653,7 +3669,7 @@ services:
     function clearState() {
       try {
         sessionStorage.removeItem(STATE_KEY);
-        console.log('[State] Cleared');
+        if (CONFIG.DEBUG_MODE) console.log('[State] Cleared');
       } catch (err) {
         console.error('[State] Clear failed:', err);
       }
@@ -3800,7 +3816,7 @@ services:
           }
         };
         
-        console.log('Creating x402 backing contract:', msg);
+        if (CONFIG.DEBUG_MODE) console.log('Creating x402 backing contract:', msg);
         
         statusDiv.innerHTML = `
           <div style="padding: 0.75rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.5rem;">
@@ -3845,7 +3861,7 @@ services:
         });
         
         const result = await broadcastResponse.json();
-        console.log('Broadcast result:', result);
+        if (CONFIG.DEBUG_MODE) console.log('Broadcast result:', result);
         
         if (result.tx_response?.code !== 0) {
           throw new Error(result.tx_response?.raw_log || 'Transaction failed');
