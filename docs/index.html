@@ -899,6 +899,38 @@
       margin-left: 0.25rem;
     }
 
+    /* Provider Health Status Indicators */
+    .health-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      margin-right: 5px;
+      vertical-align: middle;
+      flex-shrink: 0;
+    }
+    .health-dot.online  { background: var(--success); box-shadow: 0 0 5px var(--success); }
+    .health-dot.slow    { background: var(--warning); box-shadow: 0 0 5px var(--warning); }
+    .health-dot.offline { background: var(--error);   box-shadow: 0 0 5px var(--error);   }
+    .health-dot.unknown { background: var(--text-muted); }
+    .health-dot.checking {
+      background: var(--border);
+      animation: dotPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes dotPulse {
+      0%, 100% { opacity: 0.25; }
+      50%       { opacity: 1; }
+    }
+    .latency-val {
+      font-variant-numeric: tabular-nums;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    .latency-val.online  { color: var(--success); }
+    .latency-val.slow    { color: var(--warning); }
+    .latency-val.offline { color: var(--error);   }
+    .latency-val.unknown, .latency-val.checking { color: var(--text-muted); }
+
     /* Reduced motion */
     @media (prefers-reduced-motion: reduce) {
       * {
@@ -924,9 +956,10 @@
       <div class="nav-links">
         <a href="analytics.html" class="nav-link">📊 Analytics</a>
         <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
+        <a href="agents.html" class="nav-link">🤖 AI Agents</a>
+        <a href="x402-setup.html" class="nav-link">⚡ x402</a>
         <a href="https://racing.builtonarkeo.com/" target="_blank" class="nav-link">🏇 Racing</a>
         <a href="https://docs.arkeo.network" target="_blank" class="nav-link">Docs</a>
-        <a href="x402-setup.html" class="nav-link">⚡ x402</a>
       </div>
       <div class="nav-buttons">
         <a href="my-contracts.html" class="nav-btn">My Contracts</a>
@@ -939,6 +972,7 @@
     <div class="mobile-menu" id="mobileMenu">
       <a href="analytics.html">📊 Analytics</a>
       <a href="request-chain.html">🗳️ Request Chain</a>
+      <a href="agents.html">🤖 AI Agents</a>
       <a href="x402-setup.html">⚡ x402</a>
       <a href="https://docs.arkeo.network" target="_blank">📄 Docs</a>
       <a href="my-contracts.html">📋 My Contracts</a>
@@ -1042,6 +1076,7 @@
               <th title="Queries Per Minute — from on-chain contract settings">QPM</th>
               <th>Status</th>
               <th title="Health checks use on-chain contract data. Active contracts prove a provider is serving data.">Health ℹ️</th>
+              <th title="Live response time measured from your browser. Green < 2s · Yellow 2-5s · Red timeout">Latency</th>
               <th></th>
             </tr>
           </thead>
@@ -1473,6 +1508,7 @@
       contracts: [],
       contractsByProvider: {}, // pubkey -> count of active contracts
       reputationScores: {}, // pubkey -> { total, requests, revenue, bond, contracts, services, breakdown }
+      healthStatus: {},     // pubkey -> { status: 'online'|'slow'|'offline'|'unknown'|'checking', latencyMs: number|null }
       timeRange: 'all_time',
       chart: null,
     };
@@ -1935,7 +1971,7 @@
       if (providers.length === 0) {
         const emptyMsg = '<p style="color: var(--text-dim); text-align: center; padding: 2rem;">No providers found.</p>';
         grid.innerHTML = emptyMsg;
-        tableBody.innerHTML = `<tr><td colspan="11" style="text-align: center; color: var(--text-dim); padding: 2rem;">No providers found.</td></tr>`;
+        tableBody.innerHTML = `<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 2rem;">No providers found.</td></tr>`;
         document.getElementById('viewAllContainer')?.remove();
         return;
       }
@@ -1970,8 +2006,10 @@
         const repBadge = getReputationBadge(repScore);
         const repTip = reputationTooltip(p.pubkey);
         
+        const hs = state.healthStatus[p.pubkey];
+        const latencyHtml = getLivLatencyHtml(p.pubkey);
         return `
-          <tr>
+          <tr data-pubkey="${escapeHtml(p.pubkey)}">
             <td class="provider-name-cell">
               ${escapeHtml(p.name || 'Unknown')}
               <small>${p.location || 'Unknown region'}</small>
@@ -1992,7 +2030,8 @@
                 ${isOnline ? '● Online' : '○ Offline'}
               </span>
             </td>
-            <td>${healthHtml(p, false)}</td>
+            <td data-cell="health">${getLivHealthDotHtml(p.pubkey)}</td>
+            <td data-cell="latency" class="latency-val ${hs ? hs.status : 'checking'}">${latencyHtml}</td>
             <td style="display: flex; gap: 0.5rem;">
               <a href="provider.html?pubkey=${encodeURIComponent(p.pubkey || '')}" class="btn btn-secondary btn-sm">Details</a>
               <a href="subscribe.html?provider=${encodeURIComponent(p.pubkey || '')}" class="btn btn-primary btn-sm">Subscribe</a>
@@ -2069,7 +2108,7 @@
                 ${isOnline ? '● Online' : '○ Offline'}
               </span>
             </div>
-            <div style="margin-bottom: 0.5rem;">${healthHtml(p, true)}</div>
+            <div style="margin-bottom: 0.5rem;">${getLivHealthDotHtml(p.pubkey)}${(() => { const hs = state.healthStatus[p.pubkey]; return hs && hs.latencyMs ? ` <span class="latency-val ${hs.status}" style="font-size:0.75rem;">${hs.latencyMs}ms</span>` : ''; })()}</div>
             ${p.description ? `<p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.4;">${escapeHtml(p.description.slice(0, 100))}${p.description.length > 100 ? '...' : ''}</p>` : ''}
             <div style="margin-bottom: 1rem;">
               <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Supported Chains</div>
@@ -2175,33 +2214,124 @@
       renderProviders(filtered, 5);
     }
 
-    // Live health check — pings each provider's metadata endpoint
-    async function runLiveHealthChecks(providers) {
-      const checks = providers.map(async (p) => {
-        // Find a metadata URI to ping
-        const metaUri = p.metadataUri;
-        if (!metaUri || !metaUri.startsWith('http')) return;
-        
-        try {
-          // Try HTTPS first (works from GitHub Pages), fall back to no-cors ping for HTTP
-          const url = metaUri.startsWith('https') ? metaUri : metaUri.replace(/^http:/, 'https:');
-          const resp = await fetch(url, { mode: 'cors', signal: AbortSignal.timeout(5000) });
-          if (resp.ok) {
-            const known = findKnown(p.pubkey);
-            if (known) known.health = 'healthy';
-            else KNOWN_PROVIDERS[p.pubkey] = { name: p.name || 'Unknown', health: 'healthy' };
-          } else {
-            const known = findKnown(p.pubkey);
-            if (known) known.health = 'unhealthy';
-          }
-        } catch (e) {
-          // HTTPS failed — can't verify from browser (mixed content). Leave health as-is from providers.js.
+    // ============================================================
+    // LIVE HEALTH CHECK — measures latency to each provider endpoint
+    // ============================================================
+
+    /**
+     * Returns the inner HTML for a live health dot.
+     * Called both at render time (from state) and after updates.
+     */
+    function getLivHealthDotHtml(pubkey) {
+      const hs = state.healthStatus[pubkey];
+      if (!hs) {
+        // Fall back to existing legacy indicator before health checks run
+        const p = state.providerInfos[pubkey];
+        if (p) return healthHtml(p, false);
+        return '<span class="health-dot checking" title="Checking..."></span><span style="color:var(--text-muted);font-size:0.8rem;">Checking…</span>';
+      }
+      const LABELS  = { online: 'Online',      slow: 'Slow',        offline: 'Offline',  checking: 'Checking…', unknown: 'Unknown' };
+      const TITLES  = {
+        online:   'Responding quickly (< 2 s)',
+        slow:     'Responding slowly (2 – 5 s)',
+        offline:  'No response within 5 s timeout',
+        checking: 'Health check in progress…',
+        unknown:  'Could not verify — CORS or unreachable (shown as Unknown)',
+      };
+      const label = LABELS[hs.status]  || 'Unknown';
+      const title = TITLES[hs.status]  || '';
+      return `<span class="health-dot ${hs.status}" title="${title}"></span><span style="font-size:0.8rem;">${label}</span>`;
+    }
+
+    /**
+     * Returns the inner HTML for the latency cell.
+     */
+    function getLivLatencyHtml(pubkey) {
+      const hs = state.healthStatus[pubkey];
+      if (!hs || hs.status === 'checking') return '<span style="opacity:0.4">…</span>';
+      if (hs.latencyMs === null) return '—';
+      return `${hs.latencyMs}<span style="font-size:0.7rem;color:var(--text-muted);margin-left:1px">ms</span>`;
+    }
+
+    /**
+     * After an individual check finishes, update just that provider's row cells
+     * without re-rendering the entire table.
+     */
+    function updateProviderHealthRow(pubkey) {
+      const rows = document.querySelectorAll(`tr[data-pubkey="${CSS.escape(pubkey)}"]`);
+      rows.forEach(row => {
+        const healthCell  = row.querySelector('[data-cell="health"]');
+        const latencyCell = row.querySelector('[data-cell="latency"]');
+        if (healthCell)  healthCell.innerHTML = getLivHealthDotHtml(pubkey);
+        if (latencyCell) {
+          const hs = state.healthStatus[pubkey];
+          latencyCell.className = `latency-val ${hs ? hs.status : 'checking'}`;
+          latencyCell.innerHTML = getLivLatencyHtml(pubkey);
         }
       });
-      
+    }
+
+    /**
+     * Ping a single provider endpoint and return { status, latencyMs }.
+     * Handles CORS gracefully — returns 'unknown' instead of throwing.
+     */
+    async function pingProvider(provider) {
+      const uri = provider.metadataUri;
+      if (!uri || !uri.startsWith('http')) return { status: 'unknown', latencyMs: null };
+      if (uri.includes('127.0.0.1') || uri.includes('localhost')) return { status: 'unknown', latencyMs: null };
+
+      // Prefer HTTPS (avoids mixed-content blocks when page is on HTTPS)
+      const url = uri.startsWith('https') ? uri : uri.replace(/^http:/, 'https:');
+      const TIMEOUT_MS = 5000;
+
+      const t0 = performance.now();
+      try {
+        const resp = await fetch(url, {
+          mode: 'cors',
+          cache: 'no-store',
+          signal: AbortSignal.timeout(TIMEOUT_MS),
+        });
+        const latencyMs = Math.round(performance.now() - t0);
+
+        // Update legacy health tracking so getHealthIndicator still works
+        const known = findKnown(provider.pubkey);
+        if (known) known.health = resp.ok ? 'healthy' : 'unhealthy';
+        else KNOWN_PROVIDERS[provider.pubkey] = { name: provider.name || 'Unknown', health: resp.ok ? 'healthy' : 'unhealthy' };
+
+        const status = latencyMs < 2000 ? 'online' : latencyMs < 5000 ? 'slow' : 'offline';
+        return { status, latencyMs };
+      } catch (err) {
+        const elapsed = Math.round(performance.now() - t0);
+        // If it timed out (close to our timeout), call it offline; otherwise CORS/network = unknown
+        if (elapsed >= TIMEOUT_MS - 100) {
+          return { status: 'offline', latencyMs: null };
+        }
+        return { status: 'unknown', latencyMs: null };
+      }
+    }
+
+    // Live health check — pings each provider's metadata endpoint
+    async function runLiveHealthChecks(providers) {
+      if (!providers || providers.length === 0) return;
+
+      // Mark all as 'checking' immediately so dots show a spinner
+      providers.forEach(p => {
+        state.healthStatus[p.pubkey] = { status: 'checking', latencyMs: null };
+      });
+      // Trigger a lightweight initial re-render to show checking dots
+      // (the table is already rendered; we just patch existing rows)
+      providers.forEach(p => updateProviderHealthRow(p.pubkey));
+
+      // Run all pings in parallel, updating each row as it resolves
+      const checks = providers.map(async (p) => {
+        const result = await pingProvider(p);
+        state.healthStatus[p.pubkey] = result;
+        updateProviderHealthRow(p.pubkey);
+      });
+
       await Promise.allSettled(checks);
-      
-      // Re-render with updated health
+
+      // Final sort: healthy first, then reputation (re-render respecting new health data)
       const onlineProviders = Object.values(state.providerInfos).filter(p => {
         if (p.status !== 'ONLINE' || p.totalBond < parseInt(CONFIG.MIN_BOND)) return false;
         const uri = p.metadataUri || '';
@@ -2211,12 +2341,12 @@
         return true;
       });
       onlineProviders.sort((a, b) => {
-        const aHealth = (KNOWN_PROVIDERS[a.pubkey]?.health === 'healthy') ? 1 : 0;
-        const bHealth = (KNOWN_PROVIDERS[b.pubkey]?.health === 'healthy') ? 1 : 0;
-        if (bHealth !== aHealth) return bHealth - aHealth;
+        const aOnline = state.healthStatus[a.pubkey]?.status === 'online' ? 2 : state.healthStatus[a.pubkey]?.status === 'slow' ? 1 : 0;
+        const bOnline = state.healthStatus[b.pubkey]?.status === 'online' ? 2 : state.healthStatus[b.pubkey]?.status === 'slow' ? 1 : 0;
+        if (bOnline !== aOnline) return bOnline - aOnline;
         return (state.reputationScores[b.pubkey]?.total || 0) - (state.reputationScores[a.pubkey]?.total || 0);
       });
-      renderProviders(onlineProviders, 5);
+      renderProviders(onlineProviders, showAllProviders ? null : 5);
     }
 
     function getHealthIndicator(provider) {
