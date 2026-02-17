@@ -3919,7 +3919,6 @@ console.log(data);</pre>
         const sigHex = Array.from(sigBytes).map(b => b.toString(16).padStart(2, '0')).join('');
         
         // arkauth format: "contractId:pubkey:nonce:signature"
-        const spenderPubkey = signingKey.publicKeyBech32;
         const arkauth = `${contractId}:${spenderPubkey}:${nonce}:${sigHex}`;
         
         // Build the sentinel URL with arkauth query parameter
