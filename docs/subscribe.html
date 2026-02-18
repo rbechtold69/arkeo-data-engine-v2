@@ -4050,23 +4050,47 @@ console.log(data);</pre>
           queryUrl = `${proxyBase}${encodeURIComponent(`${sentinelBase}/${serviceName}${queryPath}`)}?arkauth=${encodeURIComponent(arkauth)}`;
         }
         
+        // Detect EVM vs Cosmos chain by service name
+        const EVM_PREFIXES = ['eth','base','bsc','bnb','polygon','arbitrum','optimism','avax','blast','ftm','fuse','celo','glmr','dym','evmos','flare','frx','bera'];
+        const isEvmService = EVM_PREFIXES.some(p => serviceName.startsWith(p));
+
         const startTime = performance.now();
-        const response = await fetch(queryUrl);
+        let response, data, blockHeight, network, moniker;
+
+        if (isEvmService) {
+          // EVM chain: POST eth_blockNumber JSON-RPC
+          const evmUrl = isHttpSentinel && isHttpsPage
+            ? `https://red5-arkeo.duckdns.org/arkeo-proxy/${encodeURIComponent(`${sentinelBase}/${serviceName}`)}?arkauth=${encodeURIComponent(arkauth)}`
+            : `${sentinelBase}/${serviceName}?arkauth=${encodeURIComponent(arkauth)}`;
+          response = await fetch(evmUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ jsonrpc: '2.0', method: 'eth_blockNumber', params: [], id: 1 })
+          });
+          data = await response.json();
+          const hexBlock = data?.result || '0x0';
+          blockHeight = parseInt(hexBlock, 16).toLocaleString();
+          network = serviceName;
+          moniker = resolvedMetadataUri ? new URL(resolvedMetadataUri).hostname : 'provider';
+        } else {
+          // Cosmos/Tendermint chain: GET /status
+          response = await fetch(queryUrl);
+          data = await response.json();
+          blockHeight = data?.result?.sync_info?.latest_block_height || 'unknown';
+          network = data?.result?.node_info?.network || 'unknown';
+          moniker = data?.result?.node_info?.moniker || 'unknown';
+        }
+
         const elapsed = Math.round(performance.now() - startTime);
         
         if (response.ok) {
-          const data = await response.json();
-          const blockHeight = data?.result?.sync_info?.latest_block_height || 'unknown';
-          const network = data?.result?.node_info?.network || 'unknown';
-          const moniker = data?.result?.node_info?.moniker || 'unknown';
-          
           resultDiv.innerHTML = `
             <div style="padding: 1rem; background: rgba(16,185,129,0.1); border: 1px solid #10b981; border-radius: 0.5rem;">
               <div style="color: #10b981; font-weight: 700; font-size: 1.1rem; margin-bottom: 0.75rem;">✅ Connection Successful!</div>
               <div style="display: grid; grid-template-columns: auto 1fr; gap: 0.25rem 1rem; font-size: 0.9rem;">
-                <span style="color: var(--text-dim);">Provider:</span> <span style="font-weight: 600;">${moniker}</span>
-                <span style="color: var(--text-dim);">Network:</span> <span>${network}</span>
-                <span style="color: var(--text-dim);">Block Height:</span> <span style="font-family: monospace;">${blockHeight}</span>
+                <span style="color: var(--text-dim);">Provider:</span> <span style="font-weight: 600;">${escapeHtml(moniker)}</span>
+                <span style="color: var(--text-dim);">Service:</span> <span>${escapeHtml(network)}</span>
+                <span style="color: var(--text-dim);">Block Height:</span> <span style="font-family: monospace;">${escapeHtml(String(blockHeight))}</span>
                 <span style="color: var(--text-dim);">Response Time:</span> <span>${elapsed}ms</span>
                 <span style="color: var(--text-dim);">Contract:</span> <span style="font-family: monospace;">#${contractId}</span>
                 <span style="color: var(--text-dim);">Auth:</span> <span style="color: #10b981;">✓ Signed with delegate key</span>
@@ -4076,11 +4100,11 @@ console.log(data);</pre>
               </div>
             </div>`;
         } else {
-          const errText = await response.text().catch(() => '');
+          const errText = JSON.stringify(data || {}).slice(0, 200);
           resultDiv.innerHTML = `
             <div style="padding: 1rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem;">
               <div style="color: var(--error); font-weight: 600;">❌ Query Failed (HTTP ${response.status})</div>
-              <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem; font-family: monospace; word-break: break-all;">${escapeHtml(errText.slice(0, 200))}</div>
+              <div style="font-size: 0.85rem; color: var(--text-dim); margin-top: 0.25rem; font-family: monospace; word-break: break-all;">${escapeHtml(errText)}</div>
             </div>`;
         }
       } catch (err) {
