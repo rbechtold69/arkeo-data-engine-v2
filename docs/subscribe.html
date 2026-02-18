@@ -3961,16 +3961,36 @@ console.log(data);</pre>
           (SERVICE_ID_TO_NAME[selectedProvider.serviceId] || selectedProvider.serviceId) : 
           'arkeo-mainnet-fullnode';
         
-        // Fetch current nonce from chain
+        // Fetch current nonce + provider info from chain
         let nonce = 1;
+        let contractProviderPubkey = null;
+        let contractServiceId = null;
         try {
           const nonceResp = await fetch(`${CONFIG.REST_API}/arkeo/contract/${contractId}`);
           if (nonceResp.ok) {
             const nonceData = await nonceResp.json();
             nonce = parseInt(nonceData.contract?.nonce || '0') + 1;
             if (nonce < 1) nonce = 1;
+            contractProviderPubkey = nonceData.contract?.provider || null;
+            contractServiceId = nonceData.contract?.service || null;
           }
         } catch(e) { /* default to 1 */ }
+
+        // If no selectedProvider (manual entry), look up provider metadata from chain
+        let resolvedMetadataUri = selectedProvider?.metadataUri || null;
+        if (!resolvedMetadataUri && contractProviderPubkey) {
+          try {
+            const provResp = await fetch(`${CONFIG.REST_API}/arkeo/providers`);
+            if (provResp.ok) {
+              const provData = await provResp.json();
+              const match = (provData.provider || []).find(p => {
+                const pk = p.pub_key?.key || p.pub_key || '';
+                return contractProviderPubkey.includes(pk.slice(0, 20)) || pk.includes(contractProviderPubkey.slice(0, 20));
+              });
+              if (match) resolvedMetadataUri = match.metadata_uri || null;
+            }
+          } catch(e) { /* couldn't look up provider */ }
+        }
         
         // Preimage format: "{contractId}:{nonce}:" (matches chain verification)
         const preimage = `${contractId}:${nonce}:`;
@@ -3984,8 +4004,8 @@ console.log(data);</pre>
         const arkauth = `${contractId}:${spenderPubkey}:${nonce}:${sigHex}`;
         
         // Build the sentinel URL with arkauth query parameter
-        const endpoint = selectedProvider?.metadataUri?.replace('/metadata.json', '') || 
-          `https://red5-arkeo.duckdns.org`;
+        const endpoint = (resolvedMetadataUri || selectedProvider?.metadataUri || '')
+          .replace('/metadata.json', '') || `https://red5-arkeo.duckdns.org`;
         const sentinelBase = endpoint.replace(/\/$/, '');
         const queryPath = '/status';
         let queryUrl = `${sentinelBase}/${serviceName}${queryPath}?arkauth=${encodeURIComponent(arkauth)}`;
