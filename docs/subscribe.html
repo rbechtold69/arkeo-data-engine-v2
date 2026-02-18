@@ -1658,8 +1658,39 @@ console.log(data);</pre>
     
     // Service ID to actual service name (for API calls)
     const SERVICE_ID_TO_NAME = {
-      1: 'arkeo-mainnet-rpc',
-      2: 'arkeo-mainnet-fullnode',
+      0: 'unknown', 1: 'mock', 2: 'arkeo-mainnet-fullnode', 3: 'avax-mainnet-fullnode',
+      4: 'avax-mainnet-archivenode', 5: 'bch-mainnet-fullnode', 6: 'bch-mainnet-lightnode',
+      7: 'bnb-mainnet-fullnode', 8: 'bsc-mainnet-fullnode', 9: 'bsc-mainnet-archivenode',
+      10: 'btc-mainnet-fullnode', 11: 'btc-mainnet-lightnode', 12: 'cardano-mainnet-relaynode',
+      13: 'gaia-mainnet-rpc', 14: 'doge-mainnet-fullnode', 15: 'doge-mainnet-lightnode',
+      16: 'etc-mainnet-archivenode', 17: 'etc-mainnet-fullnode', 18: 'etc-mainnet-lightnode',
+      19: 'eth-mainnet-archivenode', 20: 'eth-mainnet-fullnode', 21: 'eth-mainnet-lightnode',
+      22: 'ltc-mainnet-fullnode', 23: 'ltc-mainnet-lightnode', 24: 'optimism-mainnet-fullnode',
+      25: 'osmosis-mainnet-fullnode', 26: 'polkadot-mainnet-fullnode', 27: 'polkadot-mainnet-lightnode',
+      28: 'polkadot-mainnet-archivenode', 29: 'polygon-mainnet-fullnode', 30: 'polygon-mainnet-archivenode',
+      31: 'sol-mainnet-fullnode', 32: 'thorchain-mainnet-fullnode', 33: 'bch-mainnet-unchained',
+      34: 'btc-mainnet-unchained', 35: 'bnb-mainnet-unchained', 36: 'bsc-mainnet-unchained',
+      38: 'gaia-mainnet-unchained', 39: 'doge-mainnet-unchained', 40: 'eth-mainnet-unchained',
+      41: 'avax-mainnet-unchained', 42: 'ltc-mainnet-unchained', 43: 'osmosis-mainnet-unchained',
+      44: 'thorchain-mainnet-unchained', 45: 'optimism-mainnet-unchained', 46: 'gaia-mainnet-grpc',
+      47: 'btc-mainnet-blockbook', 48: 'ltc-mainnet-blockbook', 49: 'bch-mainnet-blockbook',
+      50: 'doge-mainnet-blockbook', 51: 'agoric-mainnet-archivenode', 52: 'agoric-mainnet-fullnode',
+      55: 'akash-mainnet-archivenode', 56: 'akash-mainnet-fullnode', 63: 'aptos-mainnet-fullnode',
+      65: 'arbitrum-mainnet-archivenode', 66: 'arbitrum-mainnet-fullnode', 67: 'arbitrum-mainnet-unchained',
+      74: 'arkeo-mainnet-archivenode', 75: 'arkeo-mainnet-unchained', 77: 'arkeo-testnet-fullnode',
+      80: 'avax-fuji-testnet-fullnode', 83: 'azero-mainnet-fullnode', 86: 'babylon-mainnet-fullnode',
+      88: 'base-mainnet-archivenode', 89: 'base-mainnet-fullnode', 90: 'base-mainnet-unchained',
+      92: 'base-testnet-fullnode', 97: 'bera-mainnet-archivenode', 98: 'bera-mainnet-fullnode',
+      102: 'blast-mainnet-archivenode', 103: 'blast-mainnet-fullnode', 108: 'bsc-testnet-fullnode',
+      115: 'celo-mainnet-archivenode', 116: 'celo-mainnet-fullnode', 125: 'cro-mainnet-archivenode',
+      126: 'cro-mainnet-fullnode', 140: 'dym-mainnet-archivenode', 141: 'dym-mainnet-fullnode',
+      150: 'eth-holesky-testnet-fullnode', 152: 'eth-mainnet-blockbook', 154: 'eth-sepolia-testnet-fullnode',
+      156: 'evmos-mainnet-archivenode', 157: 'evmos-mainnet-fullnode', 160: 'fil-mainnet-fullnode',
+      163: 'flare-mainnet-archivenode', 164: 'flare-mainnet-fullnode', 169: 'flow-mainnet-fullnode',
+      172: 'frx-mainnet-archivenode', 173: 'frx-mainnet-fullnode', 178: 'ftm-mainnet-archivenode',
+      179: 'ftm-mainnet-fullnode', 183: 'fuse-mainnet-archivenode', 184: 'fuse-mainnet-fullnode',
+      187: 'gaia-mainnet-archivenode', 188: 'gaia-mainnet-fullnode', 189: 'gaia-mainnet-fullnode-grpc',
+      192: 'glmr-mainnet-archivenode', 193: 'glmr-mainnet-fullnode',
     };
     
     // Demand data from contracts
@@ -3957,9 +3988,10 @@ console.log(data);</pre>
         const pubKeyBytes = secp.getPublicKey(testPrivKey, true);
         const spenderPubkey = pubkeyToBech32(pubKeyBytes, 'arkeopub');
         
-        const serviceName = selectedProvider?.serviceId ? 
-          (SERVICE_ID_TO_NAME[selectedProvider.serviceId] || selectedProvider.serviceId) : 
-          'arkeo-mainnet-fullnode';
+        const serviceIdToUse = selectedProvider?.serviceId || contractServiceId;
+        const serviceName = serviceIdToUse
+          ? (SERVICE_ID_TO_NAME[serviceIdToUse] || String(serviceIdToUse))
+          : 'arkeo-mainnet-fullnode';
         
         // Fetch current nonce + provider info from chain
         let nonce = 1;
@@ -3985,7 +4017,7 @@ console.log(data);</pre>
               const provData = await provResp.json();
               const match = (provData.provider || []).find(p => {
                 const pk = p.pub_key?.key || p.pub_key || '';
-                return contractProviderPubkey.includes(pk.slice(0, 20)) || pk.includes(contractProviderPubkey.slice(0, 20));
+                return pk === contractProviderPubkey;
               });
               if (match) resolvedMetadataUri = match.metadata_uri || null;
             }
