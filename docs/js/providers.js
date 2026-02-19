@@ -54,6 +54,14 @@ const KNOWN_PROVIDERS = {
     health: 'healthy',
   },
 
+  'arkeopub1addwnpepqwj082rncmh2v3vjhstdx2v8pswcmmy7zcvu8n9unk8rxsp76qcmk8jg23a': {
+    name: 'Polkachu',
+    description: 'Professional validator and node infrastructure provider',
+    website: 'https://polkachu.com',
+    location: 'Americas',
+    health: 'healthy',
+  },
+
   'arkeopub1addwnpepqfuk5cy2ey6h3pfpwerkhfps0d4vqt6men4j2wx56zfn5nrfk8n9ymnj327': {
     name: 'Red_5 Arkeo',
     description: 'Arkeo mainnet full node — reliable RPC infrastructure',
