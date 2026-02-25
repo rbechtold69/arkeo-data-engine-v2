@@ -185,12 +185,26 @@
       background: rgba(59, 224, 255, 0.05);
     }
     .nav-btn-accent {
-      border-color: rgba(59, 224, 255, 0.3);
-      color: var(--arkeo);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #f59e0b;
+      font-weight: 600;
     }
     .nav-btn-accent:hover {
-      background: rgba(59, 224, 255, 0.1);
+      background: rgba(245, 158, 11, 0.12);
+      border-color: #f59e0b;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    }
+
+    .nav-btn-highlight {
+      background: rgba(59, 224, 255, 0.12);
+      border-color: rgba(59, 224, 255, 0.5);
+      color: var(--arkeo);
+      font-weight: 600;
+    }
+    .nav-btn-highlight:hover {
+      background: rgba(59, 224, 255, 0.22);
       border-color: var(--arkeo);
+      box-shadow: 0 0 10px rgba(59, 224, 255, 0.2);
     }
 
     /* Hero Section */
@@ -958,28 +972,27 @@
         <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
         <a href="agents.html" class="nav-link">🤖 AI Agents</a>
         <a href="x402-setup.html" class="nav-link">⚡ x402</a>
-        <a href="https://racing.builtonarkeo.com/" target="_blank" rel="noopener" class="nav-link">🏇 Racing</a>
         <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
       </div>
       <div class="nav-buttons">
+        <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
+        <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
         <a href="my-contracts.html" class="nav-btn">My Contracts</a>
-        <a href="become-provider.html" class="nav-btn">Provide Data</a>
-        <a href="subscribe.html" class="nav-btn">Use Data</a>
         <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
       </div>
       <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
     </div>
     <div class="mobile-menu" id="mobileMenu">
+      <a href="index.html">🏠 Home</a>
+      <a href="become-provider.html">🚀 Sell Data</a>
+      <a href="subscribe.html">📡 Buy Data</a>
+      <a href="my-contracts.html">📋 My Contracts</a>
       <a href="analytics.html">📊 Analytics</a>
       <a href="request-chain.html">🗳️ Request Chain</a>
-      <a href="agents.html">🤖 AI Agents</a>
       <a href="x402-setup.html">⚡ x402</a>
+      <a href="agents.html">🤖 AI Agents</a>
       <a href="https://docs.arkeo.network" target="_blank" rel="noopener">📄 Docs</a>
-      <a href="my-contracts.html">📋 My Contracts</a>
-      <a href="become-provider.html">🚀 Provide Data</a>
-      <a href="subscribe.html">📡 Use Data</a>
       <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener">💰 Buy ARKEO</a>
-      <a href="https://racing.builtonarkeo.com/" target="_blank" rel="noopener">🏇 Racing</a>
     </div>
   </nav>
 
@@ -1476,7 +1489,8 @@
         <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="footer-link" style="color: #f59e0b;">💎 Buy ARKEO</a>
         <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="footer-link">Docs</a>
         <a href="agents.html" class="footer-link">AI Agents</a>
-      </div>
+                      <a href="https://racing.builtonarkeo.com/" target="_blank" rel="noopener" class="footer-link">🏇 Racing</a>
+</div>
       <div style="display: flex; gap: 1rem; align-items: center;">
         <a href="https://discord.gg/f3cKq2bPPF" target="_blank" rel="noopener" title="Discord" style="color: var(--text-dim); transition: color 0.2s;" onmouseover="this.style.color='#5865F2'" onmouseout="this.style.color='var(--text-dim)'">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
@@ -1760,20 +1774,26 @@
       }
       
       try {
-        const response = await fetch(info.metadataUri, { 
-          signal: AbortSignal.timeout(5000) // 5 second timeout
+        // Route through /health-check proxy to avoid mixed-content blocks
+        // (marketplace is HTTPS; most sentinels are HTTP-only)
+        const proxyUrl = `/health-check?url=${encodeURIComponent(info.metadataUri)}`;
+        const response = await fetch(proxyUrl, {
+          signal: AbortSignal.timeout(8000),
         });
         
         if (response.ok) {
-          const metadata = await response.json();
-          const moniker = metadata.config?.moniker || metadata.moniker;
-          
-          if (moniker && moniker.length > 0) {
-            info.name = moniker;
-            info.description = metadata.config?.description || metadata.description || '';
-            info.website = metadata.config?.website || metadata.website || '';
-            info.location = metadata.config?.location || metadata.location || '';
-            info.verified = true; // Metadata accessible = verified
+          const result = await response.json();
+          const metadata = result?.data;
+          if (metadata) {
+            const moniker = metadata.config?.moniker || metadata.moniker;
+            
+            if (moniker && moniker.length > 0) {
+              info.name = moniker;
+              info.description = metadata.config?.description || metadata.description || '';
+              info.website = metadata.config?.website || metadata.website || '';
+              info.location = metadata.config?.location || metadata.location || '';
+              info.verified = true; // Metadata accessible = verified
+            }
           }
         }
       } catch (err) {
@@ -2273,39 +2293,41 @@
 
     /**
      * Ping a single provider endpoint and return { status, latencyMs }.
-     * Handles CORS gracefully — returns 'unknown' instead of throwing.
+     *
+     * Routes all requests through /health-check (Cloudflare Pages Function) to
+     * avoid mixed-content blocks — the marketplace is HTTPS but most sentinels
+     * are HTTP-only. The proxy fetches server-side and returns the result.
      */
     async function pingProvider(provider) {
       const uri = provider.metadataUri;
       if (!uri || !uri.startsWith('http')) return { status: 'unknown', latencyMs: null };
       if (uri.includes('127.0.0.1') || uri.includes('localhost')) return { status: 'unknown', latencyMs: null };
 
-      // Prefer HTTPS (avoids mixed-content blocks when page is on HTTPS)
-      const url = uri.startsWith('https') ? uri : uri.replace(/^http:/, 'https:');
-      const TIMEOUT_MS = 5000;
+      const proxyUrl = `/health-check?url=${encodeURIComponent(uri)}`;
 
       const t0 = performance.now();
       try {
-        const resp = await fetch(url, {
-          mode: 'cors',
+        const resp = await fetch(proxyUrl, {
           cache: 'no-store',
-          signal: AbortSignal.timeout(TIMEOUT_MS),
+          signal: AbortSignal.timeout(10000), // 10s — proxy has its own 7s timeout
         });
         const latencyMs = Math.round(performance.now() - t0);
+        const result = resp.ok ? await resp.json() : null;
+
+        const ok = result?.ok === true;
 
         // Update legacy health tracking so getHealthIndicator still works
         const known = findKnown(provider.pubkey);
-        if (known) known.health = resp.ok ? 'healthy' : 'unhealthy';
-        else KNOWN_PROVIDERS[provider.pubkey] = { name: provider.name || 'Unknown', health: resp.ok ? 'healthy' : 'unhealthy' };
+        if (known) known.health = ok ? 'healthy' : 'unhealthy';
+        else KNOWN_PROVIDERS[provider.pubkey] = { name: provider.name || 'Unknown', health: ok ? 'healthy' : 'unhealthy' };
 
-        const status = latencyMs < 2000 ? 'online' : latencyMs < 5000 ? 'slow' : 'offline';
-        return { status, latencyMs };
+        if (!ok) return { status: 'offline', latencyMs: result?.latencyMs || null };
+
+        // Use actual upstream latency reported by the proxy (more accurate than round-trip to CF)
+        const upstreamLatency = result?.latencyMs ?? latencyMs;
+        const status = upstreamLatency < 2000 ? 'online' : upstreamLatency < 5000 ? 'slow' : 'offline';
+        return { status, latencyMs: upstreamLatency };
       } catch (err) {
-        const elapsed = Math.round(performance.now() - t0);
-        // If it timed out (close to our timeout), call it offline; otherwise CORS/network = unknown
-        if (elapsed >= TIMEOUT_MS - 100) {
-          return { status: 'offline', latencyMs: null };
-        }
         return { status: 'unknown', latencyMs: null };
       }
     }

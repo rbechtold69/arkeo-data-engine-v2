@@ -568,12 +568,26 @@
       background: rgba(59, 224, 255, 0.05);
     }
     .nav-btn-accent {
-      border-color: rgba(59, 224, 255, 0.3);
-      color: var(--arkeo, #3BE0FF);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #f59e0b;
+      font-weight: 600;
     }
     .nav-btn-accent:hover {
-      background: rgba(59, 224, 255, 0.1);
-      border-color: var(--arkeo, #3BE0FF);
+      background: rgba(245, 158, 11, 0.12);
+      border-color: #f59e0b;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    }
+
+    .nav-btn-highlight {
+      background: rgba(59, 224, 255, 0.12);
+      border-color: rgba(59, 224, 255, 0.5);
+      color: var(--arkeo);
+      font-weight: 600;
+    }
+    .nav-btn-highlight:hover {
+      background: rgba(59, 224, 255, 0.22);
+      border-color: var(--arkeo);
+      box-shadow: 0 0 10px rgba(59, 224, 255, 0.2);
     }
     @media (max-width: 768px) {
       .nav { padding: 0.75rem 1rem; }
@@ -588,6 +602,38 @@
       .logo { font-size: 1rem; }
       .logo img { height: 32px; }
     }
+/* Footer */
+.footer {
+  background: var(--bg-card, #12151c);
+  border-top: 1px solid var(--border, #252a36);
+  padding: 2rem;
+  margin-top: 4rem;
+}
+.footer-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+.footer-links {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+.footer-link {
+  color: var(--text-dim, #8b92a5);
+  text-decoration: none;
+  font-size: 0.875rem;
+  transition: color 0.2s;
+}
+.footer-link:hover { color: var(--arkeo, #3BE0FF); }
+@media (max-width: 768px) {
+  .footer-inner { flex-direction: column; text-align: center; }
+  .footer-links { justify-content: center; }
+}
   </style>
 </head>
 <body>
@@ -601,14 +647,13 @@
       <div class="nav-links">
         <a href="analytics.html" class="nav-link">📊 Analytics</a>
         <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
-        <a href="https://racing.builtonarkeo.com/" target="_blank" rel="noopener" class="nav-link">🏇 Racing</a>
         <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
         <a href="x402-setup.html" class="nav-link">⚡ x402</a>
       </div>
       <div class="nav-buttons">
         <a href="my-contracts.html" class="nav-btn">My Contracts</a>
-        <a href="become-provider.html" class="nav-btn">Provide Data</a>
-        <a href="subscribe.html" class="nav-btn">Use Data</a>
+        <a href="become-provider.html" class="nav-btn">Sell Data</a>
+        <a href="subscribe.html" class="nav-btn">Buy Data</a>
         <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
         <button class="nav-btn" id="walletBtn" onclick="connectWallet()" style="border-color: var(--arkeo); color: var(--arkeo);">🔗 Connect Wallet</button>
       </div>
@@ -621,10 +666,9 @@
       <a href="x402-setup.html">⚡ x402</a>
       <a href="https://docs.arkeo.network" target="_blank" rel="noopener">📄 Docs</a>
       <a href="my-contracts.html">📋 My Contracts</a>
-      <a href="become-provider.html">🚀 Provide Data</a>
-      <a href="subscribe.html">📡 Use Data</a>
+      <a href="become-provider.html">🚀 Sell Data</a>
+      <a href="subscribe.html">📡 Buy Data</a>
       <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener">💰 Buy ARKEO</a>
-      <a href="https://racing.builtonarkeo.com/" target="_blank" rel="noopener">🏇 Racing</a>
     </div>
   </nav>
 
@@ -3413,13 +3457,21 @@ services:
       let metaOk = false;
       try {
         if (CONFIG.DEBUG_MODE) console.log('Testing metadata URL:', metaUrl);
-        const resp = await fetch(metaUrl, { signal: AbortSignal.timeout(10000) });
+        // Route through proxy to avoid mixed-content blocks (HTTPS page, HTTP sentinels)
+        const proxyUrl = `/health-check?url=${encodeURIComponent(metaUrl)}`;
+        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
         if (resp.ok) {
-          metaOk = true;
-          resultsDiv.innerHTML = `<div class="status-box success"><span>✅</span><span>Metadata endpoint responding! (${metaUrl})</span></div>`;
+          const result = await resp.json();
+          if (result?.ok) {
+            metaOk = true;
+            const latency = result.latencyMs ? ` (${result.latencyMs}ms)` : '';
+            resultsDiv.innerHTML = `<div class="status-box success"><span>✅</span><span>Metadata endpoint responding!${latency} (${metaUrl})</span></div>`;
+          } else {
+            const errMsg = result?.error || 'unreachable';
+            resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Metadata endpoint not reachable (${escapeHtml(errMsg)}). Check the URL and try again.</span></div>`;
+          }
         } else {
-          const body = await resp.text().catch(() => '');
-          resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Metadata returned HTTP ${resp.status}: ${escapeHtml(body.slice(0, 100))}</span></div>`;
+          resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Could not reach metadata endpoint (${escapeHtml(metaUrl)}). Check the URL and try again.</span></div>`;
         }
       } catch (e) {
         console.error('Metadata fetch error:', e);
@@ -4127,5 +4179,20 @@ services:
       };
     }
   </script>
+  <footer class="footer">
+    <div class="footer-inner">
+      <div style="color: var(--text-dim, #8b92a5); font-size: 0.875rem;">
+        Built with ❤️ by the Arkeo community
+      </div>
+      <div class="footer-links">
+        <a href="https://arkeo.network" target="_blank" rel="noopener" class="footer-link">arkeo.network</a>
+        <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="footer-link">Docs</a>
+        <a href="https://github.com/rbechtold69/arkeo-data-engine-v2" target="_blank" rel="noopener" class="footer-link">GitHub</a>
+        <a href="https://discord.gg/f3cKq2bPPF" target="_blank" rel="noopener" class="footer-link">Discord</a>
+        <a href="https://x402.org" target="_blank" rel="noopener" class="footer-link">x402.org</a>
+        <a href="https://racing.builtonarkeo.com/" target="_blank" rel="noopener" class="footer-link">🏇 Racing</a>
+      </div>
+    </div>
+  </footer>
 </body>
 </html>

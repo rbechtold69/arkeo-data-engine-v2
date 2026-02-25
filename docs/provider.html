@@ -349,12 +349,26 @@
       background: rgba(59, 224, 255, 0.05);
     }
     .nav-btn-accent {
-      border-color: rgba(59, 224, 255, 0.3);
-      color: var(--arkeo, #3BE0FF);
+      border-color: rgba(245, 158, 11, 0.5);
+      color: #f59e0b;
+      font-weight: 600;
     }
     .nav-btn-accent:hover {
-      background: rgba(59, 224, 255, 0.1);
-      border-color: var(--arkeo, #3BE0FF);
+      background: rgba(245, 158, 11, 0.12);
+      border-color: #f59e0b;
+      box-shadow: 0 0 10px rgba(245, 158, 11, 0.2);
+    }
+
+    .nav-btn-highlight {
+      background: rgba(59, 224, 255, 0.12);
+      border-color: rgba(59, 224, 255, 0.5);
+      color: var(--arkeo);
+      font-weight: 600;
+    }
+    .nav-btn-highlight:hover {
+      background: rgba(59, 224, 255, 0.22);
+      border-color: var(--arkeo);
+      box-shadow: 0 0 10px rgba(59, 224, 255, 0.2);
     }
     @media (max-width: 768px) {
       .nav { padding: 0.75rem 1rem; }
@@ -381,14 +395,13 @@
       <div class="nav-links">
         <a href="analytics.html" class="nav-link">📊 Analytics</a>
         <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
-        <a href="https://racing.builtonarkeo.com/" target="_blank" class="nav-link">🏇 Racing</a>
         <a href="https://docs.arkeo.network" target="_blank" class="nav-link">Docs</a>
         <a href="x402-setup.html" class="nav-link">⚡ x402</a>
       </div>
       <div class="nav-buttons">
+        <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
+        <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
         <a href="my-contracts.html" class="nav-btn">My Contracts</a>
-        <a href="become-provider.html" class="nav-btn">Provide Data</a>
-        <a href="subscribe.html" class="nav-btn">Use Data</a>
         <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
       </div>
       <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
@@ -400,10 +413,9 @@
       <a href="x402-setup.html">⚡ x402</a>
       <a href="https://docs.arkeo.network" target="_blank">📄 Docs</a>
       <a href="my-contracts.html">📋 My Contracts</a>
-      <a href="become-provider.html">🚀 Provide Data</a>
-      <a href="subscribe.html">📡 Use Data</a>
+      <a href="become-provider.html">🚀 Sell Data</a>
+      <a href="subscribe.html">📡 Buy Data</a>
       <a href="https://app.osmosis.zone/pool/2977" target="_blank">💰 Buy ARKEO</a>
-      <a href="https://racing.builtonarkeo.com/" target="_blank">🏇 Racing</a>
     </div>
   </nav>
 
@@ -427,6 +439,7 @@
         <a href="https://discord.gg/f3cKq2bPPF" target="_blank" class="footer-link">Discord</a>
         <a href="https://twitter.com/arkaboreal" target="_blank" class="footer-link">Twitter</a>
         <a href="https://github.com/arkeonetwork" target="_blank" class="footer-link">GitHub</a>
+        <a href="https://racing.builtonarkeo.com/" target="_blank" rel="noopener" class="footer-link">🏇 Racing</a>
       </div>
     </div>
   </footer>
@@ -568,15 +581,20 @@
         }
         if (info.metadataUri && !info.metadataUri.includes('127.0.0.1') && !info.metadataUri.includes('localhost')) {
           try {
-            const resp = await fetch(info.metadataUri, { signal: AbortSignal.timeout(5000) });
+            // Route through proxy to avoid mixed-content blocks (HTTPS page, HTTP sentinels)
+            const proxyUrl = `/health-check?url=${encodeURIComponent(info.metadataUri)}`;
+            const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(8000) });
             if (resp.ok) {
-              const md = await resp.json();
-              const moniker = md.config?.moniker || md.moniker;
-              if (moniker) {
-                info.name = info.name || moniker;
-                info.description = info.description || md.config?.description || md.description || '';
-                info.website = info.website || md.config?.website || md.website || '';
-                info.location = info.location || md.config?.location || md.location || '';
+              const result = await resp.json();
+              const md = result?.data;
+              if (md) {
+                const moniker = md.config?.moniker || md.moniker;
+                if (moniker) {
+                  info.name = info.name || moniker;
+                  info.description = info.description || md.config?.description || md.description || '';
+                  info.website = info.website || md.config?.website || md.website || '';
+                  info.location = info.location || md.config?.location || md.location || '';
+                }
               }
             }
           } catch (e) { /* ignore */ }
