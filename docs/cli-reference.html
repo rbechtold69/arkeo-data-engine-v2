@@ -1,0 +1,815 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src *; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
+  <title>CLI Reference | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <style>
+    :root {
+      --bg-main: #0C0E14;
+      --bg-card: #151820;
+      --bg-input: #1a1f2e;
+      --border: #2a2f3c;
+      --border-focus: #3BE0FF;
+      --arkeo: #3BE0FF;
+      --arkeo-dim: rgba(59, 224, 255, 0.1);
+      --success: #10b981;
+      --success-dim: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --error: #ef4444;
+      --text: #ffffff;
+      --text-dim: #9ca3af;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg-main);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Nav */
+    .nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .nav-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .logo img { height: 36px; }
+    .logo span { color: var(--arkeo); }
+    .nav-links { display: flex; align-items: center; gap: 1.5rem; }
+    .nav-link { color: var(--text-dim); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
+    .nav-link:hover, .nav-link.active { color: var(--arkeo); }
+    .nav-buttons { display: flex; align-items: center; gap: 0.75rem; }
+    .nav-btn {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 0.5rem 1rem;
+      border-radius: 0.375rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .nav-btn:hover { border-color: var(--arkeo); color: var(--arkeo); }
+    .nav-btn-accent { background: var(--arkeo); color: #000; border-color: var(--arkeo); font-weight: 600; }
+    .nav-btn-accent:hover { opacity: 0.9; color: #000; }
+    .hamburger { display: none; background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer; }
+    .mobile-menu { display: none; flex-direction: column; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border); margin-top: 0.75rem; }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a { color: var(--text-dim); text-decoration: none; padding: 0.5rem 0; font-size: 0.95rem; }
+    .mobile-menu a:hover { color: var(--arkeo); }
+
+    /* Layout */
+    .page-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      grid-template-columns: 220px 1fr;
+      gap: 2.5rem;
+      align-items: start;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      position: sticky;
+      top: 90px;
+    }
+    .sidebar-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.75rem;
+    }
+    .sidebar-nav { list-style: none; }
+    .sidebar-nav li { margin-bottom: 0.15rem; }
+    .sidebar-nav a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.875rem;
+      display: block;
+      padding: 0.35rem 0.75rem;
+      border-radius: 0.375rem;
+      border-left: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .sidebar-nav a:hover { color: var(--text); background: var(--arkeo-dim); }
+    .sidebar-nav a.active { color: var(--arkeo); border-left-color: var(--arkeo); background: var(--arkeo-dim); }
+    .sidebar-nav .sidebar-section { margin-top: 1.25rem; }
+    .sidebar-nav .sidebar-section-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      padding: 0 0.75rem;
+      margin-bottom: 0.25rem;
+    }
+
+    /* Content */
+    .content { min-width: 0; }
+
+    /* Hero */
+    .hero { margin-bottom: 2.5rem; }
+    .hero-tag {
+      display: inline-block;
+      background: var(--arkeo-dim);
+      color: var(--arkeo);
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.75rem;
+      border-radius: 2rem;
+      margin-bottom: 1rem;
+      border: 1px solid rgba(59,224,255,0.25);
+    }
+    .hero h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .hero h1 span { color: var(--arkeo); }
+    .hero p { color: var(--text-dim); font-size: 1rem; max-width: 600px; }
+
+    /* Section */
+    .section { margin-bottom: 3rem; }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .section-header h2 { font-size: 1.25rem; font-weight: 600; }
+    .section-icon {
+      width: 36px; height: 36px;
+      background: var(--arkeo-dim);
+      border: 1px solid rgba(59,224,255,0.2);
+      border-radius: 0.5rem;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+    .section-intro { color: var(--text-dim); font-size: 0.95rem; margin-bottom: 1.5rem; line-height: 1.7; }
+
+    /* Command block */
+    .cmd-block { margin-bottom: 2rem; }
+    .cmd-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      margin-bottom: 0.5rem;
+    }
+    .cmd-label span { color: var(--text); }
+    .cmd-desc { color: var(--text-dim); font-size: 0.875rem; margin-top: 0.6rem; line-height: 1.6; }
+    .cmd-desc strong { color: var(--text); }
+
+    /* Code block */
+    .code-wrap {
+      position: relative;
+      background: #0a0c12;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    .code-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.5rem 1rem;
+      background: var(--bg-input);
+      border-bottom: 1px solid var(--border);
+    }
+    .code-lang { font-size: 0.75rem; color: var(--text-dim); font-family: monospace; }
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: inherit;
+    }
+    .copy-btn:hover { border-color: var(--arkeo); color: var(--arkeo); }
+    .copy-btn.copied { border-color: var(--success); color: var(--success); }
+    pre {
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.85rem;
+      line-height: 1.65;
+      color: #e2e8f0;
+    }
+    pre .comment { color: #6b7280; }
+    pre .var { color: #f59e0b; }
+    pre .flag { color: #a78bfa; }
+    pre .str { color: #34d399; }
+
+    /* Variables table */
+    .vars-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-top: 0.75rem;
+    }
+    .vars-table th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      background: var(--bg-input);
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid var(--border);
+    }
+    .vars-table td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid rgba(42,47,60,0.5);
+      color: var(--text-dim);
+      vertical-align: top;
+    }
+    .vars-table td:first-child { color: var(--warning); font-family: monospace; white-space: nowrap; }
+    .vars-table tr:last-child td { border-bottom: none; }
+
+    /* Quick ref grid */
+    .quick-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 1rem;
+    }
+    .quick-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      overflow: hidden;
+    }
+    .quick-card-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-dim);
+      padding: 0.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .quick-card pre {
+      padding: 0.75rem 1rem;
+      font-size: 0.8rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Step number badge */
+    .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px; height: 24px;
+      background: var(--arkeo-dim);
+      border: 1px solid rgba(59,224,255,0.3);
+      border-radius: 50%;
+      color: var(--arkeo);
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+      margin-bottom: 0.5rem;
+    }
+    .step-row h3 { font-size: 1rem; font-weight: 600; }
+
+    /* Warning / info callout */
+    .callout {
+      display: flex;
+      gap: 0.75rem;
+      padding: 0.875rem 1rem;
+      border-radius: 0.5rem;
+      margin: 0.75rem 0;
+      font-size: 0.875rem;
+      line-height: 1.6;
+    }
+    .callout-warn { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; }
+    .callout-info { background: var(--arkeo-dim); border: 1px solid rgba(59,224,255,0.2); color: var(--arkeo); }
+    .callout-icon { flex-shrink: 0; font-size: 1rem; }
+
+    /* Divider */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 2rem 0; }
+
+    @media (max-width: 768px) {
+      .page-wrap { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+      .hamburger { display: block; }
+      .nav-links, .nav-buttons { display: none; }
+      .hero h1 { font-size: 1.5rem; }
+      .quick-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="logo">
+      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+      <span class="logo-text">Arkeo <span>Marketplace</span></span>
+    </a>
+    <div class="nav-links">
+      <a href="analytics.html" class="nav-link">📊 Analytics</a>
+      <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
+      <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
+      <a href="x402-setup.html" class="nav-link">⚡ x402</a>
+      <a href="cli-reference.html" class="nav-link active">⌨️ CLI</a>
+    </div>
+    <div class="nav-buttons">
+      <a href="my-contracts.html" class="nav-btn">My Contracts</a>
+      <a href="become-provider.html" class="nav-btn">Sell Data</a>
+      <a href="subscribe.html" class="nav-btn">Buy Data</a>
+      <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
+    </div>
+    <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
+  </div>
+  <div class="mobile-menu" id="mobileMenu">
+    <a href="index.html">🏠 Home</a>
+    <a href="analytics.html">📊 Analytics</a>
+    <a href="request-chain.html">🗳️ Request Chain</a>
+    <a href="x402-setup.html">⚡ x402</a>
+    <a href="cli-reference.html">⌨️ CLI Reference</a>
+    <a href="https://docs.arkeo.network" target="_blank" rel="noopener">📄 Docs</a>
+    <a href="my-contracts.html">📋 My Contracts</a>
+    <a href="become-provider.html">🚀 Sell Data</a>
+    <a href="subscribe.html">📡 Buy Data</a>
+    <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener">💰 Buy ARKEO</a>
+  </div>
+</nav>
+
+<div class="page-wrap">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-label">On this page</div>
+    <ul class="sidebar-nav">
+      <li><a href="#provider" id="nav-provider">Provider Setup</a></li>
+      <li style="padding-left:0.5rem"><a href="#provider-install">Install arkeod</a></li>
+      <li style="padding-left:0.5rem"><a href="#provider-wallet">Hot Wallet</a></li>
+      <li style="padding-left:0.5rem"><a href="#provider-bond">Bond Service</a></li>
+      <li style="padding-left:0.5rem"><a href="#provider-mod">Metadata Config</a></li>
+      <li style="padding-left:0.5rem"><a href="#provider-sentinel">Sentinel Config</a></li>
+      <li style="padding-left:0.5rem"><a href="#provider-verify">Verify</a></li>
+      <li style="padding-left:0.5rem"><a href="#provider-claim">Claim Earnings</a></li>
+
+      <li class="sidebar-section"><a href="#subscriber" id="nav-subscriber">Subscriber Setup</a></li>
+      <li style="padding-left:0.5rem"><a href="#sub-find">Find Provider</a></li>
+      <li style="padding-left:0.5rem"><a href="#sub-open">Open Contract</a></li>
+      <li style="padding-left:0.5rem"><a href="#sub-requests">Make Requests</a></li>
+
+      <li class="sidebar-section"><a href="#x402" id="nav-x402">x402 Setup</a></li>
+      <li style="padding-left:0.5rem"><a href="#x402-contract">Backing Contract</a></li>
+      <li style="padding-left:0.5rem"><a href="#x402-install">Install Middleware</a></li>
+      <li style="padding-left:0.5rem"><a href="#x402-test">Test Endpoint</a></li>
+
+      <li class="sidebar-section"><a href="#quickref" id="nav-quickref">Quick Reference</a></li>
+    </ul>
+  </aside>
+
+  <!-- Main content -->
+  <main class="content">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-tag">⌨️ CLI Reference</div>
+      <h1>Command-Line <span>Reference</span></h1>
+      <p>For technical users who prefer command-line control, want to automate their setup, or are building tooling on top of Arkeo.</p>
+    </div>
+
+    <!-- ======================== PROVIDER SETUP ======================== -->
+    <section class="section" id="provider">
+      <div class="section-header">
+        <div class="section-icon">🚀</div>
+        <h2>Provider Setup</h2>
+      </div>
+      <p class="section-intro">Run these commands on the server where your blockchain node is running. You'll need Go 1.21+ and a publicly reachable IP with port 3636 open.</p>
+
+      <!-- Install -->
+      <div class="cmd-block" id="provider-install">
+        <div class="step-row"><span class="step-num">1</span><h3>Install arkeod</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>git clone https://github.com/arkeonetwork/arkeo.git
+cd arkeo
+make install
+make tools</pre>
+        </div>
+        <p class="cmd-desc">Installs the <strong>arkeod</strong> binary and supporting tools. Verify with <code style="color:var(--arkeo)">arkeod version</code>.</p>
+      </div>
+
+      <!-- Hot wallet -->
+      <div class="cmd-block" id="provider-wallet">
+        <div class="step-row"><span class="step-num">2</span><h3>Create a hot wallet</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod keys add provider-hot-wallet --keyring-backend test</pre>
+        </div>
+        <p class="cmd-desc">Creates a dedicated signing key for your sentinel. <strong>Use a hot wallet with minimal funds</strong> — not your main wallet. Save the mnemonic securely.</p>
+      </div>
+
+      <!-- Bond -->
+      <div class="cmd-block" id="provider-bond">
+        <div class="step-row"><span class="step-num">3</span><h3>Bond your provider service</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod tx arkeo bond-provider \
+  --from="&lt;your-key&gt;" \
+  --fees="200uarkeo" \
+  --keyring-backend="test" \
+  -b sync -y \
+  "$PUBKEY" "$SERVICE" -- "$BOND_AMOUNT"</pre>
+        </div>
+        <table class="vars-table">
+          <thead><tr><th>Variable</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>$PUBKEY</td><td>Your provider bech32 pubkey (arkeopub1...)</td></tr>
+            <tr><td>$SERVICE</td><td>Service name, e.g. <code>base-mainnet-fullnode</code></td></tr>
+            <tr><td>$BOND_AMOUNT</td><td>Amount in uarkeo. <code>1000000uarkeo</code> = 1 ARKEO (minimum recommended)</td></tr>
+          </tbody>
+        </table>
+        <p class="cmd-desc">Stakes ARKEO as collateral and registers your provider on-chain. Run once per service you want to offer.</p>
+      </div>
+
+      <!-- Mod-provider -->
+      <div class="cmd-block" id="provider-mod">
+        <div class="step-row"><span class="step-num">4</span><h3>Configure metadata &amp; rates</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod tx arkeo mod-provider \
+  "$PUBKEY" "$SERVICE" "$SENTINEL_URI" \
+  "$NONCE" "$STATUS" \
+  "$MIN_DURATION" "$MAX_DURATION" \
+  "$SUB_RATES" "$PAYG_RATES" \
+  "$SETTLEMENT_DURATION" \
+  --from="&lt;your-key&gt;" \
+  --fees="200uarkeo" \
+  --keyring-backend="test" -y</pre>
+        </div>
+        <table class="vars-table">
+          <thead><tr><th>Variable</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>$SENTINEL_URI</td><td>Your public sentinel URL, e.g. <code>https://myprovider.com</code></td></tr>
+            <tr><td>$NONCE</td><td>Increment by 1 each time you update (start at 1)</td></tr>
+            <tr><td>$STATUS</td><td><code>1</code> = ONLINE, <code>2</code> = OFFLINE</td></tr>
+            <tr><td>$MIN_DURATION</td><td>Minimum contract length in blocks</td></tr>
+            <tr><td>$MAX_DURATION</td><td>Maximum contract length in blocks</td></tr>
+            <tr><td>$SUB_RATES</td><td>Subscription rate in uarkeo, e.g. <code>1uarkeo</code></td></tr>
+            <tr><td>$PAYG_RATES</td><td>Pay-as-you-go rate per request, e.g. <code>200uarkeo</code></td></tr>
+            <tr><td>$SETTLEMENT_DURATION</td><td>Blocks after contract end to submit claims (e.g. <code>1000</code>)</td></tr>
+          </tbody>
+        </table>
+        <p class="cmd-desc">Sets your sentinel URL, pricing, and contract parameters on-chain. <strong>Re-run whenever you update your config.</strong></p>
+      </div>
+
+      <!-- Sentinel config -->
+      <div class="cmd-block" id="provider-sentinel">
+        <div class="step-row"><span class="step-num">5</span><h3>Configure your sentinel</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">yaml</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># sentinel_config.yaml</span>
+provider:
+  pubkey: <span class="str">"&lt;your-bech32-pubkey&gt;"</span>
+  name: <span class="str">"My Provider"</span>
+
+services:
+  - name: <span class="str">base-mainnet-fullnode</span>
+    id: <span class="var">89</span>
+    type: base
+    rpc_url: <span class="str">http://localhost:8545</span>
+
+api:
+  listen_addr: <span class="str">"0.0.0.0:3636"</span></pre>
+        </div>
+        <div class="callout callout-warn"><span class="callout-icon">⚠️</span>Port 3636 must be publicly accessible. Run <code>curl http://YOUR-PUBLIC-IP:3636/metadata.json</code> from an external machine to confirm.</div>
+        <p class="cmd-desc">The sentinel reverse-proxies requests to your node and handles billing. See the <a href="https://github.com/arkeonetwork/arkeo" target="_blank" rel="noopener" style="color:var(--arkeo)">Arkeo GitHub</a> for the full sentinel config reference.</p>
+      </div>
+
+      <!-- Verify -->
+      <div class="cmd-block" id="provider-verify">
+        <div class="step-row"><span class="step-num">6</span><h3>Verify your provider is live</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># Check sentinel is responding</span>
+curl https://your-sentinel-url/metadata.json
+
+<span class="comment"># Check on-chain registration</span>
+arkeod query arkeo show-provider $PUBKEY
+
+<span class="comment"># List all online providers</span>
+arkeod query arkeo list-providers --output json | \
+  jq <span class="str">'.provider[] | select(.status=="ONLINE")'</span></pre>
+        </div>
+      </div>
+
+      <!-- Claim earnings -->
+      <div class="cmd-block" id="provider-claim">
+        <div class="step-row"><span class="step-num">7</span><h3>Claim earnings</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod tx arkeo claim-contract-income \
+  "$CONTRACT_ID" "$NONCE" "$SIGNATURE" nil \
+  --from "$PROVIDER_KEY" \
+  --fees="200uarkeo" \
+  --keyring-backend="test" -y</pre>
+        </div>
+        <div class="callout callout-warn"><span class="callout-icon">⚠️</span>Claims not submitted within the settlement window after contract expiry are <strong>lost permanently</strong>. Set up a cron job to run this regularly.</div>
+        <p class="cmd-desc">Submits accumulated PAYG claims to the chain for settlement. Run on a schedule — daily at minimum, hourly is safer.</p>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ======================== SUBSCRIBER SETUP ======================== -->
+    <section class="section" id="subscriber">
+      <div class="section-header">
+        <div class="section-icon">📡</div>
+        <h2>Subscriber Setup</h2>
+      </div>
+      <p class="section-intro">Open contracts and query providers directly from the command line. Useful for automation, scripting, or integrating Arkeo into your own tooling.</p>
+
+      <!-- Find provider -->
+      <div class="cmd-block" id="sub-find">
+        <div class="step-row"><span class="step-num">1</span><h3>Find an online provider</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># List all online providers</span>
+arkeod query arkeo list-providers --output json | \
+  jq <span class="str">'.provider[] | select(.status=="ONLINE")'</span>
+
+<span class="comment"># Filter by service number (e.g. service 89 = base-mainnet-fullnode)</span>
+arkeod query arkeo list-providers --output json | \
+  jq <span class="str">'.provider[] | select(.status=="ONLINE" and .service==89)'</span>
+
+<span class="comment"># List all available services and their IDs</span>
+arkeod query arkeo all-services</pre>
+        </div>
+      </div>
+
+      <!-- Open contract -->
+      <div class="cmd-block" id="sub-open">
+        <div class="step-row"><span class="step-num">2</span><h3>Open a contract</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod tx arkeo open-contract \
+  "$PROVIDER_PUBKEY" "$SERVICE" "$CLIENT_PUBKEY" \
+  "$CONTRACT_TYPE" "$DEPOSIT" "$DURATION" \
+  "$RATE" "$QPM" "$SETTLEMENT" "$AUTH" "$DELEGATE" \
+  --from="$CLIENT_KEY" \
+  --fees="200uarkeo" \
+  --keyring-backend="test" -y</pre>
+        </div>
+        <table class="vars-table">
+          <thead><tr><th>Variable</th><th>Description</th></tr></thead>
+          <tbody>
+            <tr><td>$CONTRACT_TYPE</td><td><code>1</code> = Subscription, <code>2</code> = Pay-as-you-go</td></tr>
+            <tr><td>$DEPOSIT</td><td>Tokens to lock, e.g. <code>5000000uarkeo</code>. Unused PAYG deposit is returned.</td></tr>
+            <tr><td>$DURATION</td><td>Contract length in blocks</td></tr>
+            <tr><td>$RATE</td><td>Rate in uarkeo (must match or exceed provider's minimum)</td></tr>
+            <tr><td>$QPM</td><td>Queries per minute limit. <code>0</code> = unlimited</td></tr>
+            <tr><td>$SETTLEMENT</td><td>Settlement duration in blocks after contract ends</td></tr>
+            <tr><td>$AUTH</td><td><code>0</code> = open access, <code>1</code> = whitelist</td></tr>
+            <tr><td>$DELEGATE</td><td>Delegate pubkey for signing. Use <code>nil</code> if none.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Requests -->
+      <div class="cmd-block" id="sub-requests">
+        <div class="step-row"><span class="step-num">3</span><h3>Make requests</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash — Subscription</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># Subscription: just pass the contract ID — no signing needed</span>
+curl <span class="str">"https://PROVIDER-SENTINEL:3636/SERVICE?arkauth=$CONTRACT_ID"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'</span></pre>
+        </div>
+        <div class="code-wrap" style="margin-top:0.75rem">
+          <div class="code-header"><span class="code-lang">bash — PAYG (signed)</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># 1. Get current nonce</span>
+NONCE=$(curl -s <span class="str">"https://PROVIDER:3636/claims?contract_id=$ID&amp;client=$PUBKEY"</span> | jq .highestNonce)
+NEXT_NONCE=$((NONCE + 1))
+
+<span class="comment"># 2. Sign the claim (message format: CONTRACT_ID:NONCE: — note trailing colon)</span>
+MSG=<span class="str">"$CONTRACT_ID:$NEXT_NONCE:"</span>
+SIG=$(signhere -u <span class="str">"$KEY"</span> -m <span class="str">"$MSG"</span> | tail -n 1)
+
+<span class="comment"># 3. Make the request</span>
+curl <span class="str">"https://PROVIDER:3636/SERVICE?arkauth=$CONTRACT_ID:$PUBKEY:$NEXT_NONCE:$SIG"</span> \
+  -H <span class="str">"Content-Type: application/json"</span> \
+  -d <span class="str">'{"jsonrpc":"2.0","method":"eth_blockNumber","params":[],"id":1}'</span></pre>
+        </div>
+        <p class="cmd-desc">PAYG requires signing each request. The nonce <strong>must increment</strong> with every request. Arkauth format: <code style="color:var(--arkeo)">{contractId}:{pubkey}:{nonce}:{sig}</code></p>
+      </div>
+
+      <!-- Check contract -->
+      <div class="cmd-block">
+        <div class="step-row"><span class="step-num">4</span><h3>Check your contract</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># Show a specific contract</span>
+arkeod query arkeo show-contract $CONTRACT_ID
+
+<span class="comment"># List all your contracts</span>
+arkeod query arkeo list-contracts --output json | \
+  jq <span class="str">'.contract[] | select(.client=="$PUBKEY")'</span>
+
+<span class="comment"># Check your balance</span>
+arkeod query bank balances $ADDRESS</pre>
+        </div>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ======================== x402 SETUP ======================== -->
+    <section class="section" id="x402">
+      <div class="section-header">
+        <div class="section-icon">⚡</div>
+        <h2>x402 Setup</h2>
+      </div>
+      <p class="section-intro">x402 lets AI agents pay per-request in USDC — no subscription contract needed on the agent side. You run a lightweight proxy on your server that sits in front of your Arkeo provider endpoint.</p>
+      <div class="callout callout-info"><span class="callout-icon">💡</span>Want auto-generated code? Use the <a href="x402-setup.html" style="color:var(--arkeo);font-weight:600">x402 Setup Wizard →</a> to pick your framework and get copy-paste ready code.</div>
+
+      <!-- Backing contract -->
+      <div class="cmd-block" id="x402-contract">
+        <div class="step-row"><span class="step-num">1</span><h3>Open a backing Arkeo contract</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># Example: open PAYG contract with 10 ARKEO deposit on Base</span>
+arkeod tx arkeo open-contract \
+  "$PROVIDER_PUBKEY" "base-mainnet-fullnode" "$YOUR_PUBKEY" \
+  2 "10000000uarkeo" "5000000" \
+  "200" "0" "1000" "0" "nil" \
+  --from="$YOUR_KEY" \
+  --fees="200uarkeo" \
+  --keyring-backend="test" -y</pre>
+        </div>
+        <p class="cmd-desc">Your x402 proxy uses this PAYG contract to authenticate requests to the Arkeo provider. The proxy signs each request with its delegate key. Save the contract ID — you'll need it in your proxy config.</p>
+      </div>
+
+      <!-- Install middleware -->
+      <div class="cmd-block" id="x402-install">
+        <div class="step-row"><span class="step-num">2</span><h3>Install x402 middleware</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash — Node.js / Express</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>npm install express @x402/express @x402/core @x402/evm</pre>
+        </div>
+        <div class="code-wrap" style="margin-top:0.75rem">
+          <div class="code-header"><span class="code-lang">bash — Node.js / Hono</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>npm install hono @x402/hono @x402/core @x402/evm</pre>
+        </div>
+        <div class="code-wrap" style="margin-top:0.75rem">
+          <div class="code-header"><span class="code-lang">bash — Python / FastAPI</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>pip install fastapi uvicorn x402</pre>
+        </div>
+        <div class="code-wrap" style="margin-top:0.75rem">
+          <div class="code-header"><span class="code-lang">bash — Go / Gin</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre>go get github.com/coinbase/x402/go/x402</pre>
+        </div>
+      </div>
+
+      <!-- Test endpoint -->
+      <div class="cmd-block" id="x402-test">
+        <div class="step-row"><span class="step-num">3</span><h3>Test your x402 endpoint</h3></div>
+        <div class="code-wrap">
+          <div class="code-header"><span class="code-lang">bash</span><button class="copy-btn" onclick="copyCode(this)">Copy</button></div>
+          <pre><span class="comment"># Should return HTTP 402 Payment Required (expected — means it's working)</span>
+curl -i https://your-proxy-url/
+
+<span class="comment"># Verify your backing contract is active</span>
+arkeod query arkeo show-contract $CONTRACT_ID
+
+<span class="comment"># Monitor request usage</span>
+curl <span class="str">"https://your-arkeo-provider:3636/claims?contract_id=$CONTRACT_ID&amp;client=$YOUR_PUBKEY"</span></pre>
+        </div>
+        <p class="cmd-desc">A 402 response on the bare endpoint is correct — it means the payment wall is working. AI agent clients using the x402 protocol will handle the payment flow automatically.</p>
+      </div>
+    </section>
+
+    <hr class="divider">
+
+    <!-- ======================== QUICK REFERENCE ======================== -->
+    <section class="section" id="quickref">
+      <div class="section-header">
+        <div class="section-icon">⚡</div>
+        <h2>Quick Reference</h2>
+      </div>
+      <p class="section-intro">Common commands for day-to-day use.</p>
+
+      <div class="quick-grid">
+        <div class="quick-card">
+          <div class="quick-card-label">Show provider <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod query arkeo show-provider $PUBKEY</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">List online providers <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod query arkeo list-providers \
+  --output json | jq \
+  '.provider[] | select(.status=="ONLINE")'</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">Show contract <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod query arkeo show-contract $CONTRACT_ID</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">List my contracts <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod query arkeo list-contracts \
+  --output json | jq \
+  '.contract[] | select(.client=="$PUBKEY")'</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">Check balance <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod query bank balances $ADDRESS</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">List all services <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>arkeod query arkeo all-services</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">Provider logs (Docker) <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker logs arkeo-data-engine-provider -f</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">Subscriber logs (Docker) <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>docker logs arkeo-data-engine-subscriber -f</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">Sentinel logs (systemd) <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>journalctl -u sentinel -f</pre>
+        </div>
+        <div class="quick-card">
+          <div class="quick-card-label">Check open claims <button class="copy-btn" style="font-size:0.7rem;padding:0.15rem 0.5rem" onclick="copyCode(this)">Copy</button></div>
+          <pre>curl http://localhost:3636/open-claims</pre>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  function copyCode(btn) {
+    const pre = btn.closest('.code-wrap, .quick-card')?.querySelector('pre');
+    if (!pre) return;
+    navigator.clipboard.writeText(pre.innerText).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  // Highlight active sidebar link on scroll
+  const sections = document.querySelectorAll('section[id], div[id]');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => { if (window.scrollY >= s.offsetTop - 120) current = s.id; });
+    navLinks.forEach(a => {
+      a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+    });
+  }, { passive: true });
+</script>
+
+</body>
+</html>

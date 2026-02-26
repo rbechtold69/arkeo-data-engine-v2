@@ -1,6 +1,6 @@
 // Shared KNOWN_PROVIDERS config — single source of truth
 // Used by index.html, subscribe.html, provider.html
-// Last health check: 2026-02-17 15:37 UTC
+// Last health check: 2026-02-26 04:00 UTC
 
 const KNOWN_PROVIDERS = {
   // ✅ HEALTHY — sentinel responding
@@ -8,6 +8,7 @@ const KNOWN_PROVIDERS = {
     name: 'Liquify',
     description: 'Professional blockchain infrastructure provider',
     website: 'https://liquify.com',
+    sentinelUrl: 'https://arkeo-provider.liquify.com',
     location: 'Europe',
     health: 'healthy',
   },
@@ -37,12 +38,13 @@ const KNOWN_PROVIDERS = {
     description: 'Blockchain infrastructure provider',
     website: 'https://roomit.xyz',
     location: 'Asia',
-    health: 'healthy',
+    health: 'unhealthy', // sentinel returning 403 — needs to whitelist external requests
   },
   'arkeopub1addwnpepqdvlra44yykhmmpwtfavs35a5w6h8xqtuceedkuxur6v0gs8yfxa59h7wnm': {
     name: '0xFury',
     description: 'Enterprise-grade blockchain infrastructure solutions',
     website: 'https://0xfury.com',
+    sentinelUrl: 'http://arkeo.dc01.0xfury.io:3636',
     location: 'Europe',
     health: 'healthy',
   },
@@ -51,7 +53,7 @@ const KNOWN_PROVIDERS = {
     description: 'Blockchain node infrastructure services',
     website: 'https://nodefleet.org',
     location: 'Americas',
-    health: 'healthy',
+    health: 'unhealthy', // sentinel on port 13636 — accessibility unconfirmed
   },
 
   'arkeopub1addwnpepqwj082rncmh2v3vjhstdx2v8pswcmmy7zcvu8n9unk8rxsp76qcmk8jg23a': {
@@ -59,7 +61,7 @@ const KNOWN_PROVIDERS = {
     description: 'Professional validator and node infrastructure provider',
     website: 'https://polkachu.com',
     location: 'Americas',
-    health: 'healthy',
+    health: 'unhealthy', // on-chain ONLINE + pricing set, but metadata_uri is blank — needs sentinel URL configured
   },
 
   'arkeopub1addwnpepqfuk5cy2ey6h3pfpwerkhfps0d4vqt6men4j2wx56zfn5nrfk8n9ymnj327': {
