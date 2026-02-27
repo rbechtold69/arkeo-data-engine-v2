@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; connect-src *; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
+  <title>x402 Provider Setup Guide | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <style>
+    :root {
+      --bg-main: #0C0E14;
+      --bg-card: #151820;
+      --bg-input: #1a1f2e;
+      --border: #2a2f3c;
+      --border-focus: #3BE0FF;
+      --arkeo: #3BE0FF;
+      --arkeo-dim: rgba(59, 224, 255, 0.1);
+      --success: #10b981;
+      --success-dim: rgba(16, 185, 129, 0.1);
+      --warning: #f59e0b;
+      --warning-dim: rgba(245, 158, 11, 0.1);
+      --error: #ef4444;
+      --text: #ffffff;
+      --text-dim: #9ca3af;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg-main);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* Nav */
+    .nav {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-decoration: none;
+      color: var(--text);
+    }
+    .logo img { height: 36px; }
+    .logo span { color: var(--arkeo); }
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+    }
+    .nav-links a {
+      color: var(--text-dim);
+      text-decoration: none;
+      font-size: 0.9rem;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--arkeo); }
+    .nav-links a.active { color: var(--arkeo); font-weight: 600; }
+
+    /* Container */
+    .container { max-width: 800px; margin: 0 auto; padding: 2rem; }
+
+    /* Hero */
+    .hero {
+      text-align: center;
+      margin-bottom: 3rem;
+      padding: 2.5rem 0;
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: var(--arkeo-dim);
+      border: 1px solid var(--arkeo);
+      color: var(--arkeo);
+      padding: 0.4rem 1rem;
+      border-radius: 2rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 1.25rem;
+    }
+    .hero h1 { font-size: 2.25rem; margin-bottom: 0.75rem; }
+    .hero h1 .accent { color: var(--arkeo); }
+    .hero p { color: var(--text-dim); font-size: 1.05rem; max-width: 560px; margin: 0 auto; }
+
+    /* TOC */
+    .toc {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin-bottom: 2.5rem;
+    }
+    .toc h3 { font-size: 0.9rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1rem; }
+    .toc ol {
+      list-style: none;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.5rem;
+    }
+    .toc ol li a {
+      color: var(--arkeo);
+      text-decoration: none;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .toc ol li a:hover { text-decoration: underline; }
+    .toc-num {
+      background: var(--arkeo-dim);
+      color: var(--arkeo);
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.75rem;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+
+    /* Sections */
+    .section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+    }
+    .section-header {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+    }
+    .section-num {
+      background: var(--arkeo);
+      color: #000;
+      width: 36px; height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .section-header h2 { font-size: 1.25rem; }
+    .section-header .section-sub { color: var(--text-dim); font-size: 0.9rem; font-weight: 400; }
+    p { color: var(--text-dim); margin-bottom: 1rem; }
+    p:last-child { margin-bottom: 0; }
+
+    /* Info / Warning / Success boxes */
+    .info-box {
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      margin-bottom: 1rem;
+      font-size: 0.9rem;
+    }
+    .info-box.note { background: var(--arkeo-dim); border-left: 3px solid var(--arkeo); color: var(--text); }
+    .info-box.warning { background: var(--warning-dim); border-left: 3px solid var(--warning); color: var(--text); }
+    .info-box.success { background: var(--success-dim); border-left: 3px solid var(--success); color: var(--text); }
+    .info-box strong { display: block; margin-bottom: 0.25rem; }
+
+    /* Code blocks */
+    .code-section { margin-bottom: 1.5rem; }
+    .code-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.4rem;
+    }
+    .code-label span { font-size: 0.8rem; color: var(--text-dim); font-family: monospace; }
+    .copy-btn {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 0.25rem 0.6rem;
+      border-radius: 0.3rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { border-color: var(--arkeo); color: var(--arkeo); }
+    .copy-btn.copied { border-color: var(--success); color: var(--success); }
+    pre {
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      overflow-x: auto;
+      font-family: 'SF Mono', Monaco, 'Fira Code', 'Courier New', monospace;
+      font-size: 0.82rem;
+      line-height: 1.7;
+      color: #e6edf3;
+      white-space: pre;
+    }
+    .comment { color: #8b949e; }
+    .keyword { color: #ff7b72; }
+    .string { color: #a5d6ff; }
+    .variable { color: #ffa657; }
+    .number { color: #79c0ff; }
+
+    /* Checklist */
+    .checklist { list-style: none; }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.95rem;
+      color: var(--text-dim);
+    }
+    .checklist li:last-child { border-bottom: none; }
+    .check-icon { color: var(--success); font-size: 1.1rem; flex-shrink: 0; margin-top: 0.1rem; }
+    .check-label strong { color: var(--text); display: block; }
+
+    /* Revenue calc */
+    .rev-calc {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin-top: 1rem;
+    }
+    .rev-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    .rev-row:last-child { border-bottom: none; font-weight: 600; }
+    .rev-row .label { color: var(--text-dim); }
+    .rev-row .value { color: var(--arkeo); }
+
+    /* CTA */
+    .cta-section {
+      background: linear-gradient(135deg, var(--arkeo-dim) 0%, rgba(16, 185, 129, 0.05) 100%);
+      border: 1px solid var(--arkeo);
+      border-radius: 1rem;
+      padding: 2rem;
+      text-align: center;
+      margin-top: 2rem;
+    }
+    .cta-section h3 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    .cta-section p { max-width: 480px; margin: 0 auto 1.5rem; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.875rem 2rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      text-decoration: none;
+      font-size: 1rem;
+      transition: all 0.2s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary { background: var(--arkeo); color: #000; }
+    .btn-primary:hover { opacity: 0.85; }
+    .btn-secondary {
+      background: var(--bg-input);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--arkeo); color: var(--arkeo); }
+    .btn-group { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; margin-top: 1.5rem; }
+
+    footer {
+      background: var(--bg-card);
+      border-top: 1px solid var(--border);
+      padding: 2rem;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      margin-top: 3rem;
+    }
+    footer a { color: var(--arkeo); text-decoration: none; }
+
+    @media (max-width: 640px) {
+      .nav-links { display: none; }
+      .toc ol { grid-template-columns: 1fr; }
+      .hero h1 { font-size: 1.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <nav class="nav">
+    <a href="index.html" class="logo">
+      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
+      <span>Arkeo</span>
+    </a>
+    <div class="nav-links">
+      <a href="index.html">Providers</a>
+      <a href="subscribe.html">Subscribers</a>
+      <a href="my-contracts.html">My Contracts</a>
+      <a href="cli-reference.html">⌨️ CLI</a>
+      <a href="x402-provider-guide.html" class="active">⚡ x402</a>
+    </div>
+  </nav>
+
+  <div class="container">
+
+    <!-- Hero -->
+    <div class="hero">
+      <div class="hero-badge">⚡ x402 Provider Guide</div>
+      <h1>Accept <span class="accent">USDC Payments</span><br>From AI Agents</h1>
+      <p>Deploy an x402 proxy on your existing RPC node. AI agents pay per request in USDC — no API keys, no accounts, no friction.</p>
+    </div>
+
+    <!-- TOC -->
+    <div class="toc">
+      <h3>In This Guide</h3>
+      <ol>
+        <li><a href="#prereqs"><span class="toc-num">1</span> Prerequisites</a></li>
+        <li><a href="#install"><span class="toc-num">2</span> Install x402 Proxy</a></li>
+        <li><a href="#wallet"><span class="toc-num">3</span> Prepare Your Wallet</a></li>
+        <li><a href="#config"><span class="toc-num">4</span> Configure server.mjs</a></li>
+        <li><a href="#systemd"><span class="toc-num">5</span> Systemd Service</a></li>
+        <li><a href="#nginx"><span class="toc-num">6</span> Nginx Reverse Proxy</a></li>
+        <li><a href="#test"><span class="toc-num">7</span> Test Your Endpoint</a></li>
+        <li><a href="#register"><span class="toc-num">8</span> Register on Arkeo</a></li>
+      </ol>
+    </div>
+
+    <!-- What is x402 -->
+    <div class="section" style="margin-bottom:1.5rem;">
+      <div class="info-box success">
+        <strong>✅ Confirmed Working</strong>
+        This guide is based on Red_5 (rbechtold.eth), the first Arkeo provider with a live x402 endpoint. Setup time: ~45 minutes on an existing VPS.
+      </div>
+      <p>x402 is an open standard where your HTTP endpoint returns a <code>402 Payment Required</code> response with USDC payment details. AI agents and apps pay per-request using USDC on Base — no API keys needed on either side.</p>
+      <p>You earn <strong>$0.0001 per request</strong> (configurable). That's $100 per million requests, settled directly to your EVM wallet.</p>
+      <div class="rev-calc">
+        <div class="rev-row"><span class="label">1,000 requests/day</span><span class="value">$3/month</span></div>
+        <div class="rev-row"><span class="label">10,000 requests/day</span><span class="value">$30/month</span></div>
+        <div class="rev-row"><span class="label">100,000 requests/day</span><span class="value">$300/month</span></div>
+        <div class="rev-row"><span class="label">1M requests/day</span><span class="value">$3,000/month</span></div>
+      </div>
+    </div>
+
+    <!-- Step 1 -->
+    <div class="section" id="prereqs">
+      <div class="section-header">
+        <div class="section-num">1</div>
+        <div>
+          <h2>Prerequisites</h2>
+          <div class="section-sub">What you need before starting</div>
+        </div>
+      </div>
+      <ul class="checklist">
+        <li>
+          <span class="check-icon">✓</span>
+          <span class="check-label">
+            <strong>Linux VPS with your RPC node already running</strong>
+            Any provider (DO, Hetzner, AWS). Ubuntu 22.04+ recommended.
+          </span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span class="check-label">
+            <strong>Node.js 18+ installed</strong>
+            Run <code>node --version</code> to check. Install: <code>curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt install nodejs</code>
+          </span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span class="check-label">
+            <strong>Domain with SSL certificate</strong>
+            Example: <code>rpc.yournode.com</code>. Use Certbot/Let's Encrypt (free). nginx must be installed.
+          </span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span class="check-label">
+            <strong>EVM wallet with ETH on Base for gas</strong>
+            ~0.01 ETH is plenty. Your wallet will receive USDC payments directly from payers.
+          </span>
+        </li>
+        <li>
+          <span class="check-icon">✓</span>
+          <span class="check-label">
+            <strong>Registered provider on Arkeo</strong>
+            If not yet registered, start at <a href="become-provider.html" style="color:var(--arkeo)">arkeomarketplace.com/become-provider</a> first.
+          </span>
+        </li>
+      </ul>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="section" id="install">
+      <div class="section-header">
+        <div class="section-num">2</div>
+        <div>
+          <h2>Install x402 Proxy</h2>
+          <div class="section-sub">~5 minutes</div>
+        </div>
+      </div>
+      <p>Create a dedicated directory and install the x402 packages:</p>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="comment"># Create directory and initialize</span>
+mkdir -p /opt/x402-proxy
+cd /opt/x402-proxy
+npm init -y
+
+<span class="comment"># Install x402 packages (local EVM facilitator — no CDP needed)</span>
+npm install @x402/node @x402/evm viem
+
+<span class="comment"># Verify install</span>
+ls node_modules/@x402/</pre>
+      </div>
+
+      <div class="info-box note">
+        <strong>Why local facilitator?</strong>
+        We use <code>@x402/evm/exact/facilitator</code> which calls <code>transferWithAuthorization</code> on USDC directly. No third-party CDP API keys required, and no signature-rejection issues.
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="section" id="wallet">
+      <div class="section-header">
+        <div class="section-num">3</div>
+        <div>
+          <h2>Prepare Your Wallet Key</h2>
+          <div class="section-sub">Secure your facilitator wallet</div>
+        </div>
+      </div>
+      <p>The facilitator needs a private key to sign settlement transactions on Base. This wallet does NOT need to hold USDC — it just pays gas for settlement. Use a dedicated wallet, not your main wallet.</p>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="comment"># Store your private key in a secure env file</span>
+<span class="comment"># Replace with your actual private key (0x-prefixed)</span>
+cat &gt; /opt/x402-proxy/.env &lt;&lt;'EOF'
+FACILITATOR_PRIVATE_KEY=0xYOUR_PRIVATE_KEY_HERE
+RECIPIENT_ADDRESS=0xYOUR_EVM_WALLET_ADDRESS
+UPSTREAM_RPC=http://localhost:26657
+X402_PORT=3000
+X402_PRICE=0.0001
+EOF
+
+<span class="comment"># Lock down permissions — only root can read this</span>
+chmod 600 /opt/x402-proxy/.env</pre>
+      </div>
+
+      <div class="info-box warning">
+        <strong>⚠️ Two wallet addresses needed</strong>
+        <code>FACILITATOR_PRIVATE_KEY</code>: signs settlement txs, needs ETH on Base for gas (~0.01 ETH).<br>
+        <code>RECIPIENT_ADDRESS</code>: receives the USDC payments. Can be any address (cold wallet, multisig, etc.).
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="section" id="config">
+      <div class="section-header">
+        <div class="section-num">4</div>
+        <div>
+          <h2>Configure server.mjs</h2>
+          <div class="section-sub">The core proxy file</div>
+        </div>
+      </div>
+      <p>Create the main server file. This proxies incoming requests, requires x402 payment, and settles on Base:</p>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>/opt/x402-proxy/server.mjs</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="keyword">import</span> { createServer } <span class="keyword">from</span> <span class="string">'@x402/node'</span>;
+<span class="keyword">import</span> { facilitator } <span class="keyword">from</span> <span class="string">'@x402/evm/exact/facilitator'</span>;
+<span class="keyword">import</span> { createWalletClient, http } <span class="keyword">from</span> <span class="string">'viem'</span>;
+<span class="keyword">import</span> { privateKeyToAccount } <span class="keyword">from</span> <span class="string">'viem/accounts'</span>;
+<span class="keyword">import</span> { base } <span class="keyword">from</span> <span class="string">'viem/chains'</span>;
+<span class="keyword">import</span> <span class="string">'dotenv/config'</span>;
+
+<span class="keyword">const</span> account = privateKeyToAccount(process.env.FACILITATOR_PRIVATE_KEY);
+<span class="keyword">const</span> walletClient = createWalletClient({
+  account,
+  chain: base,
+  transport: http(<span class="string">'https://mainnet.base.org'</span>),
+});
+
+<span class="keyword">const</span> myFacilitator = facilitator(walletClient);
+
+<span class="keyword">const</span> server = createServer({
+  facilitator: myFacilitator,
+  paymentRequired: {
+    scheme: <span class="string">'exact'</span>,
+    networkId: <span class="string">'eip155:8453'</span>,        <span class="comment">// Base mainnet</span>
+    maxAmountRequired: String(
+      Math.round(parseFloat(process.env.X402_PRICE || <span class="string">'0.0001'</span>) * <span class="number">1e6</span>)
+    ),                                          <span class="comment">// USDC has 6 decimals</span>
+    recipient: process.env.RECIPIENT_ADDRESS,
+    asset: <span class="string">'0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913'</span>, <span class="comment">// USDC on Base</span>
+    description: <span class="string">'RPC access via Arkeo x402'</span>,
+  },
+  upstream: process.env.UPSTREAM_RPC || <span class="string">'http://localhost:26657'</span>,
+  port: parseInt(process.env.X402_PORT || <span class="string">'3000'</span>),
+});
+
+console.log(<span class="string">`x402 proxy listening on port ${process.env.X402_PORT || 3000}`</span>);
+console.log(<span class="string">`Recipient: ${process.env.RECIPIENT_ADDRESS}`</span>);
+console.log(<span class="string">`Price: $${process.env.X402_PRICE} USDC per request`</span>);
+console.log(<span class="string">`Upstream: ${process.env.UPSTREAM_RPC}`</span>);</pre>
+      </div>
+
+      <div class="info-box note">
+        <strong>UPSTREAM_RPC</strong> should point to your local RPC node. Examples:<br>
+        • Cosmos/Tendermint: <code>http://localhost:26657</code><br>
+        • EVM (geth/erigon): <code>http://localhost:8545</code><br>
+        • Bitcoin: <code>http://localhost:8332</code>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="section" id="systemd">
+      <div class="section-header">
+        <div class="section-num">5</div>
+        <div>
+          <h2>Systemd Service</h2>
+          <div class="section-sub">Auto-start on reboot</div>
+        </div>
+      </div>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>/etc/systemd/system/x402-proxy.service</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre>[Unit]
+Description=x402 RPC Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/x402-proxy
+EnvironmentFile=/opt/x402-proxy/.env
+ExecStart=/usr/bin/node /opt/x402-proxy/server.mjs
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target</pre>
+      </div>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>bash — enable and start</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="comment"># Enable and start the service</span>
+systemctl daemon-reload
+systemctl enable x402-proxy
+systemctl start x402-proxy
+
+<span class="comment"># Check it's running</span>
+systemctl status x402-proxy
+journalctl -u x402-proxy -f</pre>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="section" id="nginx">
+      <div class="section-header">
+        <div class="section-num">6</div>
+        <div>
+          <h2>Nginx Reverse Proxy</h2>
+          <div class="section-sub">HTTPS with Let's Encrypt</div>
+        </div>
+      </div>
+      <p>Expose the proxy at <code>https://yournode.com/x402/</code>. Replace <code>yournode.com</code> with your actual domain.</p>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>/etc/nginx/sites-available/x402</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre>server {
+    listen 443 ssl;
+    server_name yournode.com;  # ← change this
+
+    ssl_certificate /etc/letsencrypt/live/yournode.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/yournode.com/privkey.pem;
+
+    location /x402/ {
+        proxy_pass http://localhost:3000/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        <span class="comment"># Important: allow both GET and POST for EVM chains</span>
+        proxy_method $request_method;
+        proxy_pass_request_body on;
+    }
+}
+
+server {
+    listen 80;
+    server_name yournode.com;
+    return 301 https://$host$request_uri;
+}</pre>
+      </div>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>bash — enable and test</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="comment"># Get SSL cert (if you don't have one already)</span>
+certbot --nginx -d yournode.com
+
+<span class="comment"># Enable the site</span>
+ln -s /etc/nginx/sites-available/x402 /etc/nginx/sites-enabled/
+nginx -t &amp;&amp; systemctl reload nginx</pre>
+      </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="section" id="test">
+      <div class="section-header">
+        <div class="section-num">7</div>
+        <div>
+          <h2>Test Your Endpoint</h2>
+          <div class="section-sub">Verify x402 is live before registering</div>
+        </div>
+      </div>
+      <p>A working x402 endpoint returns HTTP 402 with a <code>X-PAYMENT-REQUIRED</code> header on unauthenticated requests:</p>
+
+      <div class="code-section">
+        <div class="code-label">
+          <span>bash</span>
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><span class="comment"># Should return HTTP/1.1 402 Payment Required</span>
+curl -I https://yournode.com/x402/
+
+<span class="comment"># Verify the payment header is present</span>
+curl -sv https://yournode.com/x402/ 2&gt;&amp;1 | grep -i "payment\|402\|x-"</pre>
+      </div>
+
+      <div class="info-box success">
+        <strong>✅ Expected output includes:</strong>
+        <code>HTTP/2 402</code> and a header like <code>X-PAYMENT-REQUIRED: ...</code> containing your recipient address and price. If you see this, your endpoint is live.
+      </div>
+
+      <div class="info-box warning">
+        <strong>⚠️ If you get 502 Bad Gateway</strong>
+        Check that x402-proxy is running: <code>systemctl status x402-proxy</code>. Check the upstream RPC is reachable: <code>curl http://localhost:26657/status</code>.
+      </div>
+    </div>
+
+    <!-- Step 8 -->
+    <div class="section" id="register">
+      <div class="section-header">
+        <div class="section-num">8</div>
+        <div>
+          <h2>Register on Arkeo Marketplace</h2>
+          <div class="section-sub">Get discovered by subscribers</div>
+        </div>
+      </div>
+      <p>Once your endpoint is live, add your x402 URL to the marketplace so subscribers can find you. Contact the Arkeo team on Telegram or Discord to add the <code>x402Url</code> field to your provider listing — it takes 5 minutes and gives you an ⚡ x402 badge on your provider card.</p>
+
+      <div class="info-box note">
+        <strong>Your x402 URL format:</strong>
+        <code>https://yournode.com/x402/</code> — include the trailing slash. This is the URL subscribers will pay to access.
+      </div>
+
+      <p>Providers with x402 enabled appear with a prominent ⚡ badge in the marketplace and are prioritized in AI agent discovery (Bazaar extension). This puts your node directly in front of the growing ecosystem of automated x402 consumers.</p>
+
+      <div class="btn-group">
+        <a href="become-provider.html" class="btn btn-primary">➕ Register as Provider</a>
+        <a href="index.html" class="btn btn-secondary">View Marketplace</a>
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="cta-section">
+      <h3>⚡ Join the First x402 Network</h3>
+      <p>Red_5 is live at $0.0001/request. Be among the first providers to accept AI agent payments on Arkeo.</p>
+      <p style="color:var(--text-dim); font-size:0.9rem; margin-bottom:0.5rem;">Questions? Reach us on Telegram or Discord.</p>
+      <div class="btn-group">
+        <a href="https://t.me/arkeonetwork" target="_blank" rel="noopener" class="btn btn-primary">💬 Arkeo Telegram</a>
+        <a href="cli-reference.html" class="btn btn-secondary">⌨️ CLI Reference</a>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <p>Arkeo Marketplace — <a href="index.html">Providers</a> · <a href="subscribe.html">Subscribers</a> · <a href="cli-reference.html">CLI Reference</a> · <a href="x402-provider-guide.html">x402 Guide</a></p>
+    <p style="margin-top:0.5rem; color:#6b7280;">x402 is an open standard. This guide reflects a confirmed working setup as of February 2026.</p>
+  </footer>
+
+  <script>
+    function copyCode(btn) {
+      const pre = btn.closest('.code-section').querySelector('pre');
+      const text = pre.innerText;
+      navigator.clipboard.writeText(text).then(() => {
+        btn.textContent = 'Copied!';
+        btn.classList.add('copied');
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+          btn.classList.remove('copied');
+        }, 2000);
+      });
+    }
+  </script>
+
+</body>
+</html>
