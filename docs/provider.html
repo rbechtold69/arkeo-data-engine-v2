@@ -392,13 +392,13 @@
         <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
         <span class="logo-text">Arkeo <span>Marketplace</span></span>
       </a>
-      <div class="nav-links">
+            <div class="nav-links">
         <a href="analytics.html" class="nav-link">📊 Analytics</a>
         <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
-        <a href="https://docs.arkeo.network" target="_blank" class="nav-link">Docs</a>
+        <a href="agents.html" class="nav-link">🤖 AI Agents</a>
         <a href="x402-setup.html" class="nav-link">⚡ x402</a>
-      </div>
-      <div class="nav-buttons">
+        <a href="cli-reference.html" class="nav-link">⌨️ CLI</a>
+        <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
         <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
         <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
         <a href="my-contracts.html" class="nav-btn">My Contracts</a>
@@ -572,6 +572,7 @@
           info.description = meta.description;
           info.website = meta.website;
           info.location = meta.location;
+          info.x402Url = meta.x402Url || null;
         }
 
         // Try fetching metadata_uri
@@ -727,6 +728,20 @@
             </div>
           </div>
         </div>
+
+        <!-- x402 Payment Section -->
+        ${info.x402Url ? `
+        <div class="section-card" style="border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.05);">
+          <h3 style="color:#818cf8;">⚡ x402 Payments Supported</h3>
+          <p style="color:var(--text-dim);margin-bottom:1rem;">This provider accepts HTTP-native micropayments via the <a href="https://x402.org" target="_blank" rel="noopener" style="color:#818cf8;">x402 standard</a>. Pay per request in USDC on Base — no account, no KYC, no ARKEO required.</p>
+          <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+            <div style="flex:1;min-width:0;background:var(--bg-input,#0d1117);border:1px solid var(--border);border-radius:0.5rem;padding:0.6rem 1rem;font-family:monospace;font-size:0.85rem;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(info.x402Url)}</div>
+            <button onclick="navigator.clipboard.writeText('${escapeHtml(info.x402Url)}').then(()=>{this.textContent='Copied!';setTimeout(()=>this.textContent='Copy',1500)})" class="btn btn-secondary btn-sm" style="white-space:nowrap;">Copy</button>
+            <a href="${escapeHtml(info.x402Url)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);white-space:nowrap;">Test Endpoint ↗</a>
+          </div>
+          <p style="color:var(--text-dim);font-size:0.8rem;margin-top:0.75rem;">Price: <strong style="color:var(--text);">$0.0001 USDC</strong> per request &nbsp;·&nbsp; Network: <strong style="color:var(--text);">Base (eip155:8453)</strong> &nbsp;·&nbsp; <a href="x402-setup.html" style="color:#818cf8;">Set up x402 on your node →</a></p>
+        </div>
+        ` : ''}
 
         <!-- Services Offered -->
         <div class="section-card">

@@ -43,7 +43,7 @@
       z-index: 100;
     }
     .nav-inner {
-      max-width: 1200px;
+      max-width: 1400px;
       margin: 0 auto;
       display: flex;
       align-items: center;
@@ -61,7 +61,7 @@
     }
     .logo img { height: 36px; }
     .logo span { color: var(--arkeo); }
-    .nav-links { display: flex; align-items: center; gap: 1.5rem; }
+    .nav-links { display: flex; align-items: center; gap: 2rem; flex-wrap: nowrap; }
     .nav-link { color: var(--text-dim); text-decoration: none; font-size: 0.9rem; transition: color 0.2s; }
     .nav-link:hover, .nav-link.active { color: var(--arkeo); }
     .nav-buttons { display: flex; align-items: center; gap: 0.75rem; }
@@ -80,6 +80,8 @@
     .nav-btn:hover { border-color: var(--arkeo); color: var(--arkeo); }
     .nav-btn-accent { background: var(--arkeo); color: #000; border-color: var(--arkeo); font-weight: 600; }
     .nav-btn-accent:hover { opacity: 0.9; color: #000; }
+    .nav-btn-highlight { background: rgba(59,224,255,0.15); border-color: var(--arkeo); color: var(--arkeo); font-weight: 600; }
+    .nav-btn-highlight:hover { background: rgba(59,224,255,0.25); }
     .hamburger { display: none; background: none; border: none; color: var(--text); font-size: 1.5rem; cursor: pointer; }
     .mobile-menu { display: none; flex-direction: column; gap: 0.5rem; padding-top: 1rem; border-top: 1px solid var(--border); margin-top: 0.75rem; }
     .mobile-menu.open { display: flex; }
@@ -349,19 +351,18 @@
       <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
       <span class="logo-text">Arkeo <span>Marketplace</span></span>
     </a>
-    <div class="nav-links">
-      <a href="analytics.html" class="nav-link">📊 Analytics</a>
-      <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
-      <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
-      <a href="x402-setup.html" class="nav-link">⚡ x402</a>
-      <a href="cli-reference.html" class="nav-link active">⌨️ CLI</a>
-    </div>
-    <div class="nav-buttons">
-      <a href="my-contracts.html" class="nav-btn">My Contracts</a>
-      <a href="become-provider.html" class="nav-btn">Sell Data</a>
-      <a href="subscribe.html" class="nav-btn">Buy Data</a>
-      <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
-    </div>
+          <div class="nav-links">
+        <a href="analytics.html" class="nav-link">📊 Analytics</a>
+        <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
+        <a href="agents.html" class="nav-link">🤖 AI Agents</a>
+        <a href="x402-setup.html" class="nav-link">⚡ x402</a>
+        <a href="cli-reference.html" class="nav-link active">⌨️ CLI</a>
+        <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
+        <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
+        <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
+        <a href="my-contracts.html" class="nav-btn">My Contracts</a>
+        <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
+      </div>
     <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
   </div>
   <div class="mobile-menu" id="mobileMenu">

@@ -967,15 +967,13 @@
         <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
         <span class="logo-text">Arkeo <span>Marketplace</span></span>
       </a>
-      <div class="nav-links">
+            <div class="nav-links">
         <a href="analytics.html" class="nav-link">📊 Analytics</a>
         <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
         <a href="agents.html" class="nav-link">🤖 AI Agents</a>
         <a href="x402-setup.html" class="nav-link">⚡ x402</a>
         <a href="cli-reference.html" class="nav-link">⌨️ CLI</a>
         <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
-      </div>
-      <div class="nav-buttons">
         <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
         <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
         <a href="my-contracts.html" class="nav-btn">My Contracts</a>
@@ -1001,7 +999,7 @@
   <!-- Hero Section -->
   <section class="hero">
     <h1>The Open Data Marketplace</h1>
-    <p>You choose your provider. You set the terms. Direct on-chain contracts, no KYC, no signup — just a wallet. Pay in USDC or ARKEO. Community owned, no VCs.</p>
+    <p>Access blockchain data from any provider, on any chain, with no account and no signup. Direct on-chain contracts, pay per request in USDC or ARKEO, and no single company that can cut you off. Built for AI agents and developers who need permissionless infrastructure that actually works.</p>
   </section>
 
   <!-- Stats Bar -->
@@ -1090,7 +1088,6 @@
               <th>Region</th>
               <th title="Queries Per Minute — from on-chain contract settings">QPM</th>
               <th>Status</th>
-              <th title="Health checks use on-chain contract data. Active contracts prove a provider is serving data.">Health ℹ️</th>
               <th title="Live response time measured from your browser. Green < 2s · Yellow 2-5s · Red timeout">Latency</th>
               <th></th>
             </tr>
@@ -1159,7 +1156,7 @@
               <span style="color: var(--arkeo);">Arkeo</span> — The Open Alternative
             </div>
             <div style="color: var(--text-dim); font-size: 0.9rem;">
-              No signup. No KYC. No monthly plans. Pay per request with ARKEO tokens or USDC. No forced token exposure. The only marketplace with native THORChain & Cosmos support.
+              Alchemy now supports x402 — but you still need an account. Arkeo doesn't. No signup, no KYC, no monthly plans. Pay per request with USDC or ARKEO tokens. The only decentralized marketplace with native THORChain &amp; Cosmos support.
             </div>
           </div>
           <a href="subscribe.html" class="btn btn-primary" style="white-space: nowrap;">Try Arkeo Now →</a>
@@ -1213,13 +1210,13 @@
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 1rem; padding: 1.5rem; transition: border-color 0.2s;" onmouseover="this.style.borderColor='var(--arkeo)'" onmouseout="this.style.borderColor='var(--border)'">
           <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">🤖</div>
           <div style="font-weight: 600; margin-bottom: 0.5rem;">AI Agent Ready</div>
-          <div style="color: var(--text-dim); font-size: 0.9rem;">Agents can't fill out KYC forms or sign up for accounts. Arkeo's permissionless access is perfect for autonomous AI agents via x402.</div>
+          <div style="color: var(--text-dim); font-size: 0.9rem;">Agents can't fill out KYC forms or sign up for accounts. Alchemy's x402 still requires one. Arkeo doesn't. Fully permissionless access for autonomous agents from day one.</div>
         </div>
 
         <div style="background: var(--bg-card); border: 1px solid rgba(139,92,246,0.4); border-radius: 1rem; padding: 1.5rem; transition: border-color 0.2s;" onmouseover="this.style.borderColor='#8b5cf6'" onmouseout="this.style.borderColor='rgba(139,92,246,0.4)'">
           <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">⚡</div>
           <div style="font-weight: 600; margin-bottom: 0.5rem;">x402 Payments</div>
-          <div style="color: var(--text-dim); font-size: 0.9rem;">HTTP-native micropayments. AI agents pay per request with USDC — no accounts, no KYC, no contracts needed. Powered by <a href="https://x402.org" target="_blank" rel="noopener" style="color: var(--arkeo);">Coinbase's x402 standard</a>.</div>
+          <div style="color: var(--text-dim); font-size: 0.9rem;">HTTP-native micropayments. AI agents pay per request with USDC — no accounts, no KYC, no contracts needed. The decentralized version of what Alchemy just launched. Powered by <a href="https://x402.org" target="_blank" rel="noopener" style="color: var(--arkeo);">Coinbase's x402 standard</a>.</div>
         </div>
 
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 1rem; padding: 1.5rem; transition: border-color 0.2s;" onmouseover="this.style.borderColor='var(--arkeo)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -1610,10 +1607,11 @@
         });
         
         // Sort by reputation by default
-        // Sort: healthy first, then by reputation
+        // Sort: Live first, then Onboarding, then Offline — reputation as tiebreaker
         onlineProviders.sort((a, b) => {
-          const aHealth = (KNOWN_PROVIDERS[a.pubkey]?.health === 'healthy') ? 1 : 0;
-          const bHealth = (KNOWN_PROVIDERS[b.pubkey]?.health === 'healthy') ? 1 : 0;
+          const statusRank = s => s === 'live' ? 2 : s === 'onboarding' ? 1 : 0;
+          const aHealth = statusRank(KNOWN_PROVIDERS[a.pubkey]?.status);
+          const bHealth = statusRank(KNOWN_PROVIDERS[b.pubkey]?.status);
           if (bHealth !== aHealth) return bHealth - aHealth;
           return (state.reputationScores[b.pubkey]?.total || 0) - (state.reputationScores[a.pubkey]?.total || 0);
         });
@@ -2034,6 +2032,7 @@
           <tr data-pubkey="${escapeHtml(p.pubkey)}">
             <td class="provider-name-cell">
               ${escapeHtml(p.name || 'Unknown')}
+              ${(() => { const kp = findKnown(p.pubkey); return kp?.x402Url ? `<span style="display:inline-block;background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);border-radius:0.25rem;font-size:0.65rem;padding:0.1rem 0.35rem;margin-left:0.4rem;vertical-align:middle;font-weight:600;">⚡ x402</span>` : ''; })()}
               <small>${p.location || 'Unknown region'}</small>
             </td>
             <td>
@@ -2047,16 +2046,12 @@
             </td>
             <td>${escapeHtml(p.location || 'Unknown')}</td>
             <td style="color: var(--arkeo); font-weight: 600;">${getProviderQpm(p.pubkey)}</td>
-            <td>
-              <span class="provider-status ${isOnline ? 'online' : 'offline'}">
-                ${isOnline ? '● Online' : '○ Offline'}
-              </span>
-            </td>
-            <td data-cell="health">${getLivHealthDotHtml(p.pubkey)}</td>
+            <td data-cell="health">${getStatusBadgeHtml(p.pubkey)}</td>
             <td data-cell="latency" class="latency-val ${hs ? hs.status : 'checking'}">${latencyHtml}</td>
             <td style="display: flex; gap: 0.5rem;">
               <a href="provider.html?pubkey=${encodeURIComponent(p.pubkey || '')}" class="btn btn-secondary btn-sm">Details</a>
               <a href="subscribe.html?provider=${encodeURIComponent(p.pubkey || '')}" class="btn btn-primary btn-sm">Subscribe</a>
+              ${(() => { const kp = findKnown(p.pubkey); return kp?.x402Url ? `<a href="${escapeHtml(kp.x402Url)}" target="_blank" rel="noopener" class="btn btn-sm" style="background:rgba(99,102,241,0.15);color:#818cf8;border:1px solid rgba(99,102,241,0.3);" title="x402 endpoint — pay per request with USDC">⚡ x402</a>` : ''; })()}
             </td>
           </tr>
         `;
@@ -2126,11 +2121,8 @@
                 <div class="provider-name">${escapeHtml(p.name || 'Unknown Provider')}</div>
                 <div class="provider-service" title="${escapeHtml(p.pubkey)}">${pubkeyShort}</div>
               </div>
-              <span class="provider-status ${isOnline ? 'online' : 'offline'}">
-                ${isOnline ? '● Online' : '○ Offline'}
-              </span>
             </div>
-            <div style="margin-bottom: 0.5rem;">${getLivHealthDotHtml(p.pubkey)}${(() => { const hs = state.healthStatus[p.pubkey]; return hs && hs.latencyMs ? ` <span class="latency-val ${hs.status}" style="font-size:0.75rem;">${hs.latencyMs}ms</span>` : ''; })()}</div>
+            <div style="margin-bottom: 0.5rem;">${getStatusBadgeHtml(p.pubkey)}${(() => { const hs = state.healthStatus[p.pubkey]; return hs && hs.latencyMs ? ` <span class="latency-val ${hs.status}" style="font-size:0.75rem;">${hs.latencyMs}ms</span>` : ''; })()}</div>
             ${p.description ? `<p style="color: var(--text-dim); font-size: 0.85rem; margin-bottom: 1rem; line-height: 1.4;">${escapeHtml(p.description.slice(0, 100))}${p.description.length > 100 ? '...' : ''}</p>` : ''}
             <div style="margin-bottom: 1rem;">
               <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem;">Supported Chains</div>
@@ -2249,8 +2241,8 @@
       if (!hs) {
         // Fall back to existing legacy indicator before health checks run
         const p = state.providerInfos[pubkey];
-        if (p) return healthHtml(p, false);
-        return '<span class="health-dot checking" title="Checking..."></span><span style="color:var(--text-muted);font-size:0.8rem;">Checking…</span>';
+        if (p) return getStatusBadgeHtml(pubkey);
+        return '<span style="color:var(--text-muted);font-size:0.8rem;">…</span>';
       }
       const LABELS  = { online: 'Online',      slow: 'Slow',        offline: 'Offline',  checking: 'Checking…', unknown: 'Unknown' };
       const TITLES  = {
@@ -2284,7 +2276,7 @@
       rows.forEach(row => {
         const healthCell  = row.querySelector('[data-cell="health"]');
         const latencyCell = row.querySelector('[data-cell="latency"]');
-        if (healthCell)  healthCell.innerHTML = getLivHealthDotHtml(pubkey);
+        if (healthCell)  healthCell.innerHTML = getStatusBadgeHtml(pubkey);
         if (latencyCell) {
           const hs = state.healthStatus[pubkey];
           latencyCell.className = `latency-val ${hs ? hs.status : 'checking'}`;
@@ -2338,73 +2330,36 @@
     async function runLiveHealthChecks(providers) {
       if (!providers || providers.length === 0) return;
 
-      // Mark all as 'checking' immediately so dots show a spinner
-      providers.forEach(p => {
-        state.healthStatus[p.pubkey] = { status: 'checking', latencyMs: null };
-      });
-      // Trigger a lightweight initial re-render to show checking dots
-      // (the table is already rendered; we just patch existing rows)
-      providers.forEach(p => updateProviderHealthRow(p.pubkey));
-
-      // Run all pings in parallel, updating each row as it resolves
+      // Run all pings in parallel — collect results silently, update latency only
       const checks = providers.map(async (p) => {
         const result = await pingProvider(p);
         state.healthStatus[p.pubkey] = result;
-        updateProviderHealthRow(p.pubkey);
+        // Only update the latency cell — do NOT re-sort or re-render
+        const row = document.querySelector(`tr[data-pubkey="${p.pubkey}"]`);
+        if (row) {
+          const latencyCell = row.querySelector('[data-cell="latency"]');
+          if (latencyCell) {
+            const hs = state.healthStatus[p.pubkey];
+            latencyCell.className = `latency-val ${hs ? hs.status : 'checking'}`;
+            latencyCell.innerHTML = getLivLatencyHtml(p.pubkey);
+          }
+        }
       });
 
+      // Wait for all pings — positions never change, only latency column updates
       await Promise.allSettled(checks);
-
-      // Final sort: healthy first, then reputation (re-render respecting new health data)
-      const onlineProviders = Object.values(state.providerInfos).filter(p => {
-        if (p.status !== 'ONLINE' || p.totalBond < parseInt(CONFIG.MIN_BOND)) return false;
-        const uri = p.metadataUri || '';
-        if (uri.includes('localhost') || uri.includes('127.0.0.1')) return false;
-        const isKnown = !!findKnown(p.pubkey);
-        if (!isKnown && (!uri || uri.trim() === '')) return false;
-        return true;
-      });
-      onlineProviders.sort((a, b) => {
-        const aOnline = state.healthStatus[a.pubkey]?.status === 'online' ? 2 : state.healthStatus[a.pubkey]?.status === 'slow' ? 1 : 0;
-        const bOnline = state.healthStatus[b.pubkey]?.status === 'online' ? 2 : state.healthStatus[b.pubkey]?.status === 'slow' ? 1 : 0;
-        if (bOnline !== aOnline) return bOnline - aOnline;
-        return (state.reputationScores[b.pubkey]?.total || 0) - (state.reputationScores[a.pubkey]?.total || 0);
-      });
-      renderProviders(onlineProviders, showAllProviders ? null : 5);
     }
 
-    function getHealthIndicator(provider) {
-      const pk = provider.pubkey;
-      const uri = provider.metadataUri || '';
-      const isLocalhost = uri.includes('127.0.0.1') || uri.includes('localhost');
-      const known = findKnown(pk);
-      const health = known?.health || 'unknown';
-      const contractCount = state.contractsByProvider[pk] || 0;
-      
-      if (isLocalhost) {
-        return { dot: '🔴', label: 'Misconfigured', cls: 'health-bad', title: 'Provider uses localhost URI — not reachable by users' };
+    function getStatusBadgeHtml(pubkey) {
+      const known = findKnown(pubkey);
+      const providerStatus = known?.status || 'offline';
+      if (providerStatus === 'live') {
+        return '<span style="color:#10b981;font-weight:600;">🟢 Live</span>';
       }
-      if (health === 'healthy' && contractCount > 0) {
-        return { dot: '🟢', label: `Active · ${contractCount} contract${contractCount > 1 ? 's' : ''}`, cls: 'health-good', title: 'Sentinel responding, actively serving contracts' };
+      if (providerStatus === 'onboarding') {
+        return '<span style="color:#f59e0b;font-weight:600;">🟡 Onboarding</span>';
       }
-      if (health === 'healthy') {
-        return { dot: '🟢', label: 'Ready', cls: 'health-good', title: 'Sentinel responding and ready for contracts' };
-      }
-      if (health === 'unhealthy') {
-        return { dot: '🔴', label: 'Unreachable', cls: 'health-bad', title: 'Sentinel not responding — provider may be offline' };
-      }
-      if (provider.status === 'ONLINE') {
-        return { dot: '🟡', label: 'Unverified', cls: 'health-warn', title: 'On-chain status is ONLINE but health not verified' };
-      }
-      return { dot: '🔴', label: 'Offline', cls: 'health-bad', title: 'Provider is offline' };
-    }
-
-    function healthHtml(provider, compact) {
-      const h = getHealthIndicator(provider);
-      if (compact) {
-        return `<span title="${h.title}" style="cursor:help;">${h.dot} <span style="font-size:0.75rem;color:var(--text-dim);">${h.label}</span></span>`;
-      }
-      return `<span title="${h.title}" style="cursor:help;">${h.dot} ${h.label}</span>`;
+      return '<span style="color:#ef4444;font-weight:600;">🔴 Offline</span>';
     }
 
     function viewDetails(pubkey) {
