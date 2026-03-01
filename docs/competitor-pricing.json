@@ -1,11 +1,11 @@
 {
-  "lastUpdated": "2026-02-15",
+  "lastUpdated": "2026-03-01",
   "competitors": [
     {
       "name": "Infura",
       "type": "centralized",
       "website": "https://infura.io",
-      "freeTier": "3M credits/day (~100K req/day)",
+      "freeTier": "3M credits/day (~37.5K req/day)",
       "costPer1M": "~$5.00",
       "cosmos": false,
       "thorchain": false,
@@ -29,8 +29,8 @@
       "name": "QuickNode",
       "type": "centralized",
       "website": "https://quicknode.com",
-      "freeTier": "~10M credits/mo (trial)",
-      "costPer1M": "$0.50-5.00",
+      "freeTier": "10M credits/mo (free)",
+      "costPer1M": "$0.62-5.00",
       "cosmos": false,
       "thorchain": false,
       "kyc": "Email required",
@@ -54,7 +54,7 @@
       "type": "centralized",
       "website": "https://getblock.io",
       "freeTier": "50K CU/day (~1.5M/mo)",
-      "costPer1M": "$0.41-0.98",
+      "costPer1M": "$0.72-0.98",
       "cosmos": true,
       "thorchain": false,
       "kyc": "Email required",
