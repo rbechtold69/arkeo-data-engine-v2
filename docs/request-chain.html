@@ -690,44 +690,18 @@
       .logo { font-size: 1rem; }
       .logo img { height: 32px; }
     }
+  
+    /* Hide old nav (replaced by shared nav component) */
+    body > nav.nav, .mobile-menu { display: none !important; }
+    
   </style>
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/nav.js"></script>
 </head>
 <body>
   <!-- Navigation -->
-  <nav class="nav">
-    <div class="nav-inner">
-      <a href="index.html" class="logo">
-        <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
-        <span class="logo-text">Arkeo <span>Marketplace</span></span>
-      </a>
-            <div class="nav-links">
-        <a href="analytics.html" class="nav-link">📊 Analytics</a>
-        <a href="request-chain.html" class="nav-link active">🗳️ Request Chain</a>
-        <a href="agents.html" class="nav-link">🤖 AI Agents</a>
-        <a href="x402-setup.html" class="nav-link">⚡ x402</a>
-        <a href="cli-reference.html" class="nav-link">⌨️ CLI</a>
-        <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
-        <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
-        <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
-        <a href="my-contracts.html" class="nav-btn">My Contracts</a>
-        <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
-      </div>
-      <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
-    </div>
-    <div class="mobile-menu" id="mobileMenu">
-      <a href="index.html">🏠 Home</a>
-      <a href="analytics.html">📊 Analytics</a>
-      <a href="request-chain.html">🗳️ Request Chain</a>
-      <a href="x402-setup.html">⚡ x402</a>
-      <a href="https://docs.arkeo.network" target="_blank" rel="noopener">📄 Docs</a>
-      <a href="my-contracts.html">📋 My Contracts</a>
-      <a href="become-provider.html">🚀 Sell Data</a>
-      <a href="subscribe.html">📡 Buy Data</a>
-      <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener">💰 Buy ARKEO</a>
-    </div>
-  </nav>
-
-  <!-- Hero Section -->
+    <div id="arkeo-nav" data-active="network"></div>
+<!-- Hero Section -->
   <section class="hero">
     <h1>Request a Chain</h1>
     <p>Tell providers what chains you need. Vote for chains you want to see supported. Help shape what gets built next.</p>

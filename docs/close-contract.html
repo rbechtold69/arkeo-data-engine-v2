@@ -31,9 +31,16 @@
       .container { max-width: 100%; }
       h1 { font-size: 1.3rem; }
     }
+  
+    /* Hide old nav (replaced by shared nav component) */
+    body > nav.nav, .mobile-menu { display: none !important; }
+    
   </style>
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/nav.js"></script>
 </head>
 <body>
+  <div id="arkeo-nav" data-active="network"></div>
   <div class="container">
     <div style="background: #3a2a1a; border: 1px solid #f59e0b; border-radius: 8px; padding: 1rem; margin-bottom: 1.5rem; color: #f59e0b; font-size: 0.9rem;">
       ⚠️ <strong>Deprecated:</strong> This page uses legacy Amino signing which may not work correctly. 

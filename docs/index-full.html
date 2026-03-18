@@ -957,48 +957,18 @@
     @media (prefers-color-scheme: light) {
       /* Could add light mode styles here if needed */
     }
+  
+    /* Hide old nav (replaced by shared nav component) */
+    body > nav.nav, .mobile-menu { display: none !important; }
+    
   </style>
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/nav.js"></script>
 </head>
 <body>
   <!-- Navigation -->
-  <nav class="nav">
-    <div class="nav-inner">
-      <a href="index.html" class="logo">
-        <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
-        <span class="logo-text">Arkeo <span>Marketplace</span></span>
-      </a>
-            <div class="nav-links">
-        <a href="analytics.html" class="nav-link">📊 Analytics</a>
-        <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
-        <a href="agents.html" class="nav-link">🤖 AI Agents</a>
-        <a href="x402-setup.html" class="nav-link">⚡ x402</a>
-        <a href="cli-reference.html" class="nav-link">⌨️ CLI</a><a href="x402-provider-guide.html" class="nav-link">⚡ x402 Guide</a>
-        <a href="https://rbechtold69.github.io/swap-thorchain-arkeo/swap/" target="_blank" rel="noopener" class="nav-link" style="color: var(--arkeo);">🖥️ Frontends</a>
-        <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
-        <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
-        <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
-        <a href="my-contracts.html" class="nav-btn">My Contracts</a>
-        <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
-      </div>
-      <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
-    </div>
-    <div class="mobile-menu" id="mobileMenu">
-      <a href="index.html">🏠 Home</a>
-      <a href="become-provider.html">🚀 Sell Data</a>
-      <a href="subscribe.html">📡 Buy Data</a>
-      <a href="my-contracts.html">📋 My Contracts</a>
-      <a href="analytics.html">📊 Analytics</a>
-      <a href="request-chain.html">🗳️ Request Chain</a>
-      <a href="x402-setup.html">⚡ x402</a>
-      <a href="cli-reference.html">⌨️ CLI Reference</a>
-      <a href="agents.html">🤖 AI Agents</a>
-      <a href="https://rbechtold69.github.io/swap-thorchain-arkeo/swap/" target="_blank" rel="noopener" style="color: var(--arkeo);">🖥️ Frontends</a>
-      <a href="https://docs.arkeo.network" target="_blank" rel="noopener">📄 Docs</a>
-      <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener">💰 Buy ARKEO</a>
-    </div>
-  </nav>
-
-  <!-- Hero Section -->
+    <div id="arkeo-nav" data-active="home"></div>
+<!-- Hero Section -->
   <section class="hero">
     <h1>The Open Data Marketplace</h1>
     <p>Access blockchain data from any provider, on any chain, with no account and no signup. Direct on-chain contracts, pay per request in USDC or ARKEO, and no single company that can cut you off. Built for AI agents and developers who need permissionless infrastructure that actually works.</p>

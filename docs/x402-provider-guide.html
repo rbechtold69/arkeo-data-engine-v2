@@ -300,25 +300,18 @@
       .toc ol { grid-template-columns: 1fr; }
       .hero h1 { font-size: 1.75rem; }
     }
+  
+    /* Hide old nav (replaced by shared nav component) */
+    body > nav.nav, .mobile-menu { display: none !important; }
+    
   </style>
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/nav.js"></script>
 </head>
 <body>
 
-  <nav class="nav">
-    <a href="index.html" class="logo">
-      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
-      <span>Arkeo</span>
-    </a>
-    <div class="nav-links">
-      <a href="index.html">Providers</a>
-      <a href="subscribe.html">Subscribers</a>
-      <a href="my-contracts.html">My Contracts</a>
-      <a href="cli-reference.html">⌨️ CLI</a>
-      <a href="x402-provider-guide.html" class="active">⚡ x402</a>
-    </div>
-  </nav>
-
-  <div class="container">
+    <div id="arkeo-nav" data-active="providers"></div>
+<div class="container">
 
     <!-- Hero -->
     <div class="hero">

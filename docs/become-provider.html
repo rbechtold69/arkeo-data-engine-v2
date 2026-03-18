@@ -634,45 +634,18 @@
   .footer-inner { flex-direction: column; text-align: center; }
   .footer-links { justify-content: center; }
 }
+  
+    /* Hide old nav (replaced by shared nav component) */
+    body > nav.nav, .mobile-menu { display: none !important; }
+    
   </style>
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/nav.js"></script>
 </head>
 <body>
   <!-- Navigation -->
-  <nav class="nav">
-    <div class="nav-inner">
-      <a href="index.html" class="logo">
-        <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
-        <span class="logo-text">Arkeo <span>Marketplace</span></span>
-      </a>
-            <div class="nav-links">
-        <a href="analytics.html" class="nav-link">📊 Analytics</a>
-        <a href="request-chain.html" class="nav-link">🗳️ Request Chain</a>
-        <a href="agents.html" class="nav-link">🤖 AI Agents</a>
-        <a href="x402-setup.html" class="nav-link">⚡ x402</a>
-        <a href="cli-reference.html" class="nav-link">⌨️ CLI</a><a href="x402-provider-guide.html" class="nav-link">⚡ x402 Guide</a>
-        <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="nav-link">Docs</a>
-        <a href="become-provider.html" class="nav-btn nav-btn-highlight">Sell Data</a>
-        <a href="subscribe.html" class="nav-btn nav-btn-highlight">Buy Data</a>
-        <a href="my-contracts.html" class="nav-btn">My Contracts</a>
-        <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener" class="nav-btn nav-btn-accent">Buy ARKEO</a>
-      </div>
-      <button class="hamburger" onclick="document.getElementById('mobileMenu').classList.toggle('open')" aria-label="Menu">☰</button>
-    </div>
-    <div class="mobile-menu" id="mobileMenu">
-      <a href="index.html">🏠 Home</a>
-      <a href="analytics.html">📊 Analytics</a>
-      <a href="request-chain.html">🗳️ Request Chain</a>
-      <a href="x402-setup.html">⚡ x402</a>
-      <a href="cli-reference.html">⌨️ CLI Reference</a>
-      <a href="https://docs.arkeo.network" target="_blank" rel="noopener">📄 Docs</a>
-      <a href="my-contracts.html">📋 My Contracts</a>
-      <a href="become-provider.html">🚀 Sell Data</a>
-      <a href="subscribe.html">📡 Buy Data</a>
-      <a href="https://app.osmosis.zone/pool/2977" target="_blank" rel="noopener">💰 Buy ARKEO</a>
-    </div>
-  </nav>
-
-  <div class="container">
+    <div id="arkeo-nav" data-active="providers"></div>
+<div class="container">
     <!-- CLI hint -->
     <p style="text-align:center;color:var(--text-dim);font-size:0.875rem;margin-bottom:1.25rem;">
       Prefer the command line? <a href="cli-reference.html" style="color:var(--arkeo);text-decoration:none;">View CLI reference →</a>
