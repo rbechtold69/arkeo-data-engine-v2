@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Providers | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <meta name="description" content="Host blockchain data and frontends on Arkeo. Earn ARKEO tokens for every request served.">
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --bg-card: #12151c;
+      --border: #1e2230;
+      --arkeo: #3BE0FF;
+      --text: #ffffff;
+      --text-dim: #8b92a5;
+      --text-muted: #5a6278;
+      --success: #10b981;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+    
+    .hero {
+      text-align: center;
+      padding: 3rem 1.5rem 2rem;
+    }
+    .hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .hero h1 em { font-style: normal; color: var(--arkeo); }
+    .hero p { color: var(--text-dim); max-width: 600px; margin: 0 auto 1.5rem; }
+    .btn-primary {
+      background: var(--arkeo); color: #000; padding: 0.6rem 1.5rem;
+      border-radius: 0.5rem; text-decoration: none; font-weight: 600; display: inline-block;
+    }
+    .btn-secondary {
+      background: transparent; color: var(--arkeo); border: 1px solid var(--arkeo);
+      padding: 0.6rem 1.5rem; border-radius: 0.5rem; text-decoration: none; font-weight: 600; display: inline-block;
+    }
+
+    /* How it works */
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .step {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    .step-num {
+      background: rgba(59, 224, 255, 0.1);
+      color: var(--arkeo);
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 0.75rem;
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+    .step h3 { font-size: 0.95rem; margin-bottom: 0.35rem; }
+    .step p { color: var(--text-dim); font-size: 0.8rem; }
+
+    /* Revenue */
+    .revenue {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      margin: 2rem 0;
+    }
+    .revenue h2 { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    .revenue > p { color: var(--text-dim); margin-bottom: 1.5rem; }
+    .revenue-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+    .revenue-item {
+      text-align: center;
+      padding: 1rem;
+      background: rgba(59, 224, 255, 0.04);
+      border-radius: 0.75rem;
+    }
+    .revenue-val { font-size: 1.5rem; font-weight: 700; color: var(--arkeo); }
+    .revenue-label { font-size: 0.75rem; color: var(--text-muted); margin-top: 0.25rem; }
+
+    /* Leaderboard */
+    .leaderboard {
+      margin: 2rem 0;
+    }
+    .leaderboard h2 { font-size: 1.4rem; margin-bottom: 1rem; }
+    .lb-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      overflow: hidden;
+    }
+    .lb-table th {
+      background: var(--bg-card);
+      padding: 0.75rem 1rem;
+      text-align: left;
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+    }
+    .lb-table td {
+      padding: 0.75rem 1rem;
+      border-top: 1px solid var(--border);
+    }
+    .lb-table tr:hover { background: rgba(59, 224, 255, 0.03); }
+
+    /* Tools */
+    .tools {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .tool-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      text-decoration: none;
+      color: var(--text);
+      transition: border-color 0.2s;
+    }
+    .tool-card:hover { border-color: var(--arkeo); }
+    .tool-card h3 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+    .tool-card p { color: var(--text-dim); font-size: 0.8rem; }
+
+    /* CTA */
+    .cta {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+    }
+    .cta h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .cta p { color: var(--text-dim); margin-bottom: 1.5rem; }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--arkeo); }
+
+    .racing-embed {
+      margin: 2rem 0;
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .racing-embed iframe {
+      width: 100%;
+      height: 500px;
+      border: none;
+    }
+
+    @media (max-width: 640px) {
+      .hero h1 { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="arkeo-nav" data-active="providers"></div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Earn <em>ARKEO</em> by serving data</h1>
+    <p>Run a node, serve RPC requests, host DeFi frontends. Get paid per request with no middleman.</p>
+    <div style="display: flex; gap: 0.75rem; justify-content: center; flex-wrap: wrap;">
+      <a href="become-provider.html" class="btn-primary">Become a Provider →</a>
+      <a href="cli-reference.html" class="btn-secondary">CLI Reference</a>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section class="container">
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Run a Node</h3>
+        <p>Set up a full node or archive node for any supported chain.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Register on Arkeo</h3>
+        <p>Bond ARKEO tokens and register your sentinel on-chain.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Serve Requests</h3>
+        <p>Your sentinel routes RPC traffic. You earn per request.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <h3>Claim Income</h3>
+        <p>Batch-claim your earnings on-chain. No invoicing, no waiting.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Revenue Stats -->
+  <section class="container">
+    <div class="revenue">
+      <h2>💰 Network Revenue</h2>
+      <p>Real on-chain earnings data from active providers.</p>
+      <div class="revenue-grid">
+        <div class="revenue-item">
+          <div class="revenue-val" id="totalClaims">22,307</div>
+          <div class="revenue-label">Income Claims</div>
+        </div>
+        <div class="revenue-item">
+          <div class="revenue-val" id="activeProviders">6</div>
+          <div class="revenue-label">Active Providers</div>
+        </div>
+        <div class="revenue-item">
+          <div class="revenue-val" id="totalContracts">1,341</div>
+          <div class="revenue-label">PAYG Contracts</div>
+        </div>
+        <div class="revenue-item">
+          <div class="revenue-val" id="chainsServed">7</div>
+          <div class="revenue-label">Chains Served</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Provider Leaderboard -->
+  <section class="container">
+    <div class="leaderboard">
+      <h2>🏆 Provider Leaderboard</h2>
+      <table class="lb-table">
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Provider</th>
+            <th>Chains</th>
+            <th>Total Bond</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="leaderboardBody">
+          <tr><td colspan="5" style="text-align:center; padding:2rem; color:var(--text-muted);">Loading...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Racing Visualization -->
+  <section class="container">
+    <div class="racing-embed" style="padding: 1.5rem;">
+      <h2 style="margin-bottom: 0.5rem;">🏎️ Watch Providers Compete</h2>
+      <p style="color: var(--text-dim); margin-bottom: 1rem; font-size: 0.85rem;">Real-time response time racing between Arkeo providers.</p>
+      <a href="https://racing.buildonarkeo.com/" target="_blank" rel="noopener" class="btn-primary">Launch Racing Dashboard →</a>
+    </div>
+  </section>
+
+  <!-- Provider Tools -->
+  <section class="container">
+    <h2 style="font-size: 1.4rem; margin: 2rem 0 1rem;">🛠 Provider Tools</h2>
+    <div class="tools">
+      <a href="become-provider.html" class="tool-card">
+        <h3>📋 Setup Guide</h3>
+        <p>Step-by-step guide to register as an Arkeo data provider and configure your sentinel.</p>
+      </a>
+      <a href="x402-provider-guide.html" class="tool-card">
+        <h3>⚡ x402 Provider Guide</h3>
+        <p>Enable HTTP 402 payments on your sentinel. Accept USDC per request.</p>
+      </a>
+      <a href="cli-reference.html" class="tool-card">
+        <h3>⌨️ CLI Reference</h3>
+        <p>All arkeod commands: register, bond, claim, manage services.</p>
+      </a>
+      <a href="close-contract.html" class="tool-card">
+        <h3>📝 Contract Management</h3>
+        <p>Close contracts, reclaim bonds, manage your provider lifecycle.</p>
+      </a>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta">
+    <h2>Ready to start earning?</h2>
+    <p>Join 6 active providers serving data across 7 chains.</p>
+    <a href="become-provider.html" class="btn-primary">Become a Provider →</a>
+  </section>
+
+  <footer>
+    <div style="margin-bottom: 0.5rem;">
+      <a href="https://twitter.com/arkaboreal" target="_blank">Twitter</a> · 
+      <a href="https://discord.gg/arkeo" target="_blank">Discord</a> · 
+      <a href="https://github.com/arkeonetwork" target="_blank">GitHub</a> · 
+      <a href="https://viewblock.io/arkeo" target="_blank">ViewBlock</a>
+    </div>
+    Arkeo Network — Decentralized data infrastructure
+  </footer>
+
+  <script>
+    // Populate leaderboard from known providers
+    const PROVIDERS = [
+      { name: 'Liquify', chains: 'Base, BSC, Polygon, Arkeo', bond: '400M', status: '🟢' },
+      { name: 'InnovationTheory', chains: 'ETH, Base, Arkeo, Osmosis', bond: '1.1B', status: '🟢' },
+      { name: '0xFury', chains: 'ETH, Base', bond: '300M', status: '🟢' },
+      { name: 'Everstake', chains: 'Arbitrum, Cosmos, Aptos, Injective, NEAR', bond: '600M', status: '🟢' },
+      { name: 'StakeVillage', chains: 'ETH', bond: '100M', status: '🟢' },
+      { name: 'Red_5', chains: 'Arkeo', bond: '100M', status: '🟢' },
+    ];
+    const tbody = document.getElementById('leaderboardBody');
+    tbody.innerHTML = PROVIDERS.map((p, i) => `<tr>
+      <td style="font-weight:700;color:${i < 3 ? 'var(--arkeo)' : 'var(--text-dim)'}">#${i + 1}</td>
+      <td style="font-weight:500;">${p.name}</td>
+      <td style="font-size:0.8rem;color:var(--text-dim);">${p.chains}</td>
+      <td>${p.bond}</td>
+      <td>${p.status}</td>
+    </tr>`).join('');
+  </script>
+</body>
+</html>

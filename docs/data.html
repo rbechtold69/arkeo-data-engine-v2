@@ -1,0 +1,487 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RPC Data | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <meta name="description" content="Browse Arkeo's decentralized RPC providers. Compare pricing, chains, and uptime. Subscribe with no KYC.">
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/coingecko-cache.js"></script>
+  <script src="js/providers.js"></script>
+  <script src="js/nav.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js" integrity="sha384-jb8JQMbMoBUzgWatfe6COACi2ljcDdZQ2OxczGA3bGNeWe+6DChMTBJemed7ZnvJ" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --bg-card: #12151c;
+      --bg-input: #1a1f2a;
+      --border: #1e2230;
+      --arkeo: #3BE0FF;
+      --text: #ffffff;
+      --text-dim: #8b92a5;
+      --text-muted: #5a6278;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --error: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+
+    /* Hero */
+    .data-hero {
+      text-align: center;
+      padding: 3rem 1.5rem 2rem;
+    }
+    .data-hero h1 {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-bottom: 0.5rem;
+    }
+    .data-hero h1 em { font-style: normal; color: var(--arkeo); }
+    .data-hero p { color: var(--text-dim); font-size: 1rem; max-width: 600px; margin: 0 auto 1.5rem; }
+    
+    .hero-actions {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      background: var(--arkeo);
+      color: #000;
+      padding: 0.6rem 1.5rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--arkeo);
+      border: 1px solid var(--arkeo);
+      padding: 0.6rem 1.5rem;
+      border-radius: 0.5rem;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    /* Why Section */
+    .why-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+      margin: 2rem 0;
+    }
+    .why-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .why-card h3 {
+      font-size: 0.95rem;
+      margin-bottom: 0.35rem;
+    }
+    .why-card p {
+      color: var(--text-dim);
+      font-size: 0.8rem;
+      line-height: 1.5;
+    }
+
+    /* Section Headers */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin: 2.5rem 0 1rem;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+    .section-title {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    /* Filter Bar */
+    .filter-bar {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1rem;
+    }
+    .filter-input, .filter-select {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      color: var(--text);
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+    }
+    .filter-input:focus, .filter-select:focus {
+      outline: none;
+      border-color: var(--arkeo);
+    }
+    .filter-input { min-width: 250px; }
+
+    /* Provider Table */
+    .table-container {
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      overflow-x: auto;
+      margin-bottom: 2rem;
+    }
+    .provider-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .provider-table th {
+      background: var(--bg-card);
+      padding: 0.75rem 1rem;
+      text-align: left;
+      color: var(--text-dim);
+      font-weight: 600;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .provider-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .provider-table tr:last-child td { border-bottom: none; }
+    .provider-table tr:hover { background: rgba(59, 224, 255, 0.03); }
+
+    /* Pricing Comparison */
+    .pricing-section {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 2rem;
+      margin: 2rem 0;
+    }
+    .pricing-section h2 {
+      font-size: 1.4rem;
+      margin-bottom: 0.5rem;
+    }
+    .pricing-section > p {
+      color: var(--text-dim);
+      margin-bottom: 1.5rem;
+    }
+    .tab-bar {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .tab-btn {
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 0.4rem 1rem;
+      border-radius: 2rem;
+      font-size: 0.8rem;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .tab-btn.active, .tab-btn:hover {
+      border-color: var(--arkeo);
+      color: var(--arkeo);
+      background: rgba(59, 224, 255, 0.08);
+    }
+    .arkeo-highlight {
+      margin-top: 1.5rem;
+      padding: 1.25rem;
+      background: rgba(59, 224, 255, 0.06);
+      border: 1px solid rgba(59, 224, 255, 0.2);
+      border-radius: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    .arkeo-highlight strong { color: var(--arkeo); }
+
+    /* CTA */
+    .cta-section {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      border-top: 1px solid var(--border);
+      margin-top: 2rem;
+    }
+    .cta-section h2 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .cta-section p { color: var(--text-dim); margin-bottom: 1.5rem; }
+    .cta-buttons {
+      display: flex;
+      gap: 0.75rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--arkeo); }
+
+    @media (max-width: 640px) {
+      .data-hero h1 { font-size: 1.5rem; }
+      .filter-input { min-width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div id="arkeo-nav" data-active="data"></div>
+
+  <!-- Hero -->
+  <section class="data-hero">
+    <h1>Get <em>RPC data</em> from the open marketplace</h1>
+    <p>Browse providers, compare pricing, and connect — no signup, no KYC, no monthly plans. Pay per request.</p>
+    <div class="hero-actions">
+      <a href="subscribe.html" class="btn-primary">Subscribe to a Provider →</a>
+      <a href="agents.html" class="btn-secondary">AI Agent Access</a>
+    </div>
+  </section>
+
+  <!-- Why Arkeo -->
+  <section class="container">
+    <div class="why-grid">
+      <div class="why-card">
+        <h3>🔓 No Signup Required</h3>
+        <p>Connect your wallet and start querying. No email, no KYC, no monthly commitments. Pay only for what you use.</p>
+      </div>
+      <div class="why-card">
+        <h3>⚡ Multi-Provider Failover</h3>
+        <p>Your requests automatically route through multiple independent providers. If one goes down, another picks up instantly.</p>
+      </div>
+      <div class="why-card">
+        <h3>💰 Transparent Pricing</h3>
+        <p>Every provider lists their rate on-chain. No hidden fees, no surprise invoices. Compare and choose the best deal.</p>
+      </div>
+      <div class="why-card">
+        <h3>🛡️ Censorship Resistant</h3>
+        <p>No single entity controls access. Your data requests can't be blocked, throttled, or monitored by any one party.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Provider Directory -->
+  <section class="container">
+    <div class="section-header">
+      <h2 class="section-title">Active Providers</h2>
+    </div>
+
+    <div class="filter-bar">
+      <input type="text" class="filter-input" id="searchInput" placeholder="🔍 Search providers or chains..." oninput="filterProviders()">
+      <select class="filter-select" id="dataTypeFilter" onchange="filterProviders()">
+        <option value="">All Types</option>
+        <option value="fullnode">Full Nodes</option>
+        <option value="archivenode">Archive Nodes</option>
+      </select>
+      <select class="filter-select" id="statusFilter" onchange="filterProviders()">
+        <option value="">All Status</option>
+        <option value="online">Online Only</option>
+      </select>
+    </div>
+
+    <div class="table-container">
+      <table class="provider-table" id="providerTable">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Chain</th>
+            <th>Type</th>
+            <th>Bond</th>
+            <th>Status</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="providerTableBody">
+          <tr><td colspan="6" style="text-align:center; padding: 2rem; color: var(--text-muted);">Loading providers...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Pricing Comparison -->
+  <section class="container">
+    <div class="pricing-section">
+      <h2>📊 How Does Pricing Compare?</h2>
+      <p>See what centralized and decentralized providers charge for RPC data.</p>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tabCentralized" onclick="showCompTab('centralized')">Centralized</button>
+        <button class="tab-btn" id="tabDecentralized" onclick="showCompTab('decentralized')">Decentralized</button>
+        <button class="tab-btn" id="tabAll" onclick="showCompTab('all')">All</button>
+      </div>
+
+      <div class="table-container">
+        <table class="provider-table" id="compTable">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Type</th>
+              <th>Free Tier</th>
+              <th>Cost / 1M Requests</th>
+              <th>Cosmos</th>
+              <th>THORChain</th>
+              <th>KYC</th>
+            </tr>
+          </thead>
+          <tbody id="compTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="arkeo-highlight">
+        <div>
+          <div style="font-weight: 700; margin-bottom: 0.25rem;"><strong>Arkeo</strong> — The Open Alternative</div>
+          <div style="color: var(--text-dim); font-size: 0.85rem;">No signup, no KYC, no monthly plans. Pay per request with USDC or ARKEO tokens.</div>
+        </div>
+        <a href="subscribe.html" class="btn-primary">Try Arkeo →</a>
+      </div>
+
+      <p style="color: var(--text-muted); font-size: 0.7rem; margin-top: 1rem;">
+        * Pricing verified Feb 2026. Costs vary by method complexity and volume.
+      </p>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="cta-section">
+    <h2>Ready to connect?</h2>
+    <p>Start querying blockchain data in under 60 seconds.</p>
+    <div class="cta-buttons">
+      <a href="subscribe.html" class="btn-primary">Subscribe Now</a>
+      <a href="test-arkauth.html" class="btn-secondary">Test Connection</a>
+    </div>
+  </section>
+
+  <footer>
+    <div style="margin-bottom: 0.5rem;">
+      <a href="https://twitter.com/arkaboreal" target="_blank">Twitter</a> · 
+      <a href="https://discord.gg/arkeo" target="_blank">Discord</a> · 
+      <a href="https://github.com/arkeonetwork" target="_blank">GitHub</a> · 
+      <a href="https://viewblock.io/arkeo" target="_blank">ViewBlock</a>
+    </div>
+    Arkeo Network — Decentralized data infrastructure
+  </footer>
+
+  <!-- Load provider data -->
+  <script>
+    // Load provider table from chain data
+    (async function() {
+      try {
+        const res = await fetch(`${CONFIG.RPC_API}/tx_search?query=%22message.action=%27/arkeo.arkeo.MsgModProvider%27%22&per_page=100&page=1`);
+        const data = await res.json();
+        const txs = data.result?.txs || [];
+        const tbody = document.getElementById('providerTableBody');
+        
+        if (txs.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">No providers found</td></tr>';
+          return;
+        }
+
+        const rows = [];
+        for (const tx of txs) {
+          try {
+            const decoded = atob(tx.tx);
+            // Extract basic info from events
+            const events = tx.tx_result?.events || [];
+            let provider = '', service = '', bond = '';
+            for (const ev of events) {
+              for (const attr of ev.attributes || []) {
+                const key = attr.key ? atob(attr.key) : '';
+                const val = attr.value ? atob(attr.value) : '';
+                if (key === 'provider') provider = val;
+                if (key === 'service') service = val;
+                if (key === 'bond') bond = val;
+              }
+            }
+            if (service) {
+              const chain = service.split('-')[0]?.toUpperCase() || 'Unknown';
+              const type = service.includes('archive') ? 'Archive' : 'Full Node';
+              const bondDisplay = bond ? (parseInt(bond) / 1e8).toLocaleString() + ' ARKEO' : '-';
+              const status = tx.tx_result?.code === 0 ? '🟢 Online' : '🔴 Offline';
+              rows.push(`<tr>
+                <td style="font-weight:500;">${provider.substring(0, 20)}...</td>
+                <td>${chain}</td>
+                <td>${type}</td>
+                <td>${bondDisplay}</td>
+                <td>${status}</td>
+                <td><a href="provider.html?address=${provider}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
+              </tr>`);
+            }
+          } catch {}
+        }
+        tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="text-align:center;">No data</td></tr>';
+      } catch (err) {
+        document.getElementById('providerTableBody').innerHTML = 
+          `<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Failed to load: ${err.message}</td></tr>`;
+      }
+    })();
+
+    // Pricing comparison data
+    const COMP_DATA = [
+      { name: 'Infura', type: 'Centralized', free: '100K/day', cost: '$0 (free) – $1.10', cosmos: '❌', thorchain: '❌', kyc: 'Email + CC' },
+      { name: 'Alchemy', type: 'Centralized', free: '3M/mo', cost: '$0.80–$1.20', cosmos: '❌', thorchain: '❌', kyc: 'Email + CC' },
+      { name: 'QuickNode', type: 'Centralized', free: '10M/mo', cost: '$1.50+', cosmos: '✅', thorchain: '❌', kyc: 'Email + CC' },
+      { name: 'Ankr', type: 'Hybrid', free: '30/sec', cost: '$1.00', cosmos: '✅', thorchain: '❌', kyc: 'Email' },
+      { name: 'Chainstack', type: 'Centralized', free: '3M/mo', cost: '$1.50–$3.00', cosmos: '✅', thorchain: '❌', kyc: 'Email + CC' },
+      { name: 'Pokt Network', type: 'Decentralized', free: '100K/day', cost: '~$0.85', cosmos: '✅', thorchain: '❌', kyc: 'None' },
+      { name: 'Lava Network', type: 'Decentralized', free: 'Yes', cost: 'Token-gated', cosmos: '✅', thorchain: '❌', kyc: 'None' },
+      { name: 'Arkeo', type: 'Decentralized', free: 'Yes', cost: '$0.01–$0.10', cosmos: '✅', thorchain: '✅', kyc: 'None ✅' },
+    ];
+
+    let currentTab = 'centralized';
+    function showCompTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
+      renderComp();
+    }
+    function renderComp() {
+      const tbody = document.getElementById('compTableBody');
+      const filtered = COMP_DATA.filter(d => {
+        if (currentTab === 'centralized') return d.type === 'Centralized';
+        if (currentTab === 'decentralized') return d.type !== 'Centralized';
+        return true;
+      });
+      tbody.innerHTML = filtered.map(d => `<tr${d.name === 'Arkeo' ? ' style="background:rgba(59,224,255,0.05);"' : ''}>
+        <td style="font-weight:${d.name === 'Arkeo' ? '700;color:var(--arkeo)' : '500'}">${d.name}</td>
+        <td>${d.type}</td>
+        <td>${d.free}</td>
+        <td>${d.cost}</td>
+        <td>${d.cosmos}</td>
+        <td>${d.thorchain}</td>
+        <td>${d.kyc}</td>
+      </tr>`).join('');
+    }
+    renderComp();
+
+    function filterProviders() {
+      // Placeholder — will filter provider table
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      document.querySelectorAll('#providerTableBody tr').forEach(tr => {
+        tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>

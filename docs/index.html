@@ -10,7 +10,9 @@
   <meta property="og:title" content="Arkeo — Open Data Marketplace">
   <meta property="og:description" content="Decentralized blockchain infrastructure. No signup. No KYC. Just connect.">
   <meta property="og:type" content="website">
+  <link rel="stylesheet" href="css/nav.css">
   <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
   <style>
     :root {
       --bg: #0a0c10;
@@ -23,9 +25,7 @@
       --text-muted: #5a6278;
       --success: #10b981;
     }
-
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    
     body {
       background: var(--bg);
       color: var(--text);
@@ -36,45 +36,10 @@
       flex-direction: column;
     }
 
-    /* === NAV === */
-    nav {
-      padding: 1.25rem 2rem;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      max-width: 1100px;
-      margin: 0 auto;
-      width: 100%;
-    }
-    .logo {
-      display: flex;
-      align-items: center;
-      gap: 0.6rem;
-      text-decoration: none;
-      color: var(--text);
-      font-weight: 700;
-      font-size: 1.15rem;
-    }
-    .logo img { height: 32px; }
-    .logo span { color: var(--arkeo); }
-    .nav-links {
-      display: flex;
-      gap: 1.5rem;
-      align-items: center;
-    }
-    .nav-links a {
-      color: var(--text-dim);
-      text-decoration: none;
-      font-size: 0.85rem;
-      font-weight: 500;
-      transition: color 0.15s;
-    }
-    .nav-links a:hover { color: var(--arkeo); }
-
-    /* === HERO === */
+    /* Hero */
     .hero {
       text-align: center;
-      padding: 4rem 2rem 2rem;
+      padding: 3.5rem 2rem 1.5rem;
       max-width: 700px;
       margin: 0 auto;
     }
@@ -82,46 +47,31 @@
       font-size: 2.5rem;
       font-weight: 800;
       line-height: 1.15;
-      margin-bottom: 1rem;
+      margin-bottom: 0.75rem;
       letter-spacing: -0.02em;
     }
-    .hero h1 em {
-      font-style: normal;
-      color: var(--arkeo);
-    }
+    .hero h1 em { font-style: normal; color: var(--arkeo); }
     .hero p {
       color: var(--text-dim);
-      font-size: 1.1rem;
-      margin-bottom: 0.5rem;
+      font-size: 1.05rem;
     }
 
-    /* === STATS === */
+    /* Stats */
     .stats {
       display: flex;
       justify-content: center;
       gap: 3rem;
-      padding: 1.5rem 2rem 3rem;
+      padding: 1.5rem 2rem 2.5rem;
     }
-    .stat {
-      text-align: center;
-    }
-    .stat-val {
-      font-size: 1.5rem;
-      font-weight: 700;
-      color: var(--arkeo);
-    }
-    .stat-label {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
+    .stat { text-align: center; }
+    .stat-val { font-size: 1.5rem; font-weight: 700; color: var(--arkeo); }
+    .stat-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
 
-    /* === APP GRID === */
+    /* App Grid */
     .apps {
       max-width: 1100px;
       margin: 0 auto;
-      padding: 0 2rem 3rem;
+      padding: 0 2rem 2rem;
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
       gap: 1rem;
@@ -137,128 +87,58 @@
       display: flex;
       flex-direction: column;
     }
-    .app-card:hover {
-      border-color: var(--border-hover);
-      transform: translateY(-2px);
-    }
-    .app-header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      margin-bottom: 0.75rem;
-    }
-    .app-icon {
-      font-size: 1.75rem;
-      width: 2.5rem;
-      text-align: center;
-    }
-    .app-name {
-      font-weight: 700;
-      font-size: 1.05rem;
-    }
-    .app-type {
-      color: var(--text-muted);
-      font-size: 0.75rem;
-    }
-    .app-live {
-      margin-left: auto;
-      background: rgba(16, 185, 129, 0.15);
-      color: var(--success);
-      padding: 0.15rem 0.5rem;
-      border-radius: 1rem;
-      font-size: 0.65rem;
-      font-weight: 600;
-    }
-    .app-desc {
-      color: var(--text-dim);
-      font-size: 0.85rem;
-      line-height: 1.5;
-      flex: 1;
-      margin-bottom: 1rem;
-    }
-    .app-chains {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.3rem;
-      margin-bottom: 1rem;
-    }
-    .chain-tag {
-      background: rgba(59, 224, 255, 0.08);
-      color: var(--arkeo);
-      padding: 0.15rem 0.5rem;
-      border-radius: 0.4rem;
-      font-size: 0.65rem;
-      font-weight: 500;
-    }
+    .app-card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+    .app-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.75rem; }
+    .app-icon { font-size: 1.75rem; width: 2.5rem; text-align: center; }
+    .app-name { font-weight: 700; font-size: 1.05rem; }
+    .app-type { color: var(--text-muted); font-size: 0.75rem; }
+    .app-live { margin-left: auto; background: rgba(16,185,129,0.15); color: var(--success); padding: 0.15rem 0.5rem; border-radius: 1rem; font-size: 0.65rem; font-weight: 600; }
+    .app-desc { color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; flex: 1; margin-bottom: 1rem; }
+    .app-chains { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 1rem; }
+    .chain-tag { background: rgba(59,224,255,0.08); color: var(--arkeo); padding: 0.15rem 0.5rem; border-radius: 0.4rem; font-size: 0.65rem; font-weight: 500; }
     .app-btn {
-      display: block;
-      padding: 0.6rem;
-      border-radius: 0.6rem;
-      text-align: center;
-      font-weight: 600;
-      font-size: 0.85rem;
-      text-decoration: none;
-      color: #000;
-      background: var(--arkeo);
-      transition: opacity 0.15s;
+      display: block; padding: 0.6rem; border-radius: 0.6rem; text-align: center;
+      font-weight: 600; font-size: 0.85rem; text-decoration: none; color: #000;
+      background: var(--arkeo); transition: opacity 0.15s;
     }
     .app-btn:hover { opacity: 0.85; }
 
-    /* === PROVIDERS STRIP === */
-    .providers-strip {
-      text-align: center;
-      padding: 2rem 2rem 3rem;
-      color: var(--text-muted);
-      font-size: 0.85rem;
-    }
-    .providers-strip a {
-      color: var(--arkeo);
-      text-decoration: none;
-    }
-    .providers-strip a:hover { text-decoration: underline; }
-    .provider-logos {
-      display: flex;
-      justify-content: center;
-      gap: 2rem;
-      margin-top: 0.75rem;
-      flex-wrap: wrap;
-    }
-    .provider-name {
-      color: var(--text-dim);
-      font-size: 0.8rem;
-      font-weight: 500;
-    }
-
-    /* === BOTTOM LINKS === */
-    .bottom-links {
+    /* Audience Cards */
+    .audience {
       max-width: 1100px;
       margin: 0 auto;
-      padding: 0 2rem 3rem;
+      padding: 0 2rem 2rem;
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
       gap: 1rem;
     }
-    .bottom-card {
+    .audience-card {
       background: var(--bg-card);
       border: 1px solid var(--border);
-      border-radius: 0.75rem;
-      padding: 1.25rem;
+      border-radius: 1rem;
+      padding: 1.75rem;
       text-decoration: none;
       color: var(--text);
       transition: border-color 0.2s;
     }
-    .bottom-card:hover { border-color: var(--border-hover); }
-    .bottom-card-title {
-      font-weight: 600;
-      font-size: 0.9rem;
-      margin-bottom: 0.25rem;
-    }
-    .bottom-card-desc {
-      color: var(--text-muted);
-      font-size: 0.75rem;
-    }
+    .audience-card:hover { border-color: var(--arkeo); }
+    .audience-icon { font-size: 1.75rem; margin-bottom: 0.75rem; }
+    .audience-card h3 { font-size: 1.1rem; margin-bottom: 0.35rem; }
+    .audience-card p { color: var(--text-dim); font-size: 0.85rem; line-height: 1.5; margin-bottom: 0.75rem; }
+    .audience-link { color: var(--arkeo); font-size: 0.85rem; font-weight: 600; }
 
-    /* === FOOTER === */
+    /* Provider Strip */
+    .providers-strip {
+      text-align: center;
+      padding: 1.5rem 2rem 2.5rem;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+    }
+    .providers-strip a { color: var(--arkeo); text-decoration: none; }
+    .provider-logos { display: flex; justify-content: center; gap: 2rem; margin-top: 0.75rem; flex-wrap: wrap; }
+    .provider-name { color: var(--text-dim); font-size: 0.8rem; font-weight: 500; }
+
+    /* Footer */
     footer {
       margin-top: auto;
       text-align: center;
@@ -270,32 +150,17 @@
     footer a { color: var(--text-dim); text-decoration: none; }
     footer a:hover { color: var(--arkeo); }
 
-    /* === RESPONSIVE === */
     @media (max-width: 640px) {
       .hero h1 { font-size: 1.75rem; }
-      .hero p { font-size: 0.95rem; }
       .stats { gap: 1.5rem; }
       .stat-val { font-size: 1.2rem; }
       .apps { grid-template-columns: 1fr; }
-      .nav-links { gap: 1rem; }
-      .nav-links a { font-size: 0.8rem; }
+      .audience { grid-template-columns: 1fr; }
     }
   </style>
 </head>
 <body>
-
-  <!-- Nav -->
-  <nav>
-    <a href="/" class="logo">
-      <img src="images/arkeo-logo-200px_1.png" alt="Arkeo">
-      Arkeo <span>Marketplace</span>
-    </a>
-    <div class="nav-links">
-      <a href="index-full.html">Providers</a>
-      <a href="analytics.html">Analytics</a>
-      <a href="https://docs.arkeo.network" target="_blank" rel="noopener">Docs</a>
-    </div>
-  </nav>
+  <div id="arkeo-nav" data-active="home"></div>
 
   <!-- Hero -->
   <section class="hero">
@@ -306,125 +171,110 @@
   <!-- Stats -->
   <section class="stats">
     <div class="stat">
-      <div class="stat-val" id="providerCount">6</div>
+      <div class="stat-val">6</div>
       <div class="stat-label">Providers</div>
     </div>
     <div class="stat">
-      <div class="stat-val" id="chainCount">7</div>
+      <div class="stat-val">7</div>
       <div class="stat-label">Chains</div>
     </div>
     <div class="stat">
-      <div class="stat-val" id="appCount">5</div>
+      <div class="stat-val">5</div>
       <div class="stat-label">Live Apps</div>
     </div>
   </section>
 
   <!-- App Grid -->
   <section class="apps">
-
-    <!-- THORChain Swap -->
     <div class="app-card">
       <div class="app-header">
         <div class="app-icon">⚡</div>
-        <div>
-          <div class="app-name">THORChain Swap</div>
-          <div class="app-type">Cross-chain swaps</div>
-        </div>
+        <div><div class="app-name">THORChain Swap</div><div class="app-type">Cross-chain swaps</div></div>
         <div class="app-live">LIVE</div>
       </div>
       <div class="app-desc">Swap BTC, ETH, and 40+ assets natively. Real quotes, real execution. No bridges, no wrapping.</div>
       <div class="app-chains">
-        <span class="chain-tag">ETH</span>
-        <span class="chain-tag">BSC</span>
-        <span class="chain-tag">Base</span>
-        <span class="chain-tag">Polygon</span>
-        <span class="chain-tag">Arbitrum</span>
+        <span class="chain-tag">ETH</span><span class="chain-tag">BSC</span><span class="chain-tag">Base</span><span class="chain-tag">Polygon</span><span class="chain-tag">Arbitrum</span>
       </div>
       <a href="https://swap.arkeomarketplace.com/swap" target="_blank" class="app-btn">Launch App →</a>
     </div>
 
-    <!-- Uniswap -->
     <div class="app-card">
       <div class="app-header">
         <div class="app-icon">🦄</div>
-        <div>
-          <div class="app-name">Uniswap V3</div>
-          <div class="app-type">DEX swap & pools</div>
-        </div>
+        <div><div class="app-name">Uniswap V3</div><div class="app-type">DEX swap & pools</div></div>
         <div class="app-live">LIVE</div>
       </div>
       <div class="app-desc">Live swap quotes and pool data from Uniswap V3 smart contracts. Multi-chain with provider failover.</div>
       <div class="app-chains">
-        <span class="chain-tag">ETH</span>
-        <span class="chain-tag">Base</span>
-        <span class="chain-tag">BSC</span>
-        <span class="chain-tag">Polygon</span>
-        <span class="chain-tag">Arbitrum</span>
+        <span class="chain-tag">ETH</span><span class="chain-tag">Base</span><span class="chain-tag">BSC</span><span class="chain-tag">Polygon</span><span class="chain-tag">Arbitrum</span>
       </div>
-      <a href="https://rbechtold69.github.io/uniswap-arkeo/" target="_blank" class="app-btn" style="background: #FF007A; color: #fff;">Launch App →</a>
+      <a href="https://rbechtold69.github.io/uniswap-arkeo/" target="_blank" class="app-btn" style="background:#FF007A;color:#fff;">Launch App →</a>
     </div>
 
-    <!-- Aave -->
     <div class="app-card">
       <div class="app-header">
         <div class="app-icon">👻</div>
-        <div>
-          <div class="app-name">Aave</div>
-          <div class="app-type">Lending & borrowing</div>
-        </div>
+        <div><div class="app-name">Aave</div><div class="app-type">Lending & borrowing</div></div>
         <div class="app-live">LIVE</div>
       </div>
       <div class="app-desc">Full Aave lending interface. Supply, borrow, and manage positions across multiple chains.</div>
       <div class="app-chains">
-        <span class="chain-tag">ETH</span>
-        <span class="chain-tag">Base</span>
-        <span class="chain-tag">BSC</span>
-        <span class="chain-tag">Polygon</span>
+        <span class="chain-tag">ETH</span><span class="chain-tag">Base</span><span class="chain-tag">BSC</span><span class="chain-tag">Polygon</span>
       </div>
-      <a href="https://aave.arkeomarketplace.com" target="_blank" class="app-btn" style="background: #B6509E; color: #fff;">Launch App →</a>
+      <a href="https://aave.arkeomarketplace.com" target="_blank" class="app-btn" style="background:#B6509E;color:#fff;">Launch App →</a>
     </div>
 
-    <!-- Arkeo Explorer -->
     <div class="app-card">
       <div class="app-header">
         <div class="app-icon">🔭</div>
-        <div>
-          <div class="app-name">Arkeo Explorer</div>
-          <div class="app-type">Chain browser</div>
-        </div>
+        <div><div class="app-name">Arkeo Explorer</div><div class="app-type">Chain browser</div></div>
         <div class="app-live">LIVE</div>
       </div>
       <div class="app-desc">The network exploring itself. Blocks, validators, provider registrations, and income claims — all via Arkeo RPC.</div>
       <div class="app-chains">
-        <span class="chain-tag">Arkeo</span>
-        <span class="chain-tag">30 Validators</span>
-        <span class="chain-tag">22K+ Claims</span>
+        <span class="chain-tag">Arkeo</span><span class="chain-tag">30 Validators</span><span class="chain-tag">22K+ Claims</span>
       </div>
       <a href="https://explorer.arkeomarketplace.com" target="_blank" class="app-btn">Launch Explorer →</a>
     </div>
 
-    <!-- ShapeShift -->
     <div class="app-card">
       <div class="app-header">
         <div class="app-icon">🦊</div>
-        <div>
-          <div class="app-name">ShapeShift DeFi</div>
-          <div class="app-type">Multi-chain dashboard</div>
-        </div>
+        <div><div class="app-name">ShapeShift DeFi</div><div class="app-type">Multi-chain dashboard</div></div>
         <div class="app-live">LIVE</div>
       </div>
       <div class="app-desc">THORChain pools, network stats, and cross-chain balance lookup. All powered by Arkeo.</div>
       <div class="app-chains">
-        <span class="chain-tag">THORChain</span>
-        <span class="chain-tag">Base</span>
-        <span class="chain-tag">BSC</span>
+        <span class="chain-tag">THORChain</span><span class="chain-tag">Base</span><span class="chain-tag">BSC</span>
       </div>
-      <a href="https://rbechtold69.github.io/shapeshift-arkeo/" target="_blank" class="app-btn" style="background: #3182CE; color: #fff;">Launch App →</a>
+      <a href="https://rbechtold69.github.io/shapeshift-arkeo/" target="_blank" class="app-btn" style="background:#3182CE;color:#fff;">Launch App →</a>
     </div>
-
   </section>
 
-  <!-- Providers Strip -->
+  <!-- Audience Cards -->
+  <section class="audience">
+    <a href="data.html" class="audience-card">
+      <div class="audience-icon">📡</div>
+      <h3>Need RPC Data?</h3>
+      <p>Browse providers, compare pricing, and subscribe. No signup required — connect your wallet and start querying.</p>
+      <span class="audience-link">Browse Providers →</span>
+    </a>
+    <a href="providers.html" class="audience-card">
+      <div class="audience-icon">🛠</div>
+      <h3>Want to Earn ARKEO?</h3>
+      <p>Host a node, serve data requests, or run DeFi frontends. Get paid per request with no middleman.</p>
+      <span class="audience-link">Become a Provider →</span>
+    </a>
+    <a href="network.html" class="audience-card">
+      <div class="audience-icon">🌐</div>
+      <h3>Explore the Network</h3>
+      <p>Analytics, governance, contracts, and token info. See the decentralized data marketplace in action.</p>
+      <span class="audience-link">View Network →</span>
+    </a>
+  </section>
+
+  <!-- Provider Strip -->
   <section class="providers-strip">
     Powered by 6 independent data providers on the Arkeo network
     <div class="provider-logos">
@@ -437,48 +287,15 @@
     </div>
   </section>
 
-  <!-- Explore More -->
-  <section class="bottom-links">
-    <a href="index-full.html" class="bottom-card">
-      <div class="bottom-card-title">📊 Provider Directory</div>
-      <div class="bottom-card-desc">Browse all providers, chains, pricing, and service details.</div>
-    </a>
-    <a href="become-provider.html" class="bottom-card">
-      <div class="bottom-card-title">🛠 Become a Provider</div>
-      <div class="bottom-card-desc">Host frontends and serve RPC data. Earn ARKEO tokens.</div>
-    </a>
-    <a href="x402-setup.html" class="bottom-card">
-      <div class="bottom-card-title">⚡ x402 Payments</div>
-      <div class="bottom-card-desc">Pay-per-request with USDC. No accounts needed.</div>
-    </a>
-    <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="bottom-card">
-      <div class="bottom-card-title">📖 Documentation</div>
-      <div class="bottom-card-desc">API reference, SDK guides, and integration docs.</div>
-    </a>
-  </section>
-
   <!-- Footer -->
   <footer>
     <div style="margin-bottom: 0.5rem;">
-      <a href="https://twitter.com/arkaboreal" target="_blank" rel="noopener">Twitter</a> · 
-      <a href="https://discord.gg/arkeo" target="_blank" rel="noopener">Discord</a> · 
-      <a href="https://github.com/arkeonetwork" target="_blank" rel="noopener">GitHub</a> · 
-      <a href="https://viewblock.io/arkeo" target="_blank" rel="noopener">ViewBlock</a>
+      <a href="https://twitter.com/arkaboreal" target="_blank">Twitter</a> · 
+      <a href="https://discord.gg/arkeo" target="_blank">Discord</a> · 
+      <a href="https://github.com/arkeonetwork" target="_blank">GitHub</a> · 
+      <a href="https://viewblock.io/arkeo" target="_blank">ViewBlock</a>
     </div>
     Arkeo Network — Decentralized data infrastructure
   </footer>
-
-  <!-- Live stats from chain -->
-  <script>
-    (async function loadStats() {
-      try {
-        const res = await fetch(`${CONFIG.RPC_API}/tx_search?query=%22message.action=%27/arkeo.arkeo.MsgModProvider%27%22&per_page=1&page=1`);
-        const data = await res.json();
-        const total = parseInt(data.result?.total_count || '0');
-        if (total > 0) document.getElementById('providerCount').textContent = total > 20 ? Math.floor(total / 10) + '+' : total;
-      } catch {}
-    })();
-  </script>
-
 </body>
 </html>
