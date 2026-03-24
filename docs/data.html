@@ -398,39 +398,53 @@
           return;
         }
 
-        const rows = [];
+        // Deduplicate: keep latest registration per provider+service
+        const providerMap = new Map();
         for (const tx of txs) {
           try {
-            const decoded = atob(tx.tx);
-            // Extract basic info from events
             const events = tx.tx_result?.events || [];
-            let provider = '', service = '', bond = '';
+            let provider = '', service = '', bond = '', status = '';
             for (const ev of events) {
+              if (!ev.type?.includes('ModProvider')) continue;
               for (const attr of ev.attributes || []) {
-                const key = attr.key ? atob(attr.key) : '';
-                const val = attr.value ? atob(attr.value) : '';
+                // Keys may be plain text or base64 depending on node version
+                let key = attr.key || '';
+                let val = attr.value || '';
+                try { key = atob(key); } catch {}
+                try { val = atob(val); } catch {}
+                // Strip JSON quotes from values like '"gaia-mainnet-rpc"'
+                val = val.replace(/^"|"$/g, '');
                 if (key === 'provider') provider = val;
                 if (key === 'service') service = val;
                 if (key === 'bond') bond = val;
+                if (key === 'status') status = val;
               }
             }
-            if (service) {
-              const chain = service.split('-')[0]?.toUpperCase() || 'Unknown';
-              const type = service.includes('archive') ? 'Archive' : 'Full Node';
-              const bondDisplay = bond ? (parseInt(bond) / 1e8).toLocaleString() + ' ARKEO' : '-';
-              const status = tx.tx_result?.code === 0 ? '🟢 Online' : '🔴 Offline';
-              rows.push(`<tr>
-                <td style="font-weight:500;">${provider.substring(0, 20)}...</td>
-                <td>${chain}</td>
-                <td>${type}</td>
-                <td>${bondDisplay}</td>
-                <td>${status}</td>
-                <td><a href="provider.html?address=${provider}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
-              </tr>`);
+            if (service && provider) {
+              const mapKey = `${provider}|${service}`;
+              providerMap.set(mapKey, { provider, service, bond, status, code: tx.tx_result?.code });
             }
           } catch {}
         }
-        tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="text-align:center;">No data</td></tr>';
+
+        const rows = [];
+        for (const [, entry] of providerMap) {
+          const { provider, service, bond, status: provStatus, code } = entry;
+          const chain = service.split('-')[0]?.toUpperCase() || 'Unknown';
+          const type = service.includes('archive') ? 'Archive' : 'Full Node';
+          const bondDisplay = bond ? (parseInt(bond) / 1e8).toLocaleString() + ' ARKEO' : '-';
+          const isOnline = provStatus === 'ONLINE' || code === 0;
+          const statusIcon = isOnline ? '🟢 Online' : '🔴 Offline';
+          rows.push(`<tr>
+            <td style="font-weight:500;" title="${provider}">${provider.substring(0, 20)}...</td>
+            <td>${chain}</td>
+            <td>${type}</td>
+            <td>${bondDisplay}</td>
+            <td>${statusIcon}</td>
+            <td><a href="provider.html?address=${provider}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
+          </tr>`);
+        }
+        tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="text-align:center;">No providers found</td></tr>';
       } catch (err) {
         document.getElementById('providerTableBody').innerHTML = 
           `<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Failed to load: ${err.message}</td></tr>`;
