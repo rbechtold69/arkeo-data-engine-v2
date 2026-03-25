@@ -306,9 +306,9 @@
         <thead>
           <tr>
             <th>Provider</th>
-            <th>Chain</th>
-            <th>Type</th>
-            <th>Bond</th>
+            <th>Chains Served</th>
+            <th>Services</th>
+            <th>Total Bond</th>
             <th>Status</th>
             <th></th>
           </tr>
@@ -385,12 +385,12 @@
 
   <!-- Load provider data -->
   <script>
-    // Load provider table from REST API (reliable, direct provider list)
+    // Load provider table from REST API — grouped by provider, clean display
     (async function() {
       try {
         const tbody = document.getElementById('providerTableBody');
         
-        // Fetch providers and services in parallel from REST API
+        // Fetch providers and services in parallel
         const [provRes, svcRes] = await Promise.all([
           fetch(`${CONFIG.REST_API}/arkeo/providers`),
           fetch(`${CONFIG.REST_API}/arkeo/services`)
@@ -400,11 +400,6 @@
         
         const providers = provData.provider || [];
         const services = svcData.services || [];
-        
-        if (providers.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">No providers found</td></tr>';
-          return;
-        }
 
         // Build service ID to name map
         const svcMap = {};
@@ -412,51 +407,99 @@
           svcMap[String(s.service_id)] = s.name || String(s.service_id);
         }
 
-        // Known provider names by pubkey prefix
-        const KNOWN_NAMES = {
-          'arkeopub1addwnpepq0zcwpavnx7za': 'Liquify',
-          'arkeopub1addwnpepq22m27n5ryy78': 'InnovationTheory',
-          'arkeopub1addwnpepqg3cqr8e7ax4k': '0xFury',
-          'arkeopub1addwnpepqfnajkfxfd2ts': 'Red_5',
-          'arkeopub1addwnpepq2lmfqggxp29nj': 'StakeVillage',
-          'arkeopub1addwnpepqgv66rx3gn0u8': 'Everstake',
-          'arkeopub1addwnpepqdt79h876742': 'Nallok',
+        // Chain display names
+        const CHAIN_NAMES = {
+          'arkeo': 'Arkeo', 'eth': 'Ethereum', 'base': 'Base', 'gaia': 'Cosmos Hub',
+          'osmosis': 'Osmosis', 'btc': 'Bitcoin', 'bch': 'Bitcoin Cash', 'bnb': 'BNB Chain',
+          'avax': 'Avalanche', 'arbitrum': 'Arbitrum', 'trx': 'TRON', 'aptos': 'Aptos',
+          'inj': 'Injective', 'near': 'NEAR', 'etc': 'Ethereum Classic', 'tao': 'Bittensor'
         };
 
-        function getProviderName(pubkey) {
-          for (const [prefix, name] of Object.entries(KNOWN_NAMES)) {
-            if (pubkey.startsWith(prefix)) return name;
-          }
-          return pubkey.substring(0, 20) + '...';
-        }
+        // Known provider names by pubkey prefix
+        const KNOWN = {
+          'arkeopub1addwnpepqdgt6w2qqkt4jydfud507nl': 'Liquify',
+          'arkeopub1addwnpepq22m27n5ryy787muswzjqjk': 'InnovationTheory',
+          'arkeopub1addwnpepqdvlra44yykhmmpwtfavs35': '0xFury',
+          'arkeopub1addwnpepqfuk5cy2ey6h3pfpwerkhfp': 'Red_5',
+          'arkeopub1addwnpepq2lmfqggxp29nj3ekl3ltxn': 'StakeVillage',
+          'arkeopub1addwnpepqdnr9x5c386meywavzmy5wa': 'Everstake',
+          'arkeopub1addwnpepqdt79h8767429wpr44gxwav': 'Nodes.Guru',
+          'arkeopub1addwnpepqgvlg57udnpwh4y6k7yedt6': 'Nallok',
+          'arkeopub1addwnpepqdc6phgk8vqky8v7vyyyk0z': 'InnovationTheory-2',
+          'arkeopub1addwnpepqvj8mevcpdamq9cp5478t8k': 'JEEVBASE',
+          'arkeopub1addwnpepqduv5lky7ckq8efzzu08rm6': 'RoomIT',
+          'arkeopub1addwnpepqfn52r6xng2wwfrgz2tm5yv': 'BlockHunters',
+          'arkeopub1addwnpepqg3lll0dt65suhu4e7hx898': 'NodeX',
+        };
 
-        // Filter to ONLINE providers with bond > 0
-        const activeProviders = providers.filter(p => 
-          p.status === 'ONLINE' && parseInt(p.bond || '0') > 0
-        );
+        // Filter: ONLINE, bond > 0, not localhost metadata
+        const active = providers.filter(p => {
+          if (p.status !== 'ONLINE' || parseInt(p.bond || '0') <= 0) return false;
+          const uri = p.metadata_uri || '';
+          if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
+          return true;
+        });
 
-        const rows = activeProviders.map(p => {
+        // Group by provider pubkey
+        const grouped = {};
+        for (const p of active) {
+          const pk = p.pub_key || '';
+          if (!grouped[pk]) grouped[pk] = { pubkey: pk, services: [], totalBond: 0 };
           const svcId = String(p.service || '');
           const svcName = svcMap[svcId] || `service-${svcId}`;
-          const chain = svcName.split('-')[0]?.toUpperCase() || 'Unknown';
-          const type = svcName.includes('archive') ? 'Archive' : svcName.includes('rest') ? 'REST' : 'Full Node';
-          const bond = parseInt(p.bond || '0');
-          const bondDisplay = (bond / 1e8).toLocaleString() + ' ARKEO';
-          const name = getProviderName(p.pub_key || '');
-          const hasPayg = p.pay_as_you_go_rate && p.pay_as_you_go_rate.length > 0;
-          const rate = hasPayg ? p.pay_as_you_go_rate[0].amount + ' uarkeo' : '-';
+          const chain = svcName.split('-')[0];
+          const chainDisplay = CHAIN_NAMES[chain] || chain.toUpperCase();
+          const isTestnet = svcName.includes('testnet');
+          if (!isTestnet) {
+            // Deduplicate chains (e.g. eth-mainnet-fullnode + eth-mainnet-archivenode = just "Ethereum")
+            if (!grouped[pk].services.find(s => s.chain === chainDisplay)) {
+              grouped[pk].services.push({ chain: chainDisplay, svcName, svcId });
+            }
+          }
+          grouped[pk].totalBond += parseInt(p.bond || '0');
+        }
+
+        // Get provider name
+        function getName(pk) {
+          for (const [prefix, name] of Object.entries(KNOWN)) {
+            if (pk.startsWith(prefix)) return name;
+          }
+          return null;
+        }
+
+        // Sort: named providers first (by bond desc), then unnamed
+        const entries = Object.values(grouped)
+          .filter(g => g.services.length > 0) // must have at least one mainnet service
+          .sort((a, b) => {
+            const aName = getName(a.pubkey);
+            const bName = getName(b.pubkey);
+            if (aName && !bName) return -1;
+            if (!aName && bName) return 1;
+            return b.totalBond - a.totalBond;
+          });
+
+        if (entries.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">No providers found</td></tr>';
+          return;
+        }
+
+        const rows = entries.map(g => {
+          const name = getName(g.pubkey) || g.pubkey.substring(0, 16) + '...';
+          const chains = g.services.map(s => s.chain).sort().join(', ');
+          const bondDisplay = (g.totalBond / 1e8).toLocaleString() + ' ARKEO';
+          const svcCount = g.services.length;
 
           return `<tr>
-            <td style="font-weight:500;" title="${p.pub_key || ''}">${name}</td>
-            <td>${chain}</td>
-            <td>${type}</td>
+            <td style="font-weight:500;" title="${g.pubkey}">${name}</td>
+            <td style="font-size:0.85rem;">${chains}</td>
+            <td>${svcCount} chain${svcCount !== 1 ? 's' : ''}</td>
             <td>${bondDisplay}</td>
             <td>🟢 Online</td>
-            <td><a href="provider.html?address=${p.pub_key || ''}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
+            <td><a href="provider.html?address=${g.pubkey}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
           </tr>`;
         });
 
-        tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="text-align:center;">No providers found</td></tr>';
+        tbody.innerHTML = rows.join('');
       } catch (err) {
         document.getElementById('providerTableBody').innerHTML = 
           `<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">Failed to load: ${err.message}</td></tr>`;
