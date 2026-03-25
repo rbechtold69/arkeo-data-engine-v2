@@ -385,65 +385,77 @@
 
   <!-- Load provider data -->
   <script>
-    // Load provider table from chain data
+    // Load provider table from REST API (reliable, direct provider list)
     (async function() {
       try {
-        const res = await fetch(`${CONFIG.RPC_API}/tx_search?query=%22message.action=%27/arkeo.arkeo.MsgModProvider%27%22&per_page=100&page=1`);
-        const data = await res.json();
-        const txs = data.result?.txs || [];
         const tbody = document.getElementById('providerTableBody');
         
-        if (txs.length === 0) {
+        // Fetch providers and services in parallel from REST API
+        const [provRes, svcRes] = await Promise.all([
+          fetch(`${CONFIG.REST_API}/arkeo/providers`),
+          fetch(`${CONFIG.REST_API}/arkeo/services`)
+        ]);
+        const provData = await provRes.json();
+        const svcData = await svcRes.json();
+        
+        const providers = provData.provider || [];
+        const services = svcData.services || [];
+        
+        if (providers.length === 0) {
           tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:2rem; color:var(--text-muted);">No providers found</td></tr>';
           return;
         }
 
-        // Deduplicate: keep latest registration per provider+service
-        const providerMap = new Map();
-        for (const tx of txs) {
-          try {
-            const events = tx.tx_result?.events || [];
-            let provider = '', service = '', bond = '', status = '';
-            for (const ev of events) {
-              if (!ev.type?.includes('ModProvider')) continue;
-              for (const attr of ev.attributes || []) {
-                // Keys may be plain text or base64 depending on node version
-                let key = attr.key || '';
-                let val = attr.value || '';
-                try { key = atob(key); } catch {}
-                try { val = atob(val); } catch {}
-                // Strip JSON quotes from values like '"gaia-mainnet-rpc"'
-                val = val.replace(/^"|"$/g, '');
-                if (key === 'provider') provider = val;
-                if (key === 'service') service = val;
-                if (key === 'bond') bond = val;
-                if (key === 'status') status = val;
-              }
-            }
-            if (service && provider) {
-              const mapKey = `${provider}|${service}`;
-              providerMap.set(mapKey, { provider, service, bond, status, code: tx.tx_result?.code });
-            }
-          } catch {}
+        // Build service ID to name map
+        const svcMap = {};
+        for (const s of services) {
+          svcMap[String(s.service_id)] = s.name || String(s.service_id);
         }
 
-        const rows = [];
-        for (const [, entry] of providerMap) {
-          const { provider, service, bond, status: provStatus, code } = entry;
-          const chain = service.split('-')[0]?.toUpperCase() || 'Unknown';
-          const type = service.includes('archive') ? 'Archive' : 'Full Node';
-          const bondDisplay = bond ? (parseInt(bond) / 1e8).toLocaleString() + ' ARKEO' : '-';
-          const isOnline = provStatus === 'ONLINE' || code === 0;
-          const statusIcon = isOnline ? '🟢 Online' : '🔴 Offline';
-          rows.push(`<tr>
-            <td style="font-weight:500;" title="${provider}">${provider.substring(0, 20)}...</td>
+        // Known provider names by pubkey prefix
+        const KNOWN_NAMES = {
+          'arkeopub1addwnpepq0zcwpavnx7za': 'Liquify',
+          'arkeopub1addwnpepq22m27n5ryy78': 'InnovationTheory',
+          'arkeopub1addwnpepqg3cqr8e7ax4k': '0xFury',
+          'arkeopub1addwnpepqfnajkfxfd2ts': 'Red_5',
+          'arkeopub1addwnpepq2lmfqggxp29nj': 'StakeVillage',
+          'arkeopub1addwnpepqgv66rx3gn0u8': 'Everstake',
+          'arkeopub1addwnpepqdt79h876742': 'Nallok',
+        };
+
+        function getProviderName(pubkey) {
+          for (const [prefix, name] of Object.entries(KNOWN_NAMES)) {
+            if (pubkey.startsWith(prefix)) return name;
+          }
+          return pubkey.substring(0, 20) + '...';
+        }
+
+        // Filter to ONLINE providers with bond > 0
+        const activeProviders = providers.filter(p => 
+          p.status === 'ONLINE' && parseInt(p.bond || '0') > 0
+        );
+
+        const rows = activeProviders.map(p => {
+          const svcId = String(p.service || '');
+          const svcName = svcMap[svcId] || `service-${svcId}`;
+          const chain = svcName.split('-')[0]?.toUpperCase() || 'Unknown';
+          const type = svcName.includes('archive') ? 'Archive' : svcName.includes('rest') ? 'REST' : 'Full Node';
+          const bond = parseInt(p.bond || '0');
+          const bondDisplay = (bond / 1e8).toLocaleString() + ' ARKEO';
+          const name = getProviderName(p.pub_key || '');
+          const hasPayg = p.pay_as_you_go_rate && p.pay_as_you_go_rate.length > 0;
+          const rate = hasPayg ? p.pay_as_you_go_rate[0].amount + ' uarkeo' : '-';
+
+          return `<tr>
+            <td style="font-weight:500;" title="${p.pub_key || ''}">${name}</td>
             <td>${chain}</td>
             <td>${type}</td>
             <td>${bondDisplay}</td>
-            <td>${statusIcon}</td>
-            <td><a href="provider.html?address=${provider}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
-          </tr>`);
-        }
+            <td>🟢 Online</td>
+            <td><a href="provider.html?address=${p.pub_key || ''}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
+          </tr>`;
+        });
+
         tbody.innerHTML = rows.join('') || '<tr><td colspan="6" style="text-align:center;">No providers found</td></tr>';
       } catch (err) {
         document.getElementById('providerTableBody').innerHTML = 
