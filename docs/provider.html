@@ -495,7 +495,7 @@
     // Main loader
     async function loadProvider() {
       const params = new URLSearchParams(window.location.search);
-      const pubkey = params.get('pubkey');
+      const pubkey = params.get('pubkey') || params.get('address');
       if (!pubkey) { showError('No pubkey in URL'); return; }
 
       try {
