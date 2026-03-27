@@ -963,7 +963,8 @@ def build_providers_metadata(provider_payload: Dict[str, Any]) -> Dict[str, Any]
 
 def build_active_services(provider_services_payload: Dict[str, Any], metadata_cache: dict[str, Any] | None = None) -> Dict[str, Any]:
     """
-    Build active_services.json directly from provider-services by selecting ONLINE providers/services with cached metadata.
+    Build active_services.json directly from provider-services by selecting ONLINE providers/services.
+    Metadata is included when available but is NOT required for a service to be listed.
     """
     t_start = time.time()
     data = provider_services_payload.get("data") if isinstance(provider_services_payload, dict) else {}
@@ -989,12 +990,11 @@ def build_active_services(provider_services_payload: Dict[str, Any], metadata_ca
         if status_str not in {"online", "1"} and status_val not in (1, True):
             continue
         mu = entry.get("metadata_uri") or entry.get("metadataUri")
-        if not mu or not _is_external(mu):
+        # Skip localhost/internal metadata URIs but allow missing or unreachable metadata
+        if mu and not _is_external(mu):
             continue
-        meta_entry = meta_cache.get(mu) if meta_cache else None
+        meta_entry = meta_cache.get(mu) if (meta_cache and mu) else None
         meta_ok = bool(meta_entry and (meta_entry.get("status") == 1 or meta_entry.get("status") == "1"))
-        if not meta_ok:
-            continue
         # bond threshold
         bond_val = entry.get("bond") or entry.get("service_bond") or entry.get("bond_amount")
         try:
@@ -1023,8 +1023,8 @@ def build_active_services(provider_services_payload: Dict[str, Any], metadata_ca
                         "provider_pubkey": pk,
                         "service_id": svc.get("service_id") or svc.get("id") or svc.get("service"),
                         "service": svc.get("service") or svc.get("name"),
-                        "metadata_uri": mu,
-                        "metadata": meta_entry.get("data") if isinstance(meta_entry, dict) else None,
+                        "metadata_uri": mu or "",
+                        "metadata": meta_entry.get("data") if (isinstance(meta_entry, dict) and meta_ok) else None,
                         "raw": svc,
                     }
                 )
@@ -1034,8 +1034,8 @@ def build_active_services(provider_services_payload: Dict[str, Any], metadata_ca
                     "provider_pubkey": pk,
                     "service_id": entry.get("service_id") or entry.get("id") or entry.get("service"),
                     "service": entry.get("service") or entry.get("name"),
-                    "metadata_uri": mu,
-                    "metadata": meta_entry.get("data") if isinstance(meta_entry, dict) else None,
+                    "metadata_uri": mu or "",
+                    "metadata": meta_entry.get("data") if (isinstance(meta_entry, dict) and meta_ok) else None,
                     "raw": entry,
                 }
             )
@@ -1085,18 +1085,17 @@ def build_active_providers_from_active_services(active_services_payload: Dict[st
             continue
 
         mu = p.get("metadata_uri") or p.get("metadataUri")
-        if not mu or not _is_external(mu):
+        # Skip localhost/internal metadata URIs but allow missing or unreachable metadata
+        if mu and not _is_external(mu):
             continue
 
-        meta_entry = meta_cache.get(mu)
+        meta_entry = meta_cache.get(mu) if (meta_cache and mu) else None
         meta_ok = bool(meta_entry)
-        if not meta_ok:
-            continue
 
         entry = dict(p)
         entry["provider_pubkey"] = pk
-        entry["metadata_uri_active"] = True
-        entry["metadata"] = meta_entry.get("data")
+        entry["metadata_uri_active"] = meta_ok
+        entry["metadata"] = meta_entry.get("data") if (isinstance(meta_entry, dict) and meta_ok) else None
         # Prefer moniker from metadata when available.
         meta_val = entry["metadata"]
         if isinstance(meta_val, dict):
