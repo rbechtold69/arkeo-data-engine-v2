@@ -60,11 +60,12 @@ const KNOWN_PROVIDERS = {
     status: 'onboarding',
   },
   'arkeopub1addwnpepqgvlg57udnpwh4y6k7yedt6pnfd0gutcqkkzu5w2xmyp6vtwkjhs7ge3rv7': {
-    name: 'Nodefleet.org',
-    description: 'Blockchain node infrastructure services',
+    name: 'Nodefleet',
+    description: 'Web3 blockchain and node running company providing top quality infrastructure across multi-chain ecosystems',
     website: 'https://nodefleet.org',
-    location: 'Americas',
-    status: 'onboarding',
+    sentinelUrl: 'https://sentinel.arkeo.us.nodefleet.net',
+    location: 'US East',
+    status: 'live',
   },
   'arkeopub1addwnpepqwj082rncmh2v3vjhstdx2v8pswcmmy7zcvu8n9unk8rxsp76qcmk8jg23a': {
     name: 'Polkachu',
