@@ -43,11 +43,11 @@ const KNOWN_PROVIDERS = {
   },
   'arkeopub1addwnpepqfuk5cy2ey6h3pfpwerkhfps0d4vqt6men4j2wx56zfn5nrfk8n9ymnj327': {
     name: 'Red_5 Arkeo',
-    description: 'Arkeo mainnet full node — reliable RPC infrastructure',
+    description: 'Arkeo mainnet full node, reliable RPC infrastructure',
     website: 'https://red5-arkeo.duckdns.org',
-    sentinelUrl: 'https://red5-arkeo.duckdns.org',
+    sentinelUrl: 'http://red5-arkeo.duckdns.org:3636',
     x402Url: 'https://red5-arkeo.duckdns.org/x402/',
-    location: 'North America',
+    location: 'Europe',
     status: 'live',
   },
 
