@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PAYG Pricing Guide | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <meta name="description" content="Live pay-as-you-go rates from Arkeo providers. Understand billing, compare rates, and choose the right provider.">
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/config.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/providers.js"></script>
+  <script src="js/nav.js"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --bg-card: #12151c;
+      --bg-input: #1a1f2a;
+      --border: #1e2230;
+      --arkeo: #3BE0FF;
+      --text: #ffffff;
+      --text-dim: #8b92a5;
+      --text-muted: #5a6278;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+
+    .page-hero {
+      text-align: center;
+      padding: 3rem 1.5rem 2rem;
+    }
+    .page-hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-hero h1 em { font-style: normal; color: var(--arkeo); }
+    .page-hero p { color: var(--text-dim); max-width: 580px; margin: 0 auto; }
+
+    .section { margin: 2.5rem 0; }
+    .section-title {
+      font-size: 1.3rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    /* Table */
+    .table-wrap {
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      overflow-x: auto;
+    }
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+    .data-table th {
+      background: var(--bg-card);
+      padding: 0.75rem 1rem;
+      text-align: left;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    .data-table td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover { background: rgba(59, 224, 255, 0.03); }
+
+    /* Info cards */
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 1rem;
+    }
+    .info-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+    }
+    .info-card h3 { font-size: 1rem; margin-bottom: 0.5rem; }
+    .info-card p, .info-card li {
+      color: var(--text-dim);
+      font-size: 0.875rem;
+      line-height: 1.7;
+    }
+    .info-card ul { padding-left: 1.25rem; }
+
+    /* Billing explainer */
+    .billing-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .billing-step {
+      display: flex;
+      gap: 1rem;
+      align-items: flex-start;
+    }
+    .step-num {
+      background: var(--arkeo);
+      color: #000;
+      width: 2rem;
+      height: 2rem;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      flex-shrink: 0;
+    }
+    .step-content h4 { font-size: 0.95rem; margin-bottom: 0.25rem; }
+    .step-content p { color: var(--text-dim); font-size: 0.875rem; }
+
+    /* Rate ranges */
+    .range-table { width: 100%; }
+    .range-good { color: var(--success); }
+    .range-ok { color: var(--warning); }
+    .range-high { color: #ef4444; }
+
+    .highlight-box {
+      background: rgba(59, 224, 255, 0.06);
+      border: 1px solid rgba(59, 224, 255, 0.2);
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      border-top: 1px solid var(--border);
+      margin-top: 3rem;
+    }
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--arkeo); }
+
+    @media (max-width: 640px) {
+      .page-hero h1 { font-size: 1.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="arkeo-nav" data-active="data"></div>
+
+  <section class="page-hero">
+    <h1>PAYG <em>Pricing Guide</em></h1>
+    <p>Live pay-as-you-go rates from on-chain data. No hidden fees. Pay only for requests you make.</p>
+  </section>
+
+  <div class="container">
+
+    <!-- Live rates table -->
+    <div class="section">
+      <h2 class="section-title">📡 Live Provider Rates</h2>
+      <div class="table-wrap">
+        <table class="data-table" id="ratesTable">
+          <thead>
+            <tr>
+              <th>Provider</th>
+              <th>Service</th>
+              <th>Rate (uarkeo/req)</th>
+              <th>Per 1K Requests</th>
+              <th>Per 1M Requests</th>
+              <th>Rating</th>
+            </tr>
+          </thead>
+          <tbody id="ratesBody">
+            <tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Loading rates...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="color:var(--text-muted);font-size:0.75rem;margin-top:0.5rem;">* Rates in uarkeo (micro-ARKEO). 100,000,000 uarkeo = 1 ARKEO.</p>
+    </div>
+
+    <!-- Recommended ranges -->
+    <div class="section">
+      <h2 class="section-title">💡 Recommended Pricing Ranges</h2>
+      <div class="info-grid">
+        <div class="info-card">
+          <h3>🟢 Competitive (1 - 10,000 uarkeo/req)</h3>
+          <p>Most providers in this range attract high volume. Good for providers with spare capacity who want consistent subscribers.</p>
+          <ul style="margin-top:0.75rem;">
+            <li>1K requests: 0.01 - 0.1 ARKEO</li>
+            <li>1M requests: 10 - 100 ARKEO</li>
+            <li>Best for: New providers, high-volume chains</li>
+          </ul>
+        </div>
+        <div class="info-card">
+          <h3>🟡 Standard (10,000 - 100,000 uarkeo/req)</h3>
+          <p>Reasonable for established providers with good uptime and specialized chains. Comparable to centralized alternatives.</p>
+          <ul style="margin-top:0.75rem;">
+            <li>1K requests: 0.1 - 1 ARKEO</li>
+            <li>1M requests: 100 - 1,000 ARKEO</li>
+            <li>Best for: Specialized services, archive nodes</li>
+          </ul>
+        </div>
+        <div class="info-card">
+          <h3>🔴 Premium (100,000+ uarkeo/req)</h3>
+          <p>High rates only viable for unique or hard-to-access chains where no alternatives exist. Most subscribers will look elsewhere.</p>
+          <ul style="margin-top:0.75rem;">
+            <li>1K requests: 1+ ARKEO</li>
+            <li>1M requests: 1,000+ ARKEO</li>
+            <li>Best for: Rare chains, exclusive data</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Billing explainer -->
+    <div class="section">
+      <h2 class="section-title">⚙️ How Billing Works</h2>
+      <div class="info-card" style="margin-bottom:1.5rem;">
+        <div class="billing-steps">
+          <div class="billing-step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <h4>Open a Contract</h4>
+              <p>You deposit ARKEO tokens into a smart contract with a specific provider. The deposit is your spending budget. No subscription, no recurring charge.</p>
+            </div>
+          </div>
+          <div class="billing-step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <h4>Sign Each Request</h4>
+              <p>Every RPC call you make is signed with your wallet key and includes an incrementing nonce. The provider verifies your signature before serving data.</p>
+            </div>
+          </div>
+          <div class="billing-step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <h4>Pay Per Request</h4>
+              <p>Each request deducts the provider's rate from your deposit. The provider claims payment on-chain periodically. You see exactly how much you've spent.</p>
+            </div>
+          </div>
+          <div class="billing-step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <h4>Close Anytime</h4>
+              <p>Close your contract at any time to reclaim unspent funds. No lock-in period. Your remaining deposit is returned to your wallet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="highlight-box">
+        <strong style="color:var(--arkeo);">Subscription vs Pay-As-You-Go</strong>
+        <p style="color:var(--text-dim);margin-top:0.5rem;font-size:0.875rem;">
+          Arkeo supports both models. PAYG contracts let you pay per request with no minimum commitment. Subscription contracts give you a fixed rate for a set duration. Most providers offer PAYG. Check the provider detail page for subscription options.
+        </p>
+      </div>
+    </div>
+
+    <!-- Calculator -->
+    <div class="section">
+      <h2 class="section-title">🔢 Cost Calculator</h2>
+      <div class="info-card">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;margin-bottom:1rem;">
+          <div>
+            <label style="font-size:0.85rem;color:var(--text-dim);display:block;margin-bottom:0.35rem;">Rate (uarkeo per request)</label>
+            <input type="number" id="calcRate" value="25000" min="1" step="1000"
+              style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:0.5rem;color:var(--text);padding:0.5rem 0.75rem;font-size:0.875rem;"
+              oninput="updateCalc()">
+          </div>
+          <div>
+            <label style="font-size:0.85rem;color:var(--text-dim);display:block;margin-bottom:0.35rem;">Number of Requests</label>
+            <input type="number" id="calcReqs" value="1000000" min="1" step="1000"
+              style="width:100%;background:var(--bg-input);border:1px solid var(--border);border-radius:0.5rem;color:var(--text);padding:0.5rem 0.75rem;font-size:0.875rem;"
+              oninput="updateCalc()">
+          </div>
+        </div>
+        <div id="calcResult" style="background:var(--bg-input);border-radius:0.5rem;padding:1rem;font-size:0.9rem;">
+          <div style="display:flex;justify-content:space-between;margin-bottom:0.5rem;">
+            <span style="color:var(--text-dim);">Total cost:</span>
+            <span id="calcTotal" style="font-weight:700;color:var(--arkeo);">250 ARKEO</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;">
+            <span style="color:var(--text-dim);">Cost per 1,000 requests:</span>
+            <span id="calcPer1k" style="font-weight:600;">0.25 ARKEO</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Links -->
+    <div class="section">
+      <div class="info-grid">
+        <div class="info-card" style="text-align:center;">
+          <div style="font-size:2rem;margin-bottom:0.5rem;">🔌</div>
+          <h3>Subscribe to a Provider</h3>
+          <p style="margin-bottom:1rem;">Open a contract and start querying data now.</p>
+          <a href="subscribe.html" style="background:var(--arkeo);color:#000;padding:0.6rem 1.25rem;border-radius:0.5rem;text-decoration:none;font-weight:600;font-size:0.875rem;">Subscribe Now</a>
+        </div>
+        <div class="info-card" style="text-align:center;">
+          <div style="font-size:2rem;margin-bottom:0.5rem;">📋</div>
+          <h3>Browse Provider Directory</h3>
+          <p style="margin-bottom:1rem;">Compare providers, see rates, and check uptime.</p>
+          <a href="data.html" style="background:transparent;color:var(--arkeo);border:1px solid var(--arkeo);padding:0.6rem 1.25rem;border-radius:0.5rem;text-decoration:none;font-weight:600;font-size:0.875rem;">View Providers</a>
+        </div>
+        <div class="info-card" style="text-align:center;">
+          <div style="font-size:2rem;margin-bottom:0.5rem;">🛡️</div>
+          <h3>Become a Provider</h3>
+          <p style="margin-bottom:1rem;">Earn ARKEO by hosting RPC data for others.</p>
+          <a href="become-provider.html" style="background:transparent;color:var(--arkeo);border:1px solid var(--arkeo);padding:0.6rem 1.25rem;border-radius:0.5rem;text-decoration:none;font-weight:600;font-size:0.875rem;">Get Started</a>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <footer>
+    <div style="margin-bottom:0.5rem;">
+      <a href="https://twitter.com/arkaboreal" target="_blank">Twitter</a> ·
+      <a href="https://discord.gg/arkeo" target="_blank">Discord</a> ·
+      <a href="https://github.com/arkeonetwork" target="_blank">GitHub</a>
+    </div>
+    Arkeo Network. Decentralized data infrastructure
+  </footer>
+
+  <script>
+    // Load live PAYG rates from on-chain provider data
+    (async function() {
+      const tbody = document.getElementById('ratesBody');
+
+      const KNOWN = {
+        'arkeopub1addwnpepqdgt6w2qqkt4jydfud507nl': 'Liquify',
+        'arkeopub1addwnpepq22m27n5ryy787muswzjqjk': 'InnovationTheory',
+        'arkeopub1addwnpepqdvlra44yykhmmpwtfavs35': '0xFury',
+        'arkeopub1addwnpepqfuk5cy2ey6h3pfpwerkhfp': 'Red_5',
+        'arkeopub1addwnpepq2lmfqggxp29nj3ekl3ltxn': 'StakeVillage',
+        'arkeopub1addwnpepqdnr9x5c386meywavzmy5wa': 'Everstake',
+        'arkeopub1addwnpepqdt79h8767429wpr44gxwav': 'Nodes.Guru',
+        'arkeopub1addwnpepqgvlg57udnpwh4y6k7yedt6': 'Nallok',
+        'arkeopub1addwnpepqdc6phgk8vqky8v7vyyyk0z': 'InnovationTheory-2',
+        'arkeopub1addwnpepqvj8mevcpdamq9cp5478t8k': 'StakeVillage (Infra)',
+        'arkeopub1addwnpepqduv5lky7ckq8efzzu08rm6': 'RoomIT',
+        'arkeopub1addwnpepqfn52r6xng2wwfrgz2tm5yv': 'BlockHunters',
+        'arkeopub1addwnpepqg3lll0dt65suhu4e7hx898': 'NodeX',
+      };
+
+      function getName(pk) {
+        for (const [prefix, name] of Object.entries(KNOWN)) {
+          if (pk.startsWith(prefix)) return name;
+        }
+        return pk.substring(0, 16) + '...';
+      }
+
+      function getRating(rate) {
+        if (rate <= 10000) return '<span style="color:#10b981;">Competitive</span>';
+        if (rate <= 100000) return '<span style="color:#f59e0b;">Standard</span>';
+        return '<span style="color:#ef4444;">Premium</span>';
+      }
+
+      try {
+        const [providers, services] = await Promise.all([
+          API.getProviders(),
+          API.getServices()
+        ]);
+
+        const svcMap = {};
+        for (const s of services) svcMap[String(s.service_id)] = s.name || String(s.service_id);
+
+        const rows = providers
+          .filter(p => p.status === 'ONLINE' && parseInt(p.bond || 0) > 0 &&
+            !((p.metadata_uri || '').includes('localhost') || (p.metadata_uri || '').includes('127.0.0.1')))
+          .filter(p => parseInt(p.pay_as_you_go_rate || 0) > 0)
+          .sort((a, b) => parseInt(a.pay_as_you_go_rate || 0) - parseInt(b.pay_as_you_go_rate || 0))
+          .map(p => {
+            const rate = parseInt(p.pay_as_you_go_rate || 0);
+            const svcName = svcMap[String(p.service || '')] || String(p.service || 'Unknown');
+            const per1k = (rate * 1000 / 1e8).toFixed(4) + ' ARKEO';
+            const per1m = Format.arkeo(rate * 1000000) + ' ARKEO';
+            return `<tr>
+              <td style="font-weight:500;">${escapeHtml(getName(p.pub_key || ''))}</td>
+              <td style="font-size:0.85rem;color:var(--text-dim);">${escapeHtml(svcName)}</td>
+              <td>${Format.number(rate)}</td>
+              <td>${per1k}</td>
+              <td style="color:var(--arkeo);font-weight:600;">${per1m}</td>
+              <td>${getRating(rate)}</td>
+            </tr>`;
+          });
+
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">No PAYG rates found</td></tr>';
+        } else {
+          tbody.innerHTML = rows.join('');
+        }
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--text-muted);">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
+      }
+    })();
+
+    function updateCalc() {
+      const rate = parseFloat(document.getElementById('calcRate').value) || 0;
+      const reqs = parseFloat(document.getElementById('calcReqs').value) || 0;
+      const totalUarkeo = rate * reqs;
+      const totalArkeo = (totalUarkeo / 1e8).toFixed(4);
+      const per1kArkeo = (rate * 1000 / 1e8).toFixed(6);
+      document.getElementById('calcTotal').textContent = Format.arkeo(totalUarkeo) + ' ARKEO';
+      document.getElementById('calcPer1k').textContent = per1kArkeo + ' ARKEO';
+    }
+  </script>
+</body>
+</html>

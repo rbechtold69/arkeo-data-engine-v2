@@ -3411,71 +3411,247 @@ services:
       const resultsDiv = document.getElementById('selfTestResults');
       const btn = document.getElementById('selfTestBtn');
       btn.disabled = true;
+      resultsDiv.innerHTML = '';
 
-      // Derive base URL from metadata URI or sentinel URL
+      // Derive base URL from sentinel public URL input, metadata URI, or state
       let baseUrl = '';
-      if (state.metadataUrl) {
+      const inputUrl = document.getElementById('sentinelPublicUrl')?.value?.trim();
+      if (inputUrl) {
+        baseUrl = inputUrl.replace(/\/+$/, '');
+      } else if (state.metadataUrl) {
         baseUrl = state.metadataUrl.replace(/\/metadata\.json\/?$/, '');
       } else if (state.sentinelUrl) {
         baseUrl = state.sentinelUrl.replace(/\/+$/, '');
       }
 
       if (!baseUrl) {
-        resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>No sentinel URL available. Please go back and set one.</span></div>`;
+        resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>No sentinel URL available. Enter your sentinel URL above and try again.</span></div>`;
         btn.disabled = false;
         return;
+      }
+
+      // Helper: append a result row
+      function addResult(html) {
+        const wrap = document.createElement('div');
+        wrap.innerHTML = html;
+        resultsDiv.appendChild(wrap.firstElementChild || wrap);
       }
 
       const serviceName = state.selectedService?.name || '';
       const metaUrl = baseUrl + '/metadata.json';
 
-      // Test 1: metadata
-      resultsDiv.innerHTML = `<div class="status-box testing"><div class="spinner"></div><span>Testing metadata endpoint...</span></div>`;
+      // ---- Test 1: metadata endpoint reachability ----
+      const t1 = document.createElement('div');
+      t1.className = 'status-box testing';
+      t1.innerHTML = `<div class="spinner"></div><span>Testing metadata endpoint...</span>`;
+      resultsDiv.appendChild(t1);
 
       let metaOk = false;
+      let metaData = null;
+
       try {
         if (CONFIG.DEBUG_MODE) console.log('Testing metadata URL:', metaUrl);
-        // Route through proxy to avoid mixed-content blocks (HTTPS page, HTTP sentinels)
-        const proxyUrl = `/health-check?url=${encodeURIComponent(metaUrl)}`;
-        const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
-        if (resp.ok) {
-          const result = await resp.json();
-          if (result?.ok) {
-            metaOk = true;
-            const latency = result.latencyMs ? ` (${result.latencyMs}ms)` : '';
-            resultsDiv.innerHTML = `<div class="status-box success"><span>✅</span><span>Metadata endpoint responding!${latency} (${metaUrl})</span></div>`;
-          } else {
-            const errMsg = result?.error || 'unreachable';
-            resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Metadata endpoint not reachable (${escapeHtml(errMsg)}). Check the URL and try again.</span></div>`;
+
+        // Detect protocol first for better errors
+        let parsedUrl;
+        try { parsedUrl = new URL(baseUrl); } catch(e) { parsedUrl = null; }
+
+        if (parsedUrl && parsedUrl.protocol === 'http:') {
+          t1.className = 'status-box error';
+          t1.innerHTML = `<span>❌</span><div>
+            <strong>HTTP not allowed.</strong> Set up SSL on your sentinel.
+            Subscribers connect from HTTPS pages and browsers block HTTP connections from HTTPS origins.
+            Use a domain name and Let's Encrypt for free HTTPS — the installer handles this automatically.
+            <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: set up SSL (see Step 2 above)</code>
+          </div>`;
+          btn.disabled = false;
+          return;
+        }
+
+        // Try direct fetch first (works if CORS is open)
+        let directOk = false;
+        try {
+          const direct = await fetch(metaUrl, { signal: AbortSignal.timeout(8000) });
+          if (direct.ok) {
+            metaData = await direct.json();
+            directOk = true;
           }
+        } catch(directErr) {
+          // Will try proxy
+        }
+
+        if (directOk && metaData) {
+          metaOk = true;
+          t1.className = 'status-box success';
+          t1.innerHTML = `<span>✅</span><span>Metadata endpoint responding! (${escapeHtml(metaUrl)})</span>`;
         } else {
-          resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Could not reach metadata endpoint (${escapeHtml(metaUrl)}). Check the URL and try again.</span></div>`;
+          // Try proxy route
+          const proxyUrl = `/health-check?url=${encodeURIComponent(metaUrl)}`;
+          let proxyResult = null;
+          try {
+            const resp = await fetch(proxyUrl, { signal: AbortSignal.timeout(12000) });
+            if (resp.ok) proxyResult = await resp.json();
+          } catch(e) { /* proxy not available */ }
+
+          if (proxyResult?.ok) {
+            metaOk = true;
+            const latency = proxyResult.latencyMs ? ` (${proxyResult.latencyMs}ms)` : '';
+            t1.className = 'status-box success';
+            t1.innerHTML = `<span>✅</span><span>Metadata endpoint responding${latency}! (${escapeHtml(metaUrl)})</span>`;
+          } else {
+            // Diagnose the error
+            const errMsg = proxyResult?.error || '';
+            const isCors = errMsg.toLowerCase().includes('cors') || errMsg.toLowerCase().includes('access-control');
+            const isNoService = errMsg.toLowerCase().includes('no services') || errMsg.includes('404');
+            const isTimeout = errMsg.toLowerCase().includes('timeout') || errMsg.toLowerCase().includes('econnrefused') || errMsg.toLowerCase().includes('network');
+
+            if (isCors) {
+              t1.className = 'status-box error';
+              t1.innerHTML = `<span>❌</span><div>
+                <strong>CORS error.</strong> Add <code>Access-Control-Allow-Origin: *</code> header to your sentinel.
+                <br>In your nginx config or sentinel config, allow cross-origin requests.
+                <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: add Access-Control-Allow-Origin header</code>
+              </div>`;
+            } else if (isTimeout || errMsg.includes('ECONNREFUSED') || errMsg.includes('unreachable')) {
+              t1.className = 'status-box error';
+              t1.innerHTML = `<span>❌</span><div>
+                <strong>Connection refused or timed out.</strong> Check that port 3636 is open and the sentinel is running.
+                <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: check port 3636 is open (sudo ufw allow 3636/tcp) and sentinel is running</code>
+              </div>`;
+            } else {
+              t1.className = 'status-box error';
+              t1.innerHTML = `<span>❌</span><div>
+                <strong>Metadata not reachable.</strong> ${escapeHtml(errMsg || 'Unknown error')}
+                <br><code style="font-size:0.8rem;color:var(--text-dim);">Check: port 3636 open, sentinel running, HTTPS configured, CORS headers present</code>
+              </div>`;
+            }
+            btn.disabled = false;
+            return;
+          }
         }
       } catch (e) {
         console.error('Metadata fetch error:', e);
-        resultsDiv.innerHTML = `<div class="status-box error"><span>❌</span><span>Could not reach metadata endpoint (${escapeHtml(metaUrl)}). Error: ${escapeHtml(e.message || 'Unknown')}. Check the URL and try again.</span></div>`;
+        const msg = e.message || 'Unknown error';
+        const isTimeout = msg.toLowerCase().includes('timeout') || msg.toLowerCase().includes('abort');
+        t1.className = 'status-box error';
+        t1.innerHTML = `<span>❌</span><div>
+          <strong>${isTimeout ? 'Connection timed out.' : 'Fetch failed.'}</strong>
+          ${isTimeout ? 'Check that port 3636 is open and the sentinel is running.' : escapeHtml(msg)}
+          <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: check port 3636 is open on your firewall</code>
+        </div>`;
+        btn.disabled = false;
+        return;
       }
 
-      // Show "Set Metadata URI On-Chain" button after metadata test passes
+      // ---- Test 2: Validate metadata content ----
       if (metaOk) {
-        resultsDiv.innerHTML += `
-          <div style="margin-top: 1.5rem; padding: 1.25rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.75rem;">
-            <div style="font-weight: 600; margin-bottom: 0.75rem; font-size: 1rem;">🔗 Set Metadata URI On-Chain</div>
-            <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; line-height: 1.5;">
-              Your sentinel is working! Now update your provider record on-chain to set the metadata_uri. This tells subscribers where to find your provider info.
-            </div>
-            <button onclick="setMetadataUriOnChain()" id="setMetadataBtn" class="btn btn-primary" style="width: 100%;">
-              📡 Set Metadata URI On-Chain
-            </button>
-            <div id="metadataUriStatus" style="margin-top: 1rem;"></div>
-          </div>
-        `;
+        // Try to fetch metadata directly if we don't have it yet
+        if (!metaData) {
+          try {
+            const r = await fetch(metaUrl, { signal: AbortSignal.timeout(8000) });
+            if (r.ok) metaData = await r.json();
+          } catch(e) { /* ignore */ }
+        }
+
+        if (metaData) {
+          const hasServices = Array.isArray(metaData.chains) && metaData.chains.length > 0;
+          if (!hasServices && metaData.services !== undefined) {
+            // Some sentinels use "services" key
+          }
+          const moniker = metaData.moniker || metaData.name || '';
+
+          const t2 = document.createElement('div');
+          t2.className = 'status-box success';
+          t2.innerHTML = `<span>✅</span><span>Metadata valid${moniker ? ': ' + escapeHtml(moniker) : ''}</span>`;
+          resultsDiv.appendChild(t2);
+
+          // Check services list
+          const chainCount = (metaData.chains || metaData.services || []).length;
+          if (chainCount === 0) {
+            const t2b = document.createElement('div');
+            t2b.className = 'status-box warning';
+            t2b.innerHTML = `<span>⚠️</span><div>
+              <strong>No services listed in metadata.</strong>
+              Make sure you have registered your service via <code>MsgModProvider</code> and your sentinel config includes at least one chain.
+              <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: register via MsgModProvider (Step 4 above)</code>
+            </div>`;
+            resultsDiv.appendChild(t2b);
+          }
+        }
       }
 
-      // Test 2: service health
+      // ---- Test 3: On-chain verification ----
+      if (metaOk && state.walletAddress) {
+        const t3 = document.createElement('div');
+        t3.className = 'status-box testing';
+        t3.innerHTML = `<div class="spinner"></div><span>Checking on-chain provider registration...</span>`;
+        resultsDiv.appendChild(t3);
+
+        try {
+          const chainResp = await fetch(`${CONFIG.REST_API}/arkeo/providers`, { signal: AbortSignal.timeout(8000) });
+          if (chainResp.ok) {
+            const chainData = await chainResp.json();
+            const allProviders = chainData.provider || chainData.providers || [];
+            const myProviders = allProviders.filter(p => {
+              const pk = p.pub_key || '';
+              return state.walletPubkeyBytes && pk === state.walletPubkey ||
+                pk.startsWith((state.walletAddress || '').substring(0, 10));
+            });
+
+            const anyOnline = myProviders.some(p => p.status === 'ONLINE' && parseInt(p.bond || 0) > 0);
+            const anyRegistered = myProviders.length > 0;
+
+            if (anyOnline) {
+              t3.className = 'status-box success';
+              t3.innerHTML = `<span>✅</span><span>Provider found on-chain and ONLINE. Bond active.</span>`;
+            } else if (anyRegistered) {
+              t3.className = 'status-box warning';
+              t3.innerHTML = `<span>⚠️</span><div>
+                <strong>Provider registered but not ONLINE.</strong> You may need to bond ARKEO tokens or complete MsgModProvider setup.
+                <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: bond ARKEO tokens first (Step 4)</code>
+              </div>`;
+            } else {
+              t3.className = 'status-box warning';
+              t3.innerHTML = `<span>⚠️</span><div>
+                <strong>Provider not found on-chain.</strong> Complete Step 4 (Register On-Chain) to bond ARKEO tokens and activate your provider.
+                <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: bond ARKEO tokens first via Step 4</code>
+              </div>`;
+            }
+          } else {
+            t3.className = 'status-box warning';
+            t3.innerHTML = `<span>⚠️</span><span>Could not check on-chain status (API error). Verify manually on the explorer.</span>`;
+          }
+        } catch(e) {
+          t3.className = 'status-box warning';
+          t3.innerHTML = `<span>⚠️</span><span>Could not check on-chain status. Verify manually at <a href="data.html" style="color:var(--arkeo)">the provider directory</a>.</span>`;
+        }
+      }
+
+      // ---- Show "Set Metadata URI On-Chain" button after metadata test passes ----
+      if (metaOk) {
+        const setUriDiv = document.createElement('div');
+        setUriDiv.style.cssText = 'margin-top: 1.5rem; padding: 1.25rem; background: var(--arkeo-dim); border: 1px solid var(--arkeo); border-radius: 0.75rem;';
+        setUriDiv.innerHTML = `
+          <div style="font-weight: 600; margin-bottom: 0.75rem; font-size: 1rem;">🔗 Set Metadata URI On-Chain</div>
+          <div style="font-size: 0.85rem; color: var(--text-dim); margin-bottom: 1rem; line-height: 1.5;">
+            Your sentinel is working. Now update your provider record on-chain to set the metadata_uri. This tells subscribers where to find your provider info.
+          </div>
+          <button onclick="setMetadataUriOnChain()" id="setMetadataBtn" class="btn btn-primary" style="width: 100%;">
+            Set Metadata URI On-Chain
+          </button>
+          <div id="metadataUriStatus" style="margin-top: 1rem;"></div>
+        `;
+        resultsDiv.appendChild(setUriDiv);
+      }
+
+      // ---- Test 4: service health (optional, soft check) ----
       if (metaOk && serviceName) {
         const serviceUrl = baseUrl + '/' + serviceName;
-        resultsDiv.innerHTML += `<div class="status-box testing" id="serviceTestStatus"><div class="spinner"></div><span>Testing service endpoint...</span></div>`;
+        const t4 = document.createElement('div');
+        t4.className = 'status-box testing';
+        t4.id = 'serviceTestStatus';
+        t4.innerHTML = `<div class="spinner"></div><span>Testing service endpoint...</span>`;
+        resultsDiv.appendChild(t4);
         try {
           const rpcResp = await fetch(serviceUrl, {
             method: 'POST',
@@ -3483,20 +3659,16 @@ services:
             body: JSON.stringify({ jsonrpc: '2.0', method: 'health', id: 1 }),
             signal: AbortSignal.timeout(10000),
           });
-          const el = document.getElementById('serviceTestStatus');
           if (rpcResp.ok) {
-            el.className = 'status-box success';
-            el.innerHTML = `<span>✅</span><span>Service endpoint responding!</span>`;
+            t4.className = 'status-box success';
+            t4.innerHTML = `<span>✅</span><span>Service endpoint responding!</span>`;
           } else {
-            el.className = 'status-box warning';
-            el.innerHTML = `<span>⚠️</span><span>Service returned HTTP ${rpcResp.status} — may still be starting up.</span>`;
+            t4.className = 'status-box warning';
+            t4.innerHTML = `<span>⚠️</span><span>Service returned HTTP ${rpcResp.status} — may still be starting up.</span>`;
           }
         } catch (e) {
-          const el = document.getElementById('serviceTestStatus');
-          if (el) {
-            el.className = 'status-box warning';
-            el.innerHTML = `<span>⚠️</span><span>Could not reach service endpoint from browser — try curl from your server.</span>`;
-          }
+          t4.className = 'status-box warning';
+          t4.innerHTML = `<span>⚠️</span><span>Could not reach service endpoint from browser — try curl from your server to confirm it's up.</span>`;
         }
       }
 

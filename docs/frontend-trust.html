@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Frontend Trust &amp; Verification | Arkeo Marketplace</title>
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <meta name="description" content="How Arkeo Marketplace vets frontends. Open source, auditable, community-curated.">
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --bg-card: #12151c;
+      --bg-input: #1a1f2a;
+      --border: #1e2230;
+      --arkeo: #3BE0FF;
+      --text: #ffffff;
+      --text-dim: #8b92a5;
+      --text-muted: #5a6278;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 0 1.5rem; }
+
+    .page-hero {
+      text-align: center;
+      padding: 3rem 1.5rem 2rem;
+    }
+    .page-hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-hero h1 em { font-style: normal; color: var(--arkeo); }
+    .page-hero p { color: var(--text-dim); max-width: 580px; margin: 0 auto; }
+
+    .section { margin: 2rem 0; }
+    .section-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      margin-bottom: 1rem;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .trust-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1rem;
+    }
+    .trust-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+    }
+    .trust-item .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .trust-item h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 0.35rem; }
+    .trust-item p { color: var(--text-dim); font-size: 0.85rem; }
+
+    /* FAQ */
+    .faq-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+    details {
+      border-bottom: 1px solid var(--border);
+    }
+    details:first-child { border-top: 1px solid var(--border); }
+    summary {
+      padding: 1rem 0;
+      cursor: pointer;
+      font-weight: 600;
+      list-style: none;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    summary::after { content: '▸'; color: var(--arkeo); }
+    details[open] summary::after { content: '▾'; }
+    .faq-answer {
+      padding: 0 0 1rem;
+      color: var(--text-dim);
+      font-size: 0.9rem;
+      line-height: 1.7;
+    }
+    .faq-answer a { color: var(--arkeo); }
+
+    .highlight-box {
+      background: rgba(59, 224, 255, 0.06);
+      border: 1px solid rgba(59, 224, 255, 0.2);
+      border-radius: 0.75rem;
+      padding: 1.25rem 1.5rem;
+      margin: 1.5rem 0;
+    }
+
+    .vs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+      margin-top: 1rem;
+    }
+    .vs-table th {
+      text-align: left;
+      padding: 0.6rem 0.75rem;
+      color: var(--text-dim);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--border);
+    }
+    .vs-table td {
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .vs-table tr:last-child td { border-bottom: none; }
+    .yes { color: var(--success); font-weight: 600; }
+    .no { color: #ef4444; font-weight: 600; }
+
+    .btn-primary {
+      background: var(--arkeo);
+      color: #000;
+      border: none;
+      padding: 0.65rem 1.5rem;
+      border-radius: 0.5rem;
+      font-weight: 700;
+      font-size: 0.9rem;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-block;
+    }
+    .btn-secondary {
+      background: transparent;
+      color: var(--arkeo);
+      border: 1px solid var(--arkeo);
+      padding: 0.65rem 1.5rem;
+      border-radius: 0.5rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      text-decoration: none;
+      display: inline-block;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      border-top: 1px solid var(--border);
+      margin-top: 3rem;
+    }
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--arkeo); }
+  </style>
+</head>
+<body>
+  <div id="arkeo-nav" data-active="home"></div>
+
+  <section class="page-hero">
+    <h1>Frontend <em>Trust</em> and Verification</h1>
+    <p>How Arkeo Marketplace evaluates and lists frontends. No governance gatekeeping, just open-source accountability.</p>
+  </section>
+
+  <div class="container">
+
+    <!-- Core model -->
+    <div class="highlight-box">
+      <strong style="color:var(--arkeo);">No Governance Gatekeeping</strong>
+      <p style="color:var(--text-dim);font-size:0.875rem;margin-top:0.35rem;">
+        Arkeo Marketplace does not use on-chain governance to approve frontends. Listings are curated by the community using open-source review, not token voting or centralized approval. Anyone can build and submit. Quality is maintained through transparency, not bureaucracy.
+      </p>
+    </div>
+
+    <!-- How trust works -->
+    <div class="section">
+      <h2 class="section-title">How Trust Works</h2>
+      <div class="trust-grid">
+        <div class="trust-item">
+          <div class="icon">🔍</div>
+          <h3>Open Source, Auditable</h3>
+          <p>Every listed frontend must publish its source code publicly. You can read exactly what the app does before using it.</p>
+        </div>
+        <div class="trust-item">
+          <div class="icon">👥</div>
+          <h3>Community Review</h3>
+          <p>Submissions are reviewed by community members on GitHub. Issues, PRs, and discussion are all public and traceable.</p>
+        </div>
+        <div class="trust-item">
+          <div class="icon">🏛️</div>
+          <h3>Curated, Not Governed</h3>
+          <p>Maintainers apply consistent listing criteria. No token vote required, no political process. Just the published requirements.</p>
+        </div>
+        <div class="trust-item">
+          <div class="icon">🔌</div>
+          <h3>Provider Choice</h3>
+          <p>Frontends route through Arkeo providers, but users can configure which provider they use. No single provider lock-in.</p>
+        </div>
+        <div class="trust-item">
+          <div class="icon">🚨</div>
+          <h3>Community Reporting</h3>
+          <p>Anyone can flag a frontend that violates listing requirements. Maintainers review and remove listings that no longer meet standards.</p>
+        </div>
+        <div class="trust-item">
+          <div class="icon">🔄</div>
+          <h3>Versioned and Traceable</h3>
+          <p>Listing decisions are made in public Git history. You can see when a frontend was added, changed, or removed and by whom.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- What we check -->
+    <div class="section">
+      <h2 class="section-title">What the Review Checks</h2>
+      <div class="card">
+        <table class="vs-table">
+          <thead>
+            <tr>
+              <th>Criterion</th>
+              <th>What Reviewers Look For</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Source available</strong></td>
+              <td>Public repository, readable code, no obfuscated bundles without source maps</td>
+            </tr>
+            <tr>
+              <td><strong>Arkeo integration</strong></td>
+              <td>Data requests genuinely route through Arkeo protocol, not just re-branded centralized endpoints</td>
+            </tr>
+            <tr>
+              <td><strong>No malicious code</strong></td>
+              <td>No key loggers, no unauthorized token approvals, no hidden tracking pixels or analytics calls to unknown servers</td>
+            </tr>
+            <tr>
+              <td><strong>Functional</strong></td>
+              <td>App is live and its core feature works. Broken or incomplete apps are not listed.</td>
+            </tr>
+            <tr>
+              <td><strong>Distinct purpose</strong></td>
+              <td>Offers something meaningfully different from other listed frontends. Duplicate clones not listed.</td>
+            </tr>
+            <tr>
+              <td><strong>Maintainer reachable</strong></td>
+              <td>Someone responds to GitHub issues or Discord questions. Ghost projects are flagged for removal.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Provider choice section -->
+    <div class="section">
+      <h2 class="section-title">Provider Choice: Your Control</h2>
+      <div class="card">
+        <p style="color:var(--text-dim);margin-bottom:1rem;">
+          Frontends route requests through Arkeo providers, but you are never locked in. Every Arkeo-compatible frontend allows you to:
+        </p>
+        <ul style="color:var(--text-dim);padding-left:1.5rem;font-size:0.9rem;line-height:2;">
+          <li>Choose any provider from the directory</li>
+          <li>Open your own PAYG contract with any provider</li>
+          <li>Switch providers without losing data or account history</li>
+          <li>Self-host a frontend and point it at your preferred provider</li>
+        </ul>
+        <div style="margin-top:1rem;padding:0.875rem;background:rgba(16,185,129,0.07);border:1px solid rgba(16,185,129,0.25);border-radius:0.5rem;font-size:0.875rem;">
+          <strong style="color:var(--success);">No vendor lock-in.</strong> If you dislike a frontend or provider, you switch. Your contracts are on-chain, not held by any company.
+        </div>
+      </div>
+    </div>
+
+    <!-- FAQ -->
+    <div class="section">
+      <h2 class="section-title">Frequently Asked Questions</h2>
+      <div class="faq-list">
+
+        <details>
+          <summary>Does Arkeo endorse every listed frontend?</summary>
+          <div class="faq-answer">
+            No. A listing means the frontend passed the open-source review criteria at the time it was submitted. It does not mean the Arkeo Foundation or any community member vouches for the frontend's financial advice, UI choices, or ongoing maintenance. Always review the source yourself before depositing funds.
+          </div>
+        </details>
+
+        <details>
+          <summary>Can a frontend be delisted?</summary>
+          <div class="faq-answer">
+            Yes. If a frontend becomes unmaintained, moves its code closed-source, adds malicious behavior, or stops routing through Arkeo, the community can open a GitHub issue requesting removal. Maintainers review and act.
+          </div>
+        </details>
+
+        <details>
+          <summary>Is token voting used for listing decisions?</summary>
+          <div class="faq-answer">
+            No. Token voting introduces plutocracy risks. Listings use open published criteria and community review, not token-weighted governance. This keeps the process accessible to small builders and prevents whale capture.
+          </div>
+        </details>
+
+        <details>
+          <summary>What if I find a problem with a listed frontend?</summary>
+          <div class="faq-answer">
+            Open a GitHub issue on
+            <a href="https://github.com/arkeonetwork/arkeo-data-engine-v2" target="_blank" rel="noopener">arkeo-data-engine-v2</a>
+            describing the issue. For urgent security concerns, also post in the <strong>#security</strong> channel on
+            <a href="https://discord.gg/arkeo" target="_blank" rel="noopener">Discord</a>.
+            If the issue is confirmed, the listing will be suspended pending resolution.
+          </div>
+        </details>
+
+        <details>
+          <summary>Can I fork a listed frontend and submit my version?</summary>
+          <div class="faq-answer">
+            Yes, if your fork offers meaningful improvements or specialization. A copy with just a logo swap will not be listed. Show what your version adds and why users would prefer it.
+          </div>
+        </details>
+
+        <details>
+          <summary>How do I know a frontend is not stealing my keys?</summary>
+          <div class="faq-answer">
+            Read the source code. All listed frontends are open source. You can also use a hardware wallet (Ledger, Trezor) for signing, which means your private key never touches the frontend code. Never paste a private key or seed phrase into any web app.
+          </div>
+        </details>
+
+        <details>
+          <summary>What does "routes through Arkeo" mean exactly?</summary>
+          <div class="faq-answer">
+            It means the frontend connects to the Arkeo sentinel network to serve blockchain data. Requests include valid PAYG or subscription authentication headers. The frontend is not just a wrapper around Infura or another centralized API with Arkeo branding.
+          </div>
+        </details>
+
+      </div>
+    </div>
+
+    <!-- CTA -->
+    <div class="card" style="text-align:center;margin-bottom:2rem;">
+      <div style="font-size:1.5rem;margin-bottom:0.5rem;">🚀</div>
+      <h3 style="margin-bottom:0.5rem;">Ready to submit your frontend?</h3>
+      <p style="color:var(--text-dim);font-size:0.875rem;margin-bottom:1.25rem;">
+        Fill out the submission form and open a GitHub issue. The community will review it.
+      </p>
+      <div style="display:flex;gap:0.75rem;justify-content:center;flex-wrap:wrap;">
+        <a href="submit-frontend.html" class="btn-primary">Submit a Frontend</a>
+        <a href="index.html" class="btn-secondary">Browse Frontends</a>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>
+    <div style="margin-bottom:0.5rem;">
+      <a href="https://twitter.com/arkaboreal" target="_blank">Twitter</a> ·
+      <a href="https://discord.gg/arkeo" target="_blank">Discord</a> ·
+      <a href="https://github.com/arkeonetwork" target="_blank">GitHub</a>
+    </div>
+    Arkeo Network. Decentralized data infrastructure
+  </footer>
+</body>
+</html>

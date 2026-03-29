@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SDK Quick-Start | Arkeo Marketplace</title>
+  <base href="../">
+  <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
+  <meta name="description" content="Arkeo SDK quick-start guide. Open PAYG contracts, sign requests, and make authenticated RPC calls.">
+  <link rel="stylesheet" href="css/nav.css">
+  <script src="js/config.js"></script>
+  <script src="js/nav.js"></script>
+  <style>
+    :root {
+      --bg: #0a0c10;
+      --bg-card: #12151c;
+      --bg-input: #1a1f2a;
+      --border: #1e2230;
+      --arkeo: #3BE0FF;
+      --text: #ffffff;
+      --text-dim: #8b92a5;
+      --text-muted: #5a6278;
+      --success: #10b981;
+      --warning: #f59e0b;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      line-height: 1.6;
+    }
+    .container { max-width: 900px; margin: 0 auto; padding: 0 1.5rem 3rem; }
+
+    .page-hero {
+      text-align: center;
+      padding: 3rem 1.5rem 2rem;
+    }
+    .page-hero h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    .page-hero h1 em { font-style: normal; color: var(--arkeo); }
+    .page-hero p { color: var(--text-dim); max-width: 600px; margin: 0 auto; }
+
+    h2 { font-size: 1.25rem; font-weight: 700; margin: 2rem 0 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    h3 { font-size: 1rem; font-weight: 600; margin: 1.25rem 0 0.5rem; color: var(--arkeo); }
+
+    p { color: var(--text-dim); margin: 0.5rem 0; font-size: 0.9rem; }
+    a { color: var(--arkeo); }
+
+    /* Code blocks */
+    .code-block {
+      position: relative;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.825rem;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+    }
+    .code-block pre { color: #e6edf3; margin: 0; white-space: pre-wrap; padding-right: 4rem; }
+    .code-block .copy-btn {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+      cursor: pointer;
+      font-size: 0.75rem;
+      font-family: inherit;
+    }
+    .code-block .copy-btn:hover { border-color: var(--arkeo); color: var(--arkeo); }
+    .kw { color: #ff7b72; }
+    .str { color: #a5d6ff; }
+    .cm { color: #8b949e; }
+    .fn { color: #d2a8ff; }
+    .num { color: #79c0ff; }
+
+    /* Steps */
+    .step-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--arkeo);
+      color: #000;
+      width: 1.75rem;
+      height: 1.75rem;
+      border-radius: 50%;
+      font-weight: 700;
+      font-size: 0.85rem;
+      flex-shrink: 0;
+    }
+
+    .info-box {
+      background: rgba(59, 224, 255, 0.06);
+      border: 1px solid rgba(59, 224, 255, 0.2);
+      border-radius: 0.5rem;
+      padding: 0.875rem 1rem;
+      margin: 0.75rem 0;
+      font-size: 0.875rem;
+    }
+    .warn-box {
+      background: rgba(245, 158, 11, 0.07);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      border-radius: 0.5rem;
+      padding: 0.875rem 1rem;
+      margin: 0.75rem 0;
+      font-size: 0.875rem;
+      color: var(--warning);
+    }
+
+    .tab-row { display: flex; gap: 0.5rem; margin: 1.25rem 0 0; }
+    .tab-btn {
+      padding: 0.4rem 0.875rem;
+      border-radius: 0.375rem;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .tab-btn.active { background: rgba(59,224,255,0.1); border-color: var(--arkeo); color: var(--arkeo); font-weight: 600; }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.25rem;
+      margin: 1rem 0;
+    }
+
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      border-top: 1px solid var(--border);
+      margin-top: 3rem;
+    }
+    footer a { color: var(--text-dim); text-decoration: none; }
+    footer a:hover { color: var(--arkeo); }
+  </style>
+</head>
+<body>
+  <div id="arkeo-nav" data-active="data"></div>
+
+  <section class="page-hero">
+    <h1>SDK <em>Quick-Start</em></h1>
+    <p>Open a PAYG contract, sign requests, and make authenticated RPC calls to any Arkeo provider.</p>
+  </section>
+
+  <div class="container">
+
+    <div class="info-box">
+      <strong style="color:var(--arkeo);">What you need:</strong> An Arkeo wallet with ARKEO tokens, a provider to subscribe to, and Node.js (for JS) or Python 3 (for Python).
+    </div>
+
+    <!-- Step 1: Open a contract -->
+    <h2><span class="step-number">1</span> Open a PAYG Contract</h2>
+
+    <p>A contract locks a deposit of ARKEO tokens with a provider. You spend the deposit as you make requests.</p>
+
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('contract', 'cli')">Keplr / UI</button>
+      <button class="tab-btn" onclick="switchTab('contract', 'rest')">REST API</button>
+    </div>
+
+    <div id="contract-cli" class="tab-panel active">
+      <p>Use the <a href="../subscribe.html">subscribe page</a> to open a contract through your Keplr wallet. It handles transaction signing automatically.</p>
+      <div class="info-box">
+        After opening a contract, note your <strong>contract ID</strong>. You will need it for every authenticated request.
+      </div>
+    </div>
+
+    <div id="contract-rest" class="tab-panel">
+      <p>You can also open a contract programmatically using the Arkeo REST API:</p>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="cm"># Open a PAYG contract with a provider
+# deposit = amount in uarkeo (1 ARKEO = 100000000 uarkeo)</span>
+curl -X POST https://rest-seed.arkeo.network/arkeo/contract \
+  -H <span class="str">'Content-Type: application/json'</span> \
+  -d <span class="str">'{
+    "type_url": "/arkeo.arkeo.MsgOpenContract",
+    "value": {
+      "creator": "YOUR_ARKEO_ADDRESS",
+      "provider": "PROVIDER_PUBKEY",
+      "service": "arkeo-mainnet-fullnode",
+      "contract_type": "PAY_AS_YOU_GO",
+      "deposit": "10000000",
+      "duration": 648000
+    }
+  }'</span></pre>
+      </div>
+      <p>Use the <a href="../subscribe.html">subscribe page</a> for a guided UI-based flow instead.</p>
+    </div>
+
+    <!-- Step 2: Sign requests -->
+    <h2><span class="step-number">2</span> Sign Requests (arkauth header)</h2>
+
+    <p>
+      Every request to an Arkeo sentinel must include an <code>arkauth</code> parameter. It proves you own the contract and tracks your nonce to prevent replay attacks.
+    </p>
+
+    <h3>Arkauth Format</h3>
+    <div class="code-block">
+      <pre>{contractId}:{spender_pubkey_bech32}:{nonce}:{signature_hex}</pre>
+    </div>
+
+    <h3>How to Build It</h3>
+    <ol style="color:var(--text-dim);font-size:0.875rem;padding-left:1.5rem;line-height:2.2;">
+      <li>Build preimage string: <code style="background:var(--bg-input);padding:0.1rem 0.35rem;border-radius:0.25rem;">{contractId}:{pubkey}:{nonce}</code></li>
+      <li>Wrap in ADR-036 StdSignDoc (Cosmos arbitrary signing standard)</li>
+      <li>SHA-256 hash the canonical JSON of the StdSignDoc</li>
+      <li>Sign with secp256k1 (low-S normalized)</li>
+      <li>Hex-encode the signature</li>
+      <li>Append as query param: <code style="background:var(--bg-input);padding:0.1rem 0.35rem;border-radius:0.25rem;">?arkauth=...</code></li>
+    </ol>
+
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('sign', 'js')">JavaScript</button>
+      <button class="tab-btn" onclick="switchTab('sign', 'py')">Python</button>
+      <button class="tab-btn" onclick="switchTab('sign', 'raw')">Raw format</button>
+    </div>
+
+    <div id="sign-js" class="tab-panel active">
+      <p>Install dependencies:</p>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>cd sdk
+npm install</pre>
+      </div>
+      <p>Sign a single request manually:</p>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="kw">import</span> * <span class="kw">as</span> secp <span class="kw">from</span> <span class="str">'@noble/secp256k1'</span>;
+<span class="kw">import</span> { sha256 } <span class="kw">from</span> <span class="str">'@noble/hashes/sha256'</span>;
+<span class="kw">import</span> { hmac } <span class="kw">from</span> <span class="str">'@noble/hashes/hmac'</span>;
+
+<span class="cm">// Required setup for synchronous signing</span>
+secp.etc.hmacSha256Sync = (k, ...msgs) => hmac(sha256, k, secp.etc.concatBytes(...msgs));
+
+<span class="kw">const</span> CONTRACT_ID = <span class="str">'942'</span>;
+<span class="kw">const</span> PRIVATE_KEY_HEX = <span class="str">'your_hex_private_key'</span>;
+<span class="kw">const</span> PUBKEY_BECH32 = <span class="str">'arkeopub1addwnpepq...'</span>; <span class="cm">// your bech32 public key</span>
+<span class="kw">const</span> SIGNER_ADDR = <span class="str">'arkeo1...'</span>;          <span class="cm">// your arkeo address</span>
+
+<span class="kw">function</span> <span class="fn">buildArkauth</span>(contractId, pubkeyBech32, signerAddr, nonce, privKeyHex) {
+  <span class="kw">const</span> preimage = `${contractId}:${pubkeyBech32}:${nonce}`;
+  <span class="kw">const</span> signDoc = JSON.stringify({
+    account_number: <span class="str">"0"</span>, chain_id: <span class="str">""</span>,
+    fee: { amount: [], gas: <span class="str">"0"</span> }, memo: <span class="str">""</span>,
+    msgs: [{ type: <span class="str">"sign/MsgSignData"</span>, value: {
+      data: btoa(preimage),
+      signer: signerAddr
+    }}],
+    sequence: <span class="str">"0"</span>
+  });
+  <span class="kw">const</span> hash = sha256(<span class="kw">new</span> TextEncoder().encode(signDoc));
+  <span class="kw">const</span> privBytes = Uint8Array.from(
+    privKeyHex.match(/.{2}/g).map(h => parseInt(h, <span class="num">16</span>))
+  );
+  <span class="kw">const</span> sig = secp.sign(hash, privBytes, { lowS: <span class="kw">true</span> });
+  <span class="kw">const</span> sigHex = Array.from(sig.toCompactRawBytes(), b =>
+    b.toString(<span class="num">16</span>).padStart(<span class="num">2</span>, <span class="str">'0'</span>)
+  ).join(<span class="str">''</span>);
+  <span class="kw">return</span> `${contractId}:${pubkeyBech32}:${nonce}:${sigHex}`;
+}
+
+<span class="cm">// Use it in a fetch call:</span>
+<span class="kw">const</span> nonce = <span class="num">1</span>;
+<span class="kw">const</span> arkauth = buildArkauth(CONTRACT_ID, PUBKEY_BECH32, SIGNER_ADDR, nonce, PRIVATE_KEY_HEX);
+<span class="kw">const</span> url = `https://sentinel.example.com/arkeo-mainnet-fullnode/status?arkauth=${encodeURIComponent(arkauth)}`;
+<span class="kw">const</span> resp = <span class="kw">await</span> fetch(url);
+console.log(<span class="kw">await</span> resp.json());</pre>
+      </div>
+    </div>
+
+    <div id="sign-py" class="tab-panel">
+      <p>Install dependencies:</p>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre>cd sdk/python
+pip install -r requirements.txt</pre>
+      </div>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="kw">from</span> arkeo_client <span class="kw">import</span> ArkeoClient
+<span class="kw">import</span> requests, json, base64, hashlib
+<span class="kw">from</span> ecdsa <span class="kw">import</span> SigningKey, SECP256k1
+
+CONTRACT_ID = <span class="str">'942'</span>
+PRIVATE_KEY_HEX = <span class="str">'your_hex_private_key'</span>
+PUBKEY_BECH32 = <span class="str">'arkeopub1addwnpepq...'</span>
+SIGNER_ADDR = <span class="str">'arkeo1...'</span>
+
+<span class="kw">def</span> <span class="fn">build_arkauth</span>(contract_id, pubkey_bech32, signer_addr, nonce, privkey_hex):
+    preimage = f<span class="str">"{contract_id}:{pubkey_bech32}:{nonce}"</span>
+    sign_doc = json.dumps({
+        <span class="str">"account_number"</span>: <span class="str">"0"</span>, <span class="str">"chain_id"</span>: <span class="str">""</span>,
+        <span class="str">"fee"</span>: {<span class="str">"amount"</span>: [], <span class="str">"gas"</span>: <span class="str">"0"</span>}, <span class="str">"memo"</span>: <span class="str">""</span>,
+        <span class="str">"msgs"</span>: [{<span class="str">"type"</span>: <span class="str">"sign/MsgSignData"</span>, <span class="str">"value"</span>: {
+            <span class="str">"data"</span>: base64.b64encode(preimage.encode()).decode(),
+            <span class="str">"signer"</span>: signer_addr
+        }}],
+        <span class="str">"sequence"</span>: <span class="str">"0"</span>
+    }, separators=(<span class="str">','</span>, <span class="str">':'</span>))
+    msg_hash = hashlib.sha256(sign_doc.encode()).digest()
+    sk = SigningKey.from_string(bytes.fromhex(privkey_hex), curve=SECP256k1)
+    sig = sk.sign_digest(msg_hash, sigencode=lambda r, s, order: (r, s))
+    r, s = sig
+    <span class="cm"># Normalize low-S</span>
+    order = SECP256k1.order
+    <span class="kw">if</span> s > order // 2: s = order - s
+    sig_hex = r.to_bytes(32, <span class="str">'big'</span>).hex() + s.to_bytes(32, <span class="str">'big'</span>).hex()
+    <span class="kw">return</span> f<span class="str">"{contract_id}:{pubkey_bech32}:{nonce}:{sig_hex}"</span>
+
+nonce = 1
+arkauth = build_arkauth(CONTRACT_ID, PUBKEY_BECH32, SIGNER_ADDR, nonce, PRIVATE_KEY_HEX)
+url = f<span class="str">"https://sentinel.example.com/arkeo-mainnet-fullnode/status?arkauth={arkauth}"</span>
+resp = requests.get(url)
+print(resp.json())</pre>
+      </div>
+    </div>
+
+    <div id="sign-raw" class="tab-panel">
+      <h3>ADR-036 StdSignDoc</h3>
+      <div class="code-block">
+        <pre>{
+  <span class="str">"account_number"</span>: <span class="str">"0"</span>,
+  <span class="str">"chain_id"</span>: <span class="str">""</span>,
+  <span class="str">"fee"</span>: { <span class="str">"amount"</span>: [], <span class="str">"gas"</span>: <span class="str">"0"</span> },
+  <span class="str">"memo"</span>: <span class="str">""</span>,
+  <span class="str">"msgs"</span>: [{
+    <span class="str">"type"</span>: <span class="str">"sign/MsgSignData"</span>,
+    <span class="str">"value"</span>: {
+      <span class="str">"data"</span>: <span class="str">"&lt;base64(contractId:pubkey:nonce)&gt;"</span>,
+      <span class="str">"signer"</span>: <span class="str">"&lt;bech32_address&gt;"</span>
+    }
+  }],
+  <span class="str">"sequence"</span>: <span class="str">"0"</span>
+}</pre>
+      </div>
+      <p>The <code>data</code> field is the base64-encoded preimage string. The document must be canonical JSON (no extra whitespace).</p>
+    </div>
+
+    <!-- Step 3: Make authenticated calls -->
+    <h2><span class="step-number">3</span> Make Authenticated RPC Calls</h2>
+
+    <p>Use the <code>ArkeoClient</code> class in <code>sdk/arkeo-client.js</code> to handle signing automatically. It auto-increments the nonce on each call.</p>
+
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('rpc', 'js-sdk')">JavaScript SDK</button>
+      <button class="tab-btn" onclick="switchTab('rpc', 'py-sdk')">Python SDK</button>
+      <button class="tab-btn" onclick="switchTab('rpc', 'curl')">curl</button>
+    </div>
+
+    <div id="rpc-js-sdk" class="tab-panel active">
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="cm">// sdk/arkeo-client.js is in the sdk/ directory</span>
+<span class="kw">import</span> { ArkeoClient } <span class="kw">from</span> <span class="str">'./arkeo-client.js'</span>; <span class="cm">// Node.js</span>
+
+<span class="kw">const</span> client = <span class="kw">new</span> ArkeoClient({
+  sentinelUrl: <span class="str">'https://sentinel.example.com'</span>,
+  contractId: <span class="num">942</span>,
+  privateKey: <span class="str">'your_hex_private_key'</span>, <span class="cm">// or 24-word mnemonic</span>
+  service: <span class="str">'arkeo-mainnet-fullnode'</span>,
+  startNonce: <span class="num">1</span> <span class="cm">// or fetch from chain (see Step 4)</span>
+});
+
+<span class="cm">// Get node status</span>
+<span class="kw">const</span> status = <span class="kw">await</span> client.rpcJson(<span class="str">'/status'</span>);
+console.log(status);
+
+<span class="cm">// Get block</span>
+<span class="kw">const</span> block = <span class="kw">await</span> client.rpcJson(<span class="str">'/block?height=1'</span>);
+console.log(block);
+
+<span class="cm">// Get latest block height</span>
+<span class="kw">const</span> info = <span class="kw">await</span> client.rpcJson(<span class="str">'/abci_info'</span>);
+console.log(info.result?.response?.last_block_height);</pre>
+      </div>
+    </div>
+
+    <div id="rpc-py-sdk" class="tab-panel">
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="kw">from</span> arkeo_client <span class="kw">import</span> ArkeoClient
+
+client = ArkeoClient(
+    sentinel_url=<span class="str">'https://sentinel.example.com'</span>,
+    contract_id=<span class="num">942</span>,
+    private_key=<span class="str">'your_hex_private_key'</span>,
+    service=<span class="str">'arkeo-mainnet-fullnode'</span>,
+    start_nonce=<span class="num">1</span>
+)
+
+<span class="cm"># Get node status</span>
+status = client.rpc_json(<span class="str">'/status'</span>)
+print(status)
+
+<span class="cm"># Get block at height 1000</span>
+block = client.rpc_json(<span class="str">'/block?height=1000'</span>)
+print(block[<span class="str">'result'</span>][<span class="str">'block'</span>][<span class="str">'header'</span>][<span class="str">'height'</span>])</pre>
+      </div>
+    </div>
+
+    <div id="rpc-curl" class="tab-panel">
+      <p>Build the arkauth string manually (see Step 2), then pass it as a query parameter:</p>
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="cm"># Replace ARKAUTH with your signed token</span>
+ARKAUTH="942:arkeopub1addwnpepq...:1:a1b2c3..."
+
+curl "https://sentinel.example.com/arkeo-mainnet-fullnode/status?arkauth=${ARKAUTH}"</pre>
+      </div>
+    </div>
+
+    <!-- Step 4: Nonce handling -->
+    <h2><span class="step-number">4</span> Nonce Handling</h2>
+
+    <p>Nonces must strictly increment. If you restart your app, query the chain for the current nonce to avoid "bad nonce" errors.</p>
+
+    <div class="warn-box">
+      Never reuse a nonce. Sentinels track nonces per-contract and will reject duplicate or out-of-order requests.
+    </div>
+
+    <div class="tab-row">
+      <button class="tab-btn active" onclick="switchTab('nonce', 'js-nonce')">JavaScript</button>
+      <button class="tab-btn" onclick="switchTab('nonce', 'py-nonce')">Python</button>
+    </div>
+
+    <div id="nonce-js-nonce" class="tab-panel active">
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="cm">// Fetch current nonce from chain before starting</span>
+<span class="kw">async function</span> <span class="fn">getStartNonce</span>(contractId) {
+  <span class="kw">const</span> resp = <span class="kw">await</span> fetch(
+    `https://rest-seed.arkeo.network/arkeo/contract/${contractId}`
+  );
+  <span class="kw">if</span> (!resp.ok) <span class="kw">return</span> <span class="num">1</span>;
+  <span class="kw">const</span> data = <span class="kw">await</span> resp.json();
+  <span class="kw">return</span> parseInt(data.contract?.nonce || <span class="str">'0'</span>) + <span class="num">1</span>;
+}
+
+<span class="kw">const</span> startNonce = <span class="kw">await</span> getStartNonce(<span class="num">942</span>);
+<span class="kw">const</span> client = <span class="kw">new</span> ArkeoClient({
+  sentinelUrl: <span class="str">'https://sentinel.example.com'</span>,
+  contractId: <span class="num">942</span>,
+  privateKey: <span class="str">'your_private_key'</span>,
+  service: <span class="str">'arkeo-mainnet-fullnode'</span>,
+  startNonce   <span class="cm">// resume from correct nonce</span>
+});
+
+<span class="cm">// Persist nonce across restarts:</span>
+<span class="cm">// const saved = JSON.parse(fs.readFileSync('nonce.json'));</span>
+<span class="cm">// client.setNonce(saved.nonce);</span>
+<span class="cm">// ... after each batch: fs.writeFileSync('nonce.json', JSON.stringify({nonce: client.getNonce()}));</span></pre>
+      </div>
+    </div>
+
+    <div id="nonce-py-nonce" class="tab-panel">
+      <div class="code-block">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <pre><span class="kw">import</span> requests, json, os
+
+<span class="kw">def</span> <span class="fn">get_start_nonce</span>(contract_id):
+    resp = requests.get(
+        f<span class="str">"https://rest-seed.arkeo.network/arkeo/contract/{contract_id}"</span>
+    )
+    <span class="kw">if not</span> resp.ok: <span class="kw">return</span> <span class="num">1</span>
+    data = resp.json()
+    nonce = int(data.get(<span class="str">'contract'</span>, {}).get(<span class="str">'nonce'</span>, <span class="num">0</span>))
+    <span class="kw">return</span> nonce + <span class="num">1</span>
+
+<span class="cm"># Or load from local state file:</span>
+NONCE_FILE = <span class="str">'nonce_state.json'</span>
+<span class="kw">def</span> <span class="fn">load_nonce</span>():
+    <span class="kw">if</span> os.path.exists(NONCE_FILE):
+        <span class="kw">return</span> json.load(open(NONCE_FILE))[<span class="str">'nonce'</span>]
+    <span class="kw">return</span> get_start_nonce(<span class="num">942</span>)
+
+<span class="kw">def</span> <span class="fn">save_nonce</span>(nonce):
+    json.dump({<span class="str">'nonce'</span>: nonce}, open(NONCE_FILE, <span class="str">'w'</span>))
+
+start = load_nonce()
+client = ArkeoClient(..., start_nonce=start)
+<span class="cm"># After requests: save_nonce(client.get_nonce())</span></pre>
+      </div>
+    </div>
+
+    <!-- Quick test script -->
+    <h2><span class="step-number">5</span> Run the Quick Test</h2>
+    <p>Use the included <code>quick-test.mjs</code> to verify your setup. It auto-fetches the current nonce from chain.</p>
+    <div class="code-block">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <pre><span class="cm"># From the sdk/ directory</span>
+cd sdk
+node quick-test.mjs &lt;contract_id&gt; &lt;private_key_hex&gt;
+
+<span class="cm"># Example:</span>
+node quick-test.mjs 942 0abc123def...</pre>
+    </div>
+
+    <!-- Troubleshooting -->
+    <h2>Troubleshooting</h2>
+    <div class="card">
+      <h3>"bad nonce" error</h3>
+      <p>Your nonce is behind what the sentinel expects. Fetch the current nonce from the chain (see Step 4) and set your client to <code>chainNonce + 1</code>.</p>
+    </div>
+    <div class="card">
+      <h3>"invalid signature" error</h3>
+      <p>Check that your private key matches the address that opened the contract. Verify the contract ID is correct. Ensure you are signing the preimage in the exact format: <code>contractId:pubkeyBech32:nonce</code>.</p>
+    </div>
+    <div class="card">
+      <h3>"unauthorized" or HTTP 401</h3>
+      <p>Your contract may be expired or the deposit is fully consumed. Check your contract balance on the <a href="../data.html">provider directory</a> or by querying the REST API.</p>
+    </div>
+    <div class="card">
+      <h3>Connection refused</h3>
+      <p>Verify the sentinel URL is correct and the service name matches your contract. Check the provider directory for the correct sentinel URL.</p>
+    </div>
+
+    <!-- Links -->
+    <div style="margin-top:2rem;display:flex;gap:0.75rem;flex-wrap:wrap;">
+      <a href="../subscribe.html" style="background:var(--arkeo);color:#000;padding:0.6rem 1.25rem;border-radius:0.5rem;text-decoration:none;font-weight:600;font-size:0.875rem;">Open a Contract</a>
+      <a href="../data.html" style="border:1px solid var(--arkeo);color:var(--arkeo);padding:0.6rem 1.25rem;border-radius:0.5rem;text-decoration:none;font-weight:600;font-size:0.875rem;">Browse Providers</a>
+      <a href="sdk/README.md" style="border:1px solid var(--border);color:var(--text-dim);padding:0.6rem 1.25rem;border-radius:0.5rem;text-decoration:none;font-weight:600;font-size:0.875rem;">Full README</a>
+    </div>
+
+  </div><!-- /container -->
+
+  <footer>
+    <div style="margin-bottom:0.5rem;">
+      <a href="https://twitter.com/arkaboreal" target="_blank">Twitter</a> ·
+      <a href="https://discord.gg/arkeo" target="_blank">Discord</a> ·
+      <a href="https://github.com/arkeonetwork" target="_blank">GitHub</a>
+    </div>
+    Arkeo Network. Decentralized data infrastructure
+  </footer>
+
+  <script>
+    function switchTab(group, tab) {
+      // Deactivate all panels and buttons in group
+      document.querySelectorAll(`[id^="${group}-"]`).forEach(el => el.classList.remove('active'));
+      // Find parent tab-row and deactivate its buttons
+      const btn = event.target;
+      if (btn.closest('.tab-row')) {
+        btn.closest('.tab-row').querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      const panel = document.getElementById(`${group}-${tab}`);
+      if (panel) panel.classList.add('active');
+    }
+
+    function copyCode(btn) {
+      const pre = btn.parentElement.querySelector('pre');
+      if (!pre) return;
+      navigator.clipboard.writeText(pre.textContent).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = orig, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

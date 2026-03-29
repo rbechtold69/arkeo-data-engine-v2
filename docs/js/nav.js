@@ -27,8 +27,10 @@ function injectNav() {
             <div class="an-dropdown-menu">
               <a href="data.html">Provider Directory</a>
               <a href="subscribe.html">Subscribe / Buy Data</a>
+              <a href="pricing-guide.html">PAYG Pricing Guide</a>
               <a href="agents.html">AI Agents</a>
               <a href="test-arkauth.html">Test Connection</a>
+              <a href="sdk/quick-start.html">SDK Quick-Start</a>
             </div>
           </div>
 
@@ -53,6 +55,14 @@ function injectNav() {
             </div>
           </div>
 
+          <div class="an-dropdown">
+            <a href="index.html" class="an-link ${isActive('community')}">Community ▾</a>
+            <div class="an-dropdown-menu">
+              <a href="submit-frontend.html">Submit a Frontend</a>
+              <a href="frontend-trust.html">Trust &amp; Verification</a>
+            </div>
+          </div>
+
           <a href="https://docs.arkeo.network" target="_blank" rel="noopener" class="an-link">Docs</a>
         </div>
 
@@ -68,8 +78,10 @@ function injectNav() {
           <div class="an-mobile-label">Data</div>
           <a href="data.html">Provider Directory</a>
           <a href="subscribe.html">Subscribe / Buy Data</a>
+          <a href="pricing-guide.html">PAYG Pricing Guide</a>
           <a href="agents.html">AI Agents</a>
           <a href="test-arkauth.html">Test Connection</a>
+          <a href="sdk/quick-start.html">SDK Quick-Start</a>
         </div>
         <div class="an-mobile-section">
           <div class="an-mobile-label">Providers</div>
@@ -84,6 +96,11 @@ function injectNav() {
           <a href="request-chain.html">Request a Chain</a>
           <a href="my-contracts.html">My Contracts</a>
           <a href="x402-setup.html">x402 Payments</a>
+        </div>
+        <div class="an-mobile-section">
+          <div class="an-mobile-label">Community</div>
+          <a href="submit-frontend.html">Submit a Frontend</a>
+          <a href="frontend-trust.html">Trust &amp; Verification</a>
         </div>
         <div class="an-mobile-section">
           <a href="https://docs.arkeo.network" target="_blank">Docs</a>
