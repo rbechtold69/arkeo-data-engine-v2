@@ -65,7 +65,7 @@ WebSocket session recovery.
 
 - Build pinned chain/sentinel and container images; record exact commits/digests.
   Candidate Dockerfiles pin the companion fork commit
-  `e061e93c678a6f026c56652b75c777bfb79d6ce1`. Coordinate any revision with the
+  `e4830e6e4f0d4792aceff571c26392de942be784`. Coordinate any revision with the
   chain pull request; successful image builds and digest pinning are still required.
 - Run Go/race tests for sentinel and claim settlement. Go and Docker execution
   were unavailable in the audit environment.

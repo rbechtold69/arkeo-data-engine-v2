@@ -7,7 +7,7 @@ WORKDIR /src
 
 # Reproducible candidate source; coordinate changes with the sentinel review.
 ARG ARKEO_REPOSITORY=https://github.com/rbechtold69/arkeo.git
-ARG ARKEO_REF=e061e93c678a6f026c56652b75c777bfb79d6ce1
+ARG ARKEO_REF=e4830e6e4f0d4792aceff571c26392de942be784
 RUN git init arkeo && cd arkeo \
     && git remote add origin "${ARKEO_REPOSITORY}" \
     && git fetch --depth 1 origin "${ARKEO_REF}" \
