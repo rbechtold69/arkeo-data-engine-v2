@@ -144,3 +144,19 @@ freshness responses, failure-domain ownership, baseline and sustained-load laten
 primary/secondary/all-down results, stale/wrong-network rejections, ambiguous-write
 reconciliation, successful settlement, restart/restore, and gateway failover. No
 production merge, deployment or transfer is authorized by this document.
+
+## Additional browser and billing restrictions
+
+Transaction encoders now preserve 64-bit IDs/nonces from decimal strings and
+zero-valued subscription/offline enums. The browser protobuf dependency is pinned
+to 7.6.6 with an integrity hash; dynamic script origins must match exactly and have
+an integrity pin. Keplr `signArbitrary` uses ADR-036, which is incompatible with the
+current raw PAYG settlement preimage. Its PAYG adapter now rejects this unsupported
+flow before prompting the wallet. This does not disable on-chain `signDirect`
+transactions. See https://docs.keplr.app/api/guide/sign-arbitrary.
+
+The optional x402 billing bridge is disabled by default. Its duplicate signer and
+volatile counters were removed in favor of a dedicated local subscriber. It still
+requires separate dependency packaging and approved facilitator/funded acceptance;
+it is not part of the gateway readiness result. Public marketplace transaction
+wizards also require wallet interaction and chain acceptance tests before use.

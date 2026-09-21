@@ -7,136 +7,30 @@ import { registerExactEvmScheme } from "@x402/evm/exact/server";
 import { createFacilitatorConfig } from "@coinbase/x402";
 import { bazaarResourceServerExtension, declareDiscoveryExtension } from "@x402/extensions/bazaar";
 import http from "http";
-import crypto from "crypto";
+
 
 const app = express();
-const PORT = 3637;
-const SENTINEL_PORT = 3636;
-const PAY_TO = "0xd5e0fAA9905b91B9b89f1703C1C228120Bc54E61";
-
-// CDP API Keys for mainnet facilitator
+// This optional billing bridge is excluded from the institutional pilot until
+// facilitator settlement, refunds and the operator's account are tested.
+if (process.env.ARKEO_ENABLE_EXPERIMENTAL_X402 !== 'true') {
+  throw new Error('x402 is disabled pending separate payment acceptance testing');
+}
+const PORT = Number(process.env.X402_PORT || 3637);
+const PAY_TO = process.env.X402_PAY_TO || '';
 const CDP_API_KEY_ID = process.env.CDP_API_KEY_ID;
 const CDP_API_KEY_SECRET = process.env.CDP_API_KEY_SECRET;
-
-// === ARKEO CONTRACT INTEGRATION ===
-// x402 payments flow through an ARKEO PAYG contract so the 10% reserve tax applies
-// and every query creates on-chain settlement
-const ARKEO_CONTRACT_ID = parseInt(process.env.X402_ARKEO_CONTRACT_ID || "0");
-const ARKEO_SIGNING_KEY = process.env.X402_ARKEO_SIGNING_KEY || "";
-const ARKEO_SERVICE = process.env.X402_ARKEO_SERVICE || "arkeo-mainnet-fullnode";
-const ARKEO_CHAIN_ID = process.env.X402_ARKEO_CHAIN_ID || "arkeo-main-v1";
-
-// Simple arkauth generator (matches sentinel_auth.go format)
-// Format: contractId:nonce:chainId:signature
-let currentNonce = 0;
-let signingKeyBytes = null;
-let publicKeyBech32 = "";
-
-async function initArkeoAuth() {
-  if (!ARKEO_CONTRACT_ID || !ARKEO_SIGNING_KEY) {
-    console.log("⚠️  No ARKEO contract configured — x402 queries will use free tier");
-    return;
-  }
-
-  try {
-    signingKeyBytes = Buffer.from(ARKEO_SIGNING_KEY, "hex");
-    
-    // Fetch current nonce from sentinel
-    try {
-      const res = await fetch(`http://127.0.0.1:${SENTINEL_PORT}/claim/${ARKEO_CONTRACT_ID}`);
-      if (res.ok) {
-        const claim = await res.json();
-        currentNonce = (claim.nonce || 0) + 1;
-        console.log(`📡 Loaded nonce from sentinel: starting at ${currentNonce}`);
-      }
-    } catch (e) {
-      console.log("⚠️  Could not fetch nonce from sentinel, starting at 1");
-      currentNonce = 1;
-    }
-
-    console.log(`✅ ARKEO contract integration active:`);
-    console.log(`   Contract ID: ${ARKEO_CONTRACT_ID}`);
-    console.log(`   Service: ${ARKEO_SERVICE}`);
-    console.log(`   Starting nonce: ${currentNonce}`);
-    console.log(`   → 10% reserve tax applies to every x402 query`);
-  } catch (e) {
-    console.error("❌ Failed to init ARKEO auth:", e.message);
-  }
+const UPSTREAM = new URL(process.env.X402_SUBSCRIBER_URL || 'http://127.0.0.1:62001/');
+if (!/^0x[0-9a-fA-F]{40}$/.test(PAY_TO) || !CDP_API_KEY_ID || !CDP_API_KEY_SECRET) throw new Error('Explicit payment recipient and facilitator credentials required');
+if (UPSTREAM.protocol !== 'http:' || !['127.0.0.1','[::1]'].includes(UPSTREAM.hostname) || UPSTREAM.username || UPSTREAM.password || UPSTREAM.search || UPSTREAM.hash) {
+  throw new Error('Use a dedicated loopback subscriber listener');
 }
-
-async function generateArkAuth() {
-  if (!signingKeyBytes || !ARKEO_CONTRACT_ID) return null;
-
-  try {
-    const { secp256k1 } = await import("@noble/curves/secp256k1");
-    
-    const nonce = currentNonce++;
-    
-    // Sign preimage matching SDK format: "{contractId}:{nonce}:" (trailing colon)
-    const preimage = `${ARKEO_CONTRACT_ID}:${nonce}:`;
-    const preimageBytes = new TextEncoder().encode(preimage);
-    
-    // Sign raw bytes (same as SDK)
-    const sig = secp256k1.sign(preimageBytes, signingKeyBytes, { lowS: true });
-    const sigHex = Buffer.from(sig.toCompactRawBytes()).toString("hex");
-    
-    // Get compressed public key and bech32 encode it
-    const pubKeyBytes = secp256k1.getPublicKey(signingKeyBytes, true);
-    
-    // Bech32 encode: amino prefix (eb5ae98721) + compressed pubkey
-    const aminoPrefix = Buffer.from("eb5ae98721", "hex");
-    const bech32PubKey = bech32Encode("arkeopub", Buffer.concat([aminoPrefix, Buffer.from(pubKeyBytes)]));
-    
-    // 4-part arkauth format: contractId:pubkey:nonce:signature
-    return `${ARKEO_CONTRACT_ID}:${bech32PubKey}:${nonce}:${sigHex}`;
-  } catch (e) {
-    console.error("Failed to generate arkauth:", e.message);
-    return null;
-  }
-}
-
-// Bech32 encoding
-function bech32Encode(prefix, data) {
-  const CHARSET = "qpzry9x8gf2tvdw0s3jn54khce6mua7l";
-  function polymod(values) {
-    const GEN = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
-    let chk = 1;
-    for (const v of values) {
-      const b = chk >> 25;
-      chk = ((chk & 0x1ffffff) << 5) ^ v;
-      for (let i = 0; i < 5; i++) if ((b >> i) & 1) chk ^= GEN[i];
-    }
-    return chk;
-  }
-  function hrpExpand(hrp) {
-    const ret = [];
-    for (const c of hrp) ret.push(c.charCodeAt(0) >> 5);
-    ret.push(0);
-    for (const c of hrp) ret.push(c.charCodeAt(0) & 31);
-    return ret;
-  }
-  function convertBits(data, fromBits, toBits, pad) {
-    let acc = 0, bits = 0;
-    const ret = [];
-    const maxv = (1 << toBits) - 1;
-    for (const value of data) {
-      acc = (acc << fromBits) | value;
-      bits += fromBits;
-      while (bits >= toBits) {
-        bits -= toBits;
-        ret.push((acc >> bits) & maxv);
-      }
-    }
-    if (pad && bits > 0) ret.push((acc << (toBits - bits)) & maxv);
-    return ret;
-  }
-  const words = convertBits(data, 8, 5, true);
-  const chkData = [...hrpExpand(prefix), ...words];
-  const pm = polymod([...chkData, 0, 0, 0, 0, 0, 0]) ^ 1;
-  const checksum = [];
-  for (let i = 0; i < 6; i++) checksum.push((pm >> (5 * (5 - i))) & 31);
-  return prefix + "1" + [...words, ...checksum].map(d => CHARSET[d]).join("");
-}
+// All accepted routes must pass through paymentMiddleware. Never expose a
+// wildcard path that can reach an unpaid management or funded subscriber route.
+app.use((req,res,next) => {
+  if (req.path !== '/' || !['GET','POST'].includes(req.method)) return res.status(404).end();
+  next();
+});
+app.use(express.raw({type:()=>true,limit:'1mb'}));
 
 // Rate limiting — 100 requests per minute per IP
 const limiter = rateLimit({
@@ -206,7 +100,7 @@ const paymentConfig = {
       payTo: PAY_TO,
     },
   ],
-  description: "Arkeo Decentralized RPC — permissionless blockchain data access. Powered by ARKEO token economics with 10% protocol reserve. Pay per request with USDC on Base.",
+  description: "Arkeo Decentralized RPC — permissionless blockchain data access. Pay per request with USDC on Base. Arkeo payment handling is delegated to the configured subscriber.",
   mimeType: "application/json",
   extensions: {
     ...bazaarDiscovery,
@@ -223,51 +117,29 @@ app.use(
   ),
 );
 
-// Proxy all paid requests to the sentinel WITH arkauth
-app.use(async (req, res) => {
-  // Generate arkauth for this query (ties it to ARKEO contract)
-  let arkAuthParam = "";
-  if (ARKEO_CONTRACT_ID) {
-    const arkauth = await generateArkAuth();
-    if (arkauth) {
-      arkAuthParam = `${req.originalUrl.includes("?") ? "&" : "?"}arkauth=${encodeURIComponent(arkauth)}`;
-    }
+// The subscriber owns contract authorization, durable nonces and safe routing.
+// Do not implement a second, incompatible signer in this payment bridge.
+app.use((req, res) => {
+  const target = new URL(UPSTREAM);
+  const incoming = new URL(req.originalUrl, 'http://localhost');
+  for (const [key,value] of incoming.searchParams) {
+    if (!['arkauth','arkcontract'].includes(key.toLowerCase())) target.searchParams.append(key,value);
   }
-
-  // Route through the service path if ARKEO contract is configured
-  const servicePath = ARKEO_CONTRACT_ID ? `/${ARKEO_SERVICE}` : "";
-  const targetPath = `${servicePath}${req.originalUrl}${arkAuthParam}`;
-
-  const options = {
-    hostname: "127.0.0.1",
-    port: SENTINEL_PORT,
-    path: targetPath,
-    method: req.method,
-    headers: { ...req.headers, host: "localhost:" + SENTINEL_PORT },
-  };
-
-  const proxyReq = http.request(options, (proxyRes) => {
-    // If sentinel rejects (bad nonce, rate limit), pass through the error
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
-    proxyRes.pipe(res);
+  const proxyReq = http.request(target, {
+    method:req.method,
+    headers:{'Content-Type':req.headers['content-type'] || 'application/json','Accept':'application/json'},
+    timeout:10000,
+  }, proxyRes => {
+    // Buffer a bounded response so failure cannot be returned as partial success.
+    const chunks=[]; let size=0;
+    proxyRes.on('data',chunk=>{size+=chunk.length;if(size>16*1024*1024)proxyRes.destroy(new Error('response too large'));else chunks.push(chunk);});
+    proxyRes.on('end',()=>res.status(proxyRes.statusCode || 502).type(proxyRes.headers['content-type'] || 'application/json').send(Buffer.concat(chunks)));
+    proxyRes.on('error',()=>{if(!res.headersSent)res.status(502).json({error:'Subscriber response unavailable'});});
   });
-
-  proxyReq.on("error", (err) => {
-    res.status(502).json({ error: "Sentinel unavailable", details: err.message });
-  });
-
-  req.pipe(proxyReq);
+  proxyReq.on('timeout',()=>proxyReq.destroy(new Error('timeout')));
+  proxyReq.on('error',()=>{if(!res.headersSent)res.status(502).json({error:'Subscriber unavailable'});});
+  req.on('aborted',()=>proxyReq.destroy());
+  proxyReq.end(Buffer.isBuffer(req.body)?req.body:undefined);
 });
 
-// Initialize ARKEO auth and start server
-await initArkeoAuth();
-
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`\n🚀 x402 proxy listening on port ${PORT} [BASE MAINNET + ARKEO]`);
-  console.log(`   Rate limit: 100 req/min per IP`);
-  console.log(`   Proxying to sentinel on port ${SENTINEL_PORT}`);
-  console.log(`   USDC payments go to: ${PAY_TO}`);
-  if (ARKEO_CONTRACT_ID) {
-    console.log(`   ARKEO contract: ${ARKEO_CONTRACT_ID} (10% reserve tax active)`);
-  }
-});
+app.listen(PORT,'127.0.0.1',()=>console.log(`Experimental x402 bridge listening on loopback port ${PORT}`));
