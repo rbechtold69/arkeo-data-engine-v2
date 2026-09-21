@@ -65,10 +65,11 @@ WebSocket session recovery.
 
 - Build pinned chain/sentinel and container images; record exact commits/digests.
   Candidate Dockerfiles pin the companion fork commit
-  `e4830e6e4f0d4792aceff571c26392de942be784`. Coordinate any revision with the
+  `9773a23137916f76cd9b38d1ca6181bac8f7f4cc`. Coordinate any revision with the
   chain pull request; successful image builds and digest pinning are still required.
-- Run Go/race tests for sentinel and claim settlement. Go and Docker execution
-  were unavailable in the audit environment.
+- Run Go/race tests for sentinel and claim settlement. The targeted Go race suite and the three candidate container builds have
+  passed in GitHub CI; local Go/Docker execution was unavailable. Recheck final
+  commits and retain run links and image digests before any release.
 - Confirm live endpoints, service IDs, path mapping, certificates, provider terms
   and independent failure domains. Public checks from the audit environment were
   inconclusive, not evidence that the providers are down.
