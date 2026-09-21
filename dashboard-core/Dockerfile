@@ -1,15 +1,17 @@
 # ---------- Stage 1: build arkeod and helper tools ----------
-FROM golang:1.22 AS builder
+FROM golang:1.24 AS builder
 
 RUN apt-get update && apt-get install -y git make build-essential curl jq && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
-# Clone Arkeo source (pin to master by default)
-ARG ARKEO_REF=master
-# Cache-bust when upstream moves so "latest" stays up to date for the selected ref.
-ADD https://api.github.com/repos/arkeonetwork/arkeo/commits/${ARKEO_REF} /tmp/arkeo_ref.json
-RUN git clone --branch ${ARKEO_REF} --single-branch --depth 1 https://github.com/arkeonetwork/arkeo.git
+# Reproducible candidate source; coordinate changes with the sentinel review.
+ARG ARKEO_REPOSITORY=https://github.com/rbechtold69/arkeo.git
+ARG ARKEO_REF=e061e93c678a6f026c56652b75c777bfb79d6ce1
+RUN git init arkeo && cd arkeo \
+    && git remote add origin "${ARKEO_REPOSITORY}" \
+    && git fetch --depth 1 origin "${ARKEO_REF}" \
+    && git checkout --detach FETCH_HEAD
 
 WORKDIR /src/arkeo
 
@@ -29,7 +31,7 @@ COPY tailwind.config.cjs /frontend/tailwind.config.cjs
 COPY admin/index.html /frontend/admin/index.html
 COPY admin/src/ /frontend/admin/src/
 
-RUN npm install
+RUN npm ci --ignore-scripts
 RUN npm run build
 
 # ---------- Stage 3: runtime container ----------

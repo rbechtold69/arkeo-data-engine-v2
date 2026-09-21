@@ -1,13 +1,17 @@
 # ---------- Stage 1: build arkeod, api, indexer, sentinel, tools ----------
-FROM golang:1.22 AS builder
+FROM golang:1.24 AS builder
 
 RUN apt-get update && apt-get install -y git make build-essential curl jq && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
-# Clone latest Arkeo source (public repo)
-ARG ARKEO_REF=master
-RUN git clone --branch "${ARKEO_REF}" --depth 1 --single-branch https://github.com/arkeonetwork/arkeo.git
+# Reproducible candidate source; coordinate changes with the sentinel review.
+ARG ARKEO_REPOSITORY=https://github.com/rbechtold69/arkeo.git
+ARG ARKEO_REF=e061e93c678a6f026c56652b75c777bfb79d6ce1
+RUN git init arkeo && cd arkeo \
+    && git remote add origin "${ARKEO_REPOSITORY}" \
+    && git fetch --depth 1 origin "${ARKEO_REF}" \
+    && git checkout --detach FETCH_HEAD
 
 WORKDIR /src/arkeo
 
@@ -30,7 +34,7 @@ FROM node:20-bullseye AS ui-builder
 WORKDIR /app/admin
 
 COPY admin/package*.json ./
-RUN npm install
+RUN npm ci --ignore-scripts
 COPY admin/src ./src
 RUN mkdir -p vendor && npm run build
 

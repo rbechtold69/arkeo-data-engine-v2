@@ -19,6 +19,7 @@ import threading
 import uuid
 from contextlib import contextmanager
 from flask import Flask, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
 
 app = Flask(__name__)
 # Configure logging to stdout at INFO so supervisor captures our app logs
@@ -2372,22 +2373,23 @@ def _auth_exempt(path: str) -> bool:
         return True
     # Allow specific internal endpoints regardless of auth (used by background jobs/cron)
     if path in internal_exempt:
-        return True
+        return _is_local_request()
     return False
 
 
 @app.before_request
 def _require_auth():
-    """Require session auth when admin password is set."""
+    """Fail closed until an operator initializes a password locally."""
+    origin = request.headers.get("Origin")
+    if origin and not _origin_allowed(origin):
+        return jsonify({"error": "origin_not_allowed"}), 403
     if request.method == "OPTIONS":
-        resp = app.make_response(("", 204, _cors_headers()))
-        return resp
+        return app.make_response(("", 204, _cors_headers()))
     if _auth_exempt(request.path):
         return
     if not _is_auth_required():
-        return
-    token = request.cookies.get(ADMIN_SESSION_NAME)
-    if _validate_session(token):
+        return jsonify({"error": "admin_setup_required"}), 503
+    if _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
         return
     return jsonify({"error": "unauthorized"}), 401
 
@@ -4437,15 +4439,28 @@ def _load_admin_password() -> str:
 
 
 def _write_admin_password(password: str) -> bool:
-    """Persist admin password (atomic write); returns True on success."""
+    """Store a salted password hash in an owner-only file."""
     if not ADMIN_PASSWORD_PATH:
         return False
     try:
-        _atomic_write(ADMIN_PASSWORD_PATH, password.strip())
+        os.makedirs(os.path.dirname(ADMIN_PASSWORD_PATH) or ".", exist_ok=True)
+        fd = os.open(ADMIN_PASSWORD_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(generate_password_hash(password.strip()))
         return True
-    except OSError as e:
-        app.logger.error("_write_admin_password failed: %s", e)
+    except OSError:
         return False
+
+
+def _verify_admin_password(stored: str, submitted: str) -> bool:
+    if stored.startswith(("scrypt:", "pbkdf2:")):
+        try:
+            return check_password_hash(stored, submitted)
+        except (ValueError, TypeError):
+            return False
+    # Preserve access for existing installs; migrate legacy plaintext after login.
+    return secrets.compare_digest(stored, submitted)
 
 
 def _remove_admin_password() -> bool:
@@ -4498,39 +4513,33 @@ def _validate_session(token: str | None) -> bool:
 def _origin_allowed(origin: str | None) -> bool:
     if not origin:
         return False
-    try:
-        parsed = urllib.parse.urlparse(origin)
-    except Exception:
-        return False
-    origin_host = parsed.netloc or parsed.path
-    if not origin_host:
-        return False
-    try:
-        ui_parsed = urllib.parse.urlparse(ADMIN_UI_ORIGIN)
-        ui_host = ui_parsed.netloc or ui_parsed.path
-        if origin_host == ui_host:
-            return True
-    except Exception:
-        pass
-    # Allow same host as API
-    api_host = request.host.split(":")[0] if request.host else ""
-    if api_host and origin_host.startswith(api_host):
-        return True
-    return False
+    # Compare full origins, never hostname prefixes or arbitrary reflected input.
+    def canonical(value):
+        try:
+            u = urllib.parse.urlsplit(value)
+            if u.scheme not in ("http", "https") or not u.hostname or u.username or u.password:
+                return None
+            if u.path not in ("", "/") or u.query or u.fragment:
+                return None
+            return (u.scheme, u.hostname.lower(), u.port or (443 if u.scheme == "https" else 80))
+        except ValueError:
+            return None
+    candidate = canonical(origin)
+    return candidate is not None and candidate in (canonical(ADMIN_UI_ORIGIN), canonical(request.host_url))
 
 
 def _cors_headers():
     origin = request.headers.get("Origin")
-    headers = {}
-    allow_origin = origin or ADMIN_UI_ORIGIN
-    if allow_origin:
-        headers["Access-Control-Allow-Origin"] = allow_origin
-        headers["Vary"] = "Origin"
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Cache-Control"
-        headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
-        headers["Access-Control-Max-Age"] = "3600"
-    return headers
+    if not _origin_allowed(origin):
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Vary": "Origin",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+        "Access-Control-Max-Age": "3600",
+    }
 
 
 def _default_provider_settings() -> dict:
@@ -4683,7 +4692,6 @@ def _get_provider_settings_snapshot() -> dict:
 
 # Apply persisted provider settings at import time (if present)
 _apply_provider_settings(_merge_provider_settings())
-threading.Thread(target=_emit_startup_telemetry, daemon=True).start()
 
 
 def _mnemonic_file_path(settings: dict | None = None) -> str:
@@ -5446,30 +5454,28 @@ def provider_settings_save():
 
 @app.get("/api/admin-password")
 def admin_password_get():
-    """Return whether an admin password is set and the current value (for local UI use)."""
-    pwd = _load_admin_password()
-    return jsonify({"enabled": bool(pwd), "path": ADMIN_PASSWORD_PATH, "password": pwd})
+    """Public setup status only. Never return a password or its hash."""
+    return jsonify({"enabled": bool(_load_admin_password())})
 
 
 @app.post("/api/admin-password")
 def admin_password_set():
-    """Set or clear admin password (empty disables)."""
     payload = request.get_json(force=True, silent=True) or {}
     password = (payload.get("password") or "").strip() if isinstance(payload, dict) else ""
     if _is_auth_required():
-        # If a password is set, require valid session to change it
-        token = request.cookies.get(ADMIN_SESSION_NAME)
-        if not _validate_session(token):
+        if not _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
             return jsonify({"error": "unauthorized"}), 401
-    if not password:
-        ok = _remove_admin_password()
-        with SESSIONS_LOCK:
-            ADMIN_SESSIONS.clear()
-        return jsonify({"status": "disabled", "enabled": False, "ok": ok, "path": ADMIN_PASSWORD_PATH})
-    ok = _write_admin_password(password)
-    if not ok:
-        return jsonify({"error": "failed to write admin password", "path": ADMIN_PASSWORD_PATH}), 500
-    return jsonify({"status": "saved", "enabled": True, "ok": True, "path": ADMIN_PASSWORD_PATH})
+    else:
+        setup_token = os.getenv("ADMIN_SETUP_TOKEN", "")
+        supplied_token = request.headers.get("X-Admin-Setup-Token", "")
+        if not _is_local_request() or len(setup_token) < 32 or not secrets.compare_digest(setup_token, supplied_token):
+            return jsonify({"error": "local_setup_token_required"}), 403
+    if len(password) < 12:
+        return jsonify({"error": "password_must_have_at_least_12_characters"}), 400
+    if not _write_admin_password(password):
+        return jsonify({"error": "failed_to_write_admin_password"}), 500
+    ADMIN_SESSIONS.clear()
+    return jsonify({"status": "saved", "enabled": True, "ok": True})
 
 
 @app.post("/api/admin-password/check")
@@ -5480,7 +5486,7 @@ def admin_password_check():
     stored = _load_admin_password()
     if not stored:
         return jsonify({"ok": True, "enabled": False})
-    ok = stored == submitted
+    ok = _verify_admin_password(stored, submitted)
     return jsonify({"ok": ok, "enabled": True})
 
 
@@ -5494,15 +5500,18 @@ def admin_login():
         # If no password set, treat as open and do not set a session
         resp = jsonify({"ok": True, "enabled": False})
         return resp
-    if submitted != stored:
+    if not _verify_admin_password(stored, submitted):
         return jsonify({"ok": False, "enabled": True, "error": "invalid_password"}), 401
+    if not stored.startswith(("scrypt:", "pbkdf2:")):
+        if not _write_admin_password(submitted):
+            return jsonify({"error": "password_migration_failed"}), 503
     token = _generate_session_token()
     resp = jsonify({"ok": True, "enabled": True})
     resp.set_cookie(
         ADMIN_SESSION_NAME,
         token,
         httponly=True,
-        secure=False,
+        secure=request.is_secure or os.getenv("ADMIN_COOKIE_SECURE", "").lower() == "true",
         samesite="Lax",
         max_age=3600,
         path="/",
@@ -5525,7 +5534,7 @@ def admin_logout():
 def admin_session_status():
     """Return whether auth is enabled and whether current session is valid."""
     enabled = _is_auth_required()
-    authed = _validate_session(request.cookies.get(ADMIN_SESSION_NAME)) if enabled else True
+    authed = _validate_session(request.cookies.get(ADMIN_SESSION_NAME)) if enabled else False
     return jsonify({"enabled": enabled, "authed": authed})
 
 
@@ -6099,6 +6108,8 @@ def provider_claims():
                     except Exception:
                         tx_json = {"raw": tx_out}
 
+            # Re-read hash after a possible sequence-mismatch resubmission.
+            txhash = (tx_json.get("txhash") or tx_json.get("hash") or "") if isinstance(tx_json, dict) else ""
             # Poll for deliver_tx result if we have a txhash (since sync mode only gives CheckTx)
             deliver_code = None
             deliver_raw = ""
@@ -6123,14 +6134,15 @@ def provider_claims():
 
             # Mark claimed on sentinel if success code=0
             code_val = tx_json.get("code") if isinstance(tx_json, dict) else None
-            effective_code = deliver_code if deliver_code is not None else code_val
-            if effective_code == 0:
+            # CheckTx=0 only means accepted into mempool, not settled on-chain.
+            effective_code = deliver_code
+            if exit_code == 0 and deliver_code == 0 and str(deliver_height).isdigit() and int(deliver_height) > 0:
                 def _mark_claimed():
                     req = urllib.request.Request(
                         f"{sentinel_api}/mark-claimed",
                         method="POST",
                         data=json.dumps({"contract_id": contract_id, "nonce": nonce}).encode("utf-8"),
-                        headers={"Content-Type": "application/json"},
+                        headers={"Content-Type": "application/json", "Authorization": "Bearer " + os.getenv("SENTINEL_ADMIN_TOKEN", "")},
                     )
                     urllib.request.urlopen(req, timeout=5).read()
 
@@ -7029,4 +7041,5 @@ def provider_totals():
 
 
 if __name__ == "__main__":
+    threading.Thread(target=_emit_startup_telemetry, daemon=True).start()
     app.run(host="0.0.0.0", port=API_PORT)

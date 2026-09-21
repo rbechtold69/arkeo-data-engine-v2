@@ -1,258 +1,70 @@
-# Arkeo PAYG Client SDK
+# Arkeo PAYG client SDK — audit candidate
 
-Dead-simple client libraries for making authenticated RPC calls to Arkeo sentinels using Pay-As-You-Go (PAYG) contracts.
+This branch contains repairs, not an institutional production approval. See
+`docs/INSTITUTIONAL_READINESS.md` for the deployment gates.
 
-## Features
+## Authentication and wallet compatibility
 
-✅ **Automatic signing** — Every request signed with ADR-036 signatures  
-✅ **Auto-incrementing nonce** — Tracks nonce automatically  
-✅ **Transparent proxy** — Returns raw RPC responses  
-✅ **Zero config** — Just provide sentinel URL, contract ID, and private key  
-✅ **TypeScript-ready** — Written in modern JavaScript (ES modules)  
+The SDK signs SHA-256 of the UTF-8 PAYG preimage `<contractId>:<nonce>:` with
+secp256k1, returning a compact low-S signature. It sends
+`<contractId>:<spenderPublicKey>:<nonce>:<signature>` in the `arkauth` header.
+This matches the raw-preimage compatibility path in the audited chain source.
+It does not use ADR-036. JavaScript and Python signatures are checked against
+the same public test vector.
 
----
+Mnemonic input now uses BIP-39 plus BIP-32 path `m/44'/118'/0'/0/0`.
+**Upgrade compatibility:** older releases incorrectly hashed the seed instead of
+using that derivation path, producing a different wallet. Before upgrading an
+existing funded installation, record its public address and contract client;
+reconcile its balances/contracts and arrange a migration. Do not assume the new
+SDK address controls an older SDK-created contract. No funds are moved by this
+patch. An explicitly provided 32-byte private key retains its existing identity.
 
-## JavaScript / Node.js
+## JavaScript
 
-### Installation
+Run `npm ci --ignore-scripts` in this directory. Import `ArkeoClient` from
+`arkeo-client.js` and supply `sentinelUrl`, `service`, positive integer
+`contractId`, and `privateKey` through your application's secret store.
 
-```bash
-npm install
-```
-
-### Quick Start
-
-```javascript
-import { ArkeoClient } from './arkeo-client.js';
-
-const client = new ArkeoClient({
-  sentinelUrl: 'https://sentinel.arkeo.network',
-  contractId: 42,
-  privateKey: 'your_private_key_hex_or_mnemonic',
-  service: 'arkeo-mainnet-fullnode'
-});
-
-// Make RPC calls
-const status = await client.rpcJson('/status');
-console.log(status);
-```
-
-### Configuration
-
-```javascript
-new ArkeoClient({
-  sentinelUrl: 'https://sentinel.arkeo.network',  // Sentinel base URL
-  contractId: 42,                                  // Your contract ID
-  privateKey: 'beef1234...',                       // Hex string or mnemonic phrase
-  service: 'arkeo-mainnet-fullnode',               // Service name
-  startNonce: 1                                    // Optional: starting nonce (default: 1)
-})
-```
-
-### API
-
-#### `rpc(path, options)`
-Make authenticated RPC call and return Response object.
-
-```javascript
-const response = await client.rpc('/status');
-const data = await response.json();
-```
-
-#### `rpcJson(path, options)`
-Make authenticated RPC call and return JSON.
-
-```javascript
-const data = await client.rpcJson('/abci_info');
-```
-
-#### `rpcText(path, options)`
-Make authenticated RPC call and return text.
-
-```javascript
-const text = await client.rpcText('/health');
-```
-
-#### `getNonce()` / `setNonce(n)`
-Get or set current nonce (useful for persistence).
-
-```javascript
-const nonce = client.getNonce();
-client.setNonce(5); // Resume from nonce 5
-```
-
-#### `getInfo()`
-Get client information.
-
-```javascript
-console.log(client.getInfo());
-// {
-//   address: 'arkeo1abc...',
-//   publicKey: '02beef...',
-//   publicKeyBech32: 'arkeopub1addwnpepq...',
-//   contractId: 42,
-//   currentNonce: 3,
-//   service: 'arkeo-mainnet-fullnode'
-// }
-```
-
-### Private Key Formats
-
-**Hex string:**
-```javascript
-privateKey: '0123456789abcdef...' // 64 hex characters (32 bytes)
-```
-
-**Mnemonic phrase:**
-```javascript
-privateKey: 'word1 word2 word3 ... word24'
-```
-
-### Running the Example
-
-```bash
-# Edit example.js with your credentials
-node example.js
-```
-
----
+- `rpc(path, options)` supports Fetch request options and returns a Response.
+- `rpcJson` and `rpcText` decode that response; callers must check HTTP status
+  with `rpc` when distinguishing transport failures from application responses.
+- `timeoutMs` defaults to 10000; redirects are rejected.
+- `startNonce` means the **next** nonce to send. When omitted, initialization
+  requires both chain contract state and sentinel `/claims` state and uses the
+  larger nonce plus one. An unavailable source fails initialization.
+- `saveNonce(nextNonce)` is an optional asynchronous hook called before sending.
+  Configure durable storage for a funded service. If it fails, no request is sent.
+- `setNonce` cannot move backwards; `getNonce` returns the next reserved value.
 
 ## Python
 
-### Installation
+Install `python/requirements.txt`. `ArkeoClient` takes `sentinel_url`,
+`contract_id`, `private_key`, `service`, and `start_nonce`.
+`rpc(path, method='POST', json=payload)` supports read and write transport; it
+never automatically retries. `timeout` defaults to 10 seconds; redirects are
+disabled. A `save_nonce` callback can persist the next nonce before each request.
 
-```bash
-cd python
-pip install -r requirements.txt
-```
+Python does not automatically discover a restart nonce. The default of 1 is
+only suitable for a new, unused contract. Operators must restore a value above
+both the last persisted authorization and the sentinel/chain high-water mark.
 
-### Quick Start
+## Concurrency and billing boundaries
 
-```python
-from arkeo_client import ArkeoClient
+Calls within one SDK instance are serialized. A nonce is reserved before
+transmission, including failed requests: a timeout does not prove that the
+sentinel did not receive the authorization. Gaps may affect cumulative PAYG
+billing and must be reconciled against the contract's rate and claims.
 
-client = ArkeoClient(
-    sentinel_url='https://sentinel.arkeo.network',
-    contract_id=42,
-    private_key='your_private_key_hex_or_mnemonic',
-    service='arkeo-mainnet-fullnode'
-)
+These clients do not coordinate multiple processes or hosts. Give each replica
+its own wallet/contracts, or implement a durable distributed sequencer before
+sharing a contract. Do not reuse one contract concurrently through standalone
+`generateArkAuth` calls. Sentinel restart, funded settlement and multi-region
+recovery remain live acceptance gates.
 
-# Make RPC calls
-status = client.rpc_json('/status')
-print(status)
-```
+## Verification
 
-### API
-
-Same as JavaScript:
-- `rpc(path, **kwargs)` → requests.Response
-- `rpc_json(path, **kwargs)` → dict
-- `rpc_text(path, **kwargs)` → str
-- `get_nonce()` / `set_nonce(n)`
-- `get_info()` → dict
-
-### Running the Example
-
-```bash
-cd python
-# Edit example.py with your credentials
-python example.py
-```
-
----
-
-## How It Works
-
-### Arkauth Format
-
-Arkeo uses a 4-part authentication header:
-
-```
-contractId:spender_pubkey:nonce:signature
-```
-
-Example:
-```
-42:arkeopub1addwnpepq8abc...:1:a1b2c3d4...
-```
-
-### Signing Process
-
-1. **Build preimage:** `{contractId}:{spender_pubkey}:{nonce}`
-2. **Wrap in ADR-036 StdSignDoc** (Cosmos standard for arbitrary signing)
-3. **SHA-256 hash** the canonical JSON
-4. **Sign with secp256k1** (low-S normalized)
-5. **Encode signature as hex**
-
-### ADR-036 StdSignDoc Structure
-
-```json
-{
-  "account_number": "0",
-  "chain_id": "",
-  "fee": {"amount": [], "gas": "0"},
-  "memo": "",
-  "msgs": [{
-    "type": "sign/MsgSignData",
-    "value": {
-      "data": "<base64_preimage>",
-      "signer": "<bech32_address>"
-    }
-  }],
-  "sequence": "0"
-}
-```
-
-### Nonce Management
-
-- Starts at 1 (or custom `startNonce`)
-- Auto-increments after each successful request
-- Must be strictly increasing (no replay)
-- Can persist/restore with `getNonce()` / `setNonce()`
-
----
-
-## Security Notes
-
-⚠️ **Never commit private keys**  
-⚠️ **Use environment variables** for credentials  
-⚠️ **Persist nonce** to avoid replay issues after restarts  
-
----
-
-## Troubleshooting
-
-### "bad nonce" error
-
-The sentinel tracks nonces in memory. If you restart and use an old nonce:
-
-```javascript
-// Query contract on-chain to get current nonce
-const currentNonce = await queryContractNonce(contractId);
-client.setNonce(currentNonce + 1);
-```
-
-### "invalid signature" error
-
-- Check that your private key matches the contract's client/spender
-- Verify contract ID is correct
-- Ensure nonce is incrementing properly
-
-### Connection errors
-
-- Verify sentinel URL is correct
-- Check service name matches contract
-- Ensure contract has sufficient deposit remaining
-
----
-
-## Examples
-
-See [`example.js`](./example.js) and [`python/example.py`](./python/example.py) for complete working examples.
-
----
-
-## License
-
-MIT
+`npm test` runs offline regression tests. The repository's Python suite verifies
+matching key derivation/signatures and concurrent nonce allocation. These tests
+use public test vectors, fake contracts and mocked transport; they do not spend
+funds or prove that a live provider accepts and settles payment.

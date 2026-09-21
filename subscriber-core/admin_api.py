@@ -25,6 +25,7 @@ import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 from flask import Flask, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
 
 from cache_fetcher import (
@@ -231,9 +232,11 @@ class NonceStore:
     def _load(self) -> int:
         try:
             with open(self.path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return int(data.get("nonce", 0))
-        except Exception:
+                value = json.load(f)["nonce"]
+            if not isinstance(value, int) or value < 0:
+                raise ValueError("invalid persisted nonce")
+            return value
+        except FileNotFoundError:
             return 0
 
     def _save(self, val: int) -> None:
@@ -242,13 +245,21 @@ class NonceStore:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({"nonce": val}, f)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp, self.path)
+            # Persist the rename as well as file contents before authorizing payment.
+            fd = os.open(str(Path(self.path).parent), os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
         except Exception:
             try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
-            except Exception:
+                os.unlink(tmp)
+            except OSError:
                 pass
+            raise
 
     def next(self) -> int:
         with self.lock:
@@ -258,10 +269,7 @@ class NonceStore:
 
     def set(self, val: int) -> None:
         with self.lock:
-            try:
-                self.nonce = int(val)
-            except Exception:
-                return
+            self.nonce = max(self.nonce, int(val))
             self._save(self.nonce)
 
 
@@ -2433,8 +2441,8 @@ PROXY_BYPASS_TIMEOUT = _safe_float(os.getenv("PROXY_BYPASS_TIMEOUT") or "3.0", 3
 PROXY_BYPASS_COOLDOWN = _safe_float(os.getenv("PROXY_BYPASS_COOLDOWN") or "60.0", 60.0)
 PROXY_PROVIDER_COOLDOWN = _safe_float(os.getenv("PROXY_PROVIDER_COOLDOWN") or "60.0", 60.0)
 PROXY_HEIGHT_SKEW = int(os.getenv("PROXY_HEIGHT_SKEW", "6"))
-PROXY_WHITELIST_IPS = os.getenv("PROXY_WHITELIST_IPS", "0.0.0.0")
-PROXY_TRUST_FORWARDED = str(os.getenv("PROXY_TRUST_FORWARDED", "true")).lower() in ("1", "true", "yes", "on")
+PROXY_WHITELIST_IPS = os.getenv("PROXY_WHITELIST_IPS", "127.0.0.1,::1")
+PROXY_TRUST_FORWARDED = str(os.getenv("PROXY_TRUST_FORWARDED", "false")).lower() in ("1", "true", "yes", "on")
 PROXY_DECORATE_RESPONSE = str(os.getenv("PROXY_DECORATE_RESPONSE", "true")).lower() in ("1", "true", "yes", "on")
 PROXY_ARKAUTH_AS_HEADER = str(os.getenv("PROXY_ARKAUTH_AS_HEADER", "false")).lower() in ("1", "true", "yes", "on")
 PROXY_WRAP_UPSTREAM_ERRORS = str(os.getenv("PROXY_WRAP_UPSTREAM_ERRORS", "false")).lower() in ("1", "true", "yes", "on")
@@ -2461,7 +2469,7 @@ os.environ.setdefault("FOUNDRY_DISABLE_NIGHTLY_WARNING", "1")
 def run(cmd: str) -> tuple[int, str]:
     """Run a shell command and return (exit_code, output)."""
     try:
-        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+        out = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT, timeout=30)
         return 0, out.decode("utf-8")
     except subprocess.CalledProcessError as e:
         return e.returncode, e.output.decode("utf-8")
@@ -2511,16 +2519,28 @@ def _load_admin_password() -> str:
 
 
 def _write_admin_password(password: str) -> bool:
-    """Persist admin password; returns True on success."""
+    """Store a salted password hash in an owner-only file."""
     if not ADMIN_PASSWORD_PATH:
         return False
     try:
-        os.makedirs(os.path.dirname(ADMIN_PASSWORD_PATH), exist_ok=True)
-        with open(ADMIN_PASSWORD_PATH, "w", encoding="utf-8") as f:
-            f.write(password.strip())
+        os.makedirs(os.path.dirname(ADMIN_PASSWORD_PATH) or ".", exist_ok=True)
+        fd = os.open(ADMIN_PASSWORD_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(generate_password_hash(password.strip()))
         return True
     except OSError:
         return False
+
+
+def _verify_admin_password(stored: str, submitted: str) -> bool:
+    if stored.startswith(("scrypt:", "pbkdf2:")):
+        try:
+            return check_password_hash(stored, submitted)
+        except (ValueError, TypeError):
+            return False
+    # Preserve access for existing installs; migrate legacy plaintext after login.
+    return secrets.compare_digest(stored, submitted)
 
 
 def _remove_admin_password() -> bool:
@@ -2591,38 +2611,33 @@ def _auth_exempt(path: str) -> bool:
 def _origin_allowed(origin: str | None) -> bool:
     if not origin:
         return False
-    try:
-        parsed = urllib.parse.urlparse(origin)
-    except Exception:
-        return False
-    origin_host = parsed.netloc or parsed.path
-    if not origin_host:
-        return False
-    try:
-        ui_parsed = urllib.parse.urlparse(ADMIN_UI_ORIGIN)
-        ui_host = ui_parsed.netloc or ui_parsed.path
-        if origin_host == ui_host:
-            return True
-    except Exception:
-        pass
-    api_host = request.host.split(":")[0] if request.host else ""
-    if api_host and origin_host.startswith(api_host):
-        return True
-    return False
+    # Compare full origins, never hostname prefixes or arbitrary reflected input.
+    def canonical(value):
+        try:
+            u = urllib.parse.urlsplit(value)
+            if u.scheme not in ("http", "https") or not u.hostname or u.username or u.password:
+                return None
+            if u.path not in ("", "/") or u.query or u.fragment:
+                return None
+            return (u.scheme, u.hostname.lower(), u.port or (443 if u.scheme == "https" else 80))
+        except ValueError:
+            return None
+    candidate = canonical(origin)
+    return candidate is not None and candidate in (canonical(ADMIN_UI_ORIGIN), canonical(request.host_url))
 
 
 def _cors_headers():
     origin = request.headers.get("Origin")
-    headers = {}
-    if _origin_allowed(origin):
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Vary"] = "Origin"
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Cache-Control"
-        # allow full CRUD for listener/admin operations
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        headers["Access-Control-Max-Age"] = "3600"
-    return headers
+    if not _origin_allowed(origin):
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Vary": "Origin",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+        "Access-Control-Max-Age": "3600",
+    }
 
 def _is_auth_required() -> bool:
     return bool(_load_admin_password())
@@ -3033,7 +3048,6 @@ def _bootstrap_wallets():
         print(f"[boot] wallet bootstrap failed: {e}")
 
 
-_bootstrap_wallets()
 
 
 @app.after_request
@@ -3046,16 +3060,17 @@ def add_cors(resp):
 
 @app.before_request
 def _require_auth():
-    """Require session auth when admin password is set."""
+    """Fail closed until an operator initializes a password locally."""
+    origin = request.headers.get("Origin")
+    if origin and not _origin_allowed(origin):
+        return jsonify({"error": "origin_not_allowed"}), 403
     if request.method == "OPTIONS":
-        resp = app.make_response(("", 204, _cors_headers()))
-        return resp
+        return app.make_response(("", 204, _cors_headers()))
     if _auth_exempt(request.path):
         return
     if not _is_auth_required():
-        return
-    token = request.cookies.get(ADMIN_SESSION_NAME)
-    if _validate_session(token):
+        return jsonify({"error": "admin_setup_required"}), 503
+    if _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
         return
     return jsonify({"error": "unauthorized"}), 401
 
@@ -4461,27 +4476,28 @@ def subscriber_settings_save():
 
 @app.get("/api/admin-password")
 def admin_password_get():
-    """Return whether an admin password is set and the current value (for local UI use)."""
-    pwd = _load_admin_password()
-    return jsonify({"enabled": bool(pwd), "path": ADMIN_PASSWORD_PATH, "password": pwd})
+    """Public setup status only. Never return a password or its hash."""
+    return jsonify({"enabled": bool(_load_admin_password())})
 
 
 @app.post("/api/admin-password")
 def admin_password_set():
-    """Set or clear admin password (empty disables)."""
     payload = request.get_json(force=True, silent=True) or {}
     password = (payload.get("password") or "").strip() if isinstance(payload, dict) else ""
-    # If a password is set, require valid session to change it
-    if _is_auth_required() and not _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
-        return jsonify({"error": "unauthorized"}), 401
-    if not password:
-        ok = _remove_admin_password()
-        ADMIN_SESSIONS.clear()
-        return jsonify({"status": "disabled", "enabled": False, "ok": ok, "path": ADMIN_PASSWORD_PATH})
-    ok = _write_admin_password(password)
-    if not ok:
-        return jsonify({"error": "failed to write admin password", "path": ADMIN_PASSWORD_PATH}), 500
-    return jsonify({"status": "saved", "enabled": True, "ok": True, "path": ADMIN_PASSWORD_PATH})
+    if _is_auth_required():
+        if not _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
+            return jsonify({"error": "unauthorized"}), 401
+    else:
+        setup_token = os.getenv("ADMIN_SETUP_TOKEN", "")
+        supplied_token = request.headers.get("X-Admin-Setup-Token", "")
+        if not _is_local_request() or len(setup_token) < 32 or not secrets.compare_digest(setup_token, supplied_token):
+            return jsonify({"error": "local_setup_token_required"}), 403
+    if len(password) < 12:
+        return jsonify({"error": "password_must_have_at_least_12_characters"}), 400
+    if not _write_admin_password(password):
+        return jsonify({"error": "failed_to_write_admin_password"}), 500
+    ADMIN_SESSIONS.clear()
+    return jsonify({"status": "saved", "enabled": True, "ok": True})
 
 
 @app.post("/api/admin-password/check")
@@ -4492,7 +4508,7 @@ def admin_password_check():
     stored = _load_admin_password()
     if not stored:
         return jsonify({"ok": True, "enabled": False})
-    ok = stored == submitted
+    ok = _verify_admin_password(stored, submitted)
     return jsonify({"ok": ok, "enabled": True})
 
 
@@ -4505,15 +4521,18 @@ def admin_login():
     if not stored:
         resp = jsonify({"ok": True, "enabled": False})
         return resp
-    if submitted != stored:
+    if not _verify_admin_password(stored, submitted):
         return jsonify({"ok": False, "enabled": True, "error": "invalid_password"}), 401
+    if not stored.startswith(("scrypt:", "pbkdf2:")):
+        if not _write_admin_password(submitted):
+            return jsonify({"error": "password_migration_failed"}), 503
     token = _generate_session_token()
     resp = jsonify({"ok": True, "enabled": True})
     resp.set_cookie(
         ADMIN_SESSION_NAME,
         token,
         httponly=True,
-        secure=False,
+        secure=request.is_secure or os.getenv("ADMIN_COOKIE_SECURE", "").lower() == "true",
         samesite="Lax",
         max_age=3600,
         path="/",
@@ -4535,7 +4554,7 @@ def admin_logout():
 def admin_session_status():
     """Return whether auth is enabled and whether current session is valid."""
     enabled = _is_auth_required()
-    authed = _validate_session(request.cookies.get(ADMIN_SESSION_NAME)) if enabled else True
+    authed = _validate_session(request.cookies.get(ADMIN_SESSION_NAME)) if enabled else False
     return jsonify({"enabled": enabled, "authed": authed})
 
 
@@ -6659,9 +6678,46 @@ def _nonce_store_path(listener_id: str | None, contract_id: str | None) -> str:
     return os.path.join(NONCE_STORE_DIR, f"nonce_store_{lid}_{cid}.json")
 
 
+# Only known read operations may be replayed after an ambiguous upstream failure.
+_READ_RPC_METHODS = frozenset({
+    "eth_blockNumber", "eth_chainId", "eth_call", "eth_estimateGas", "eth_gasPrice",
+    "eth_feeHistory", "eth_getBalance", "eth_getCode", "eth_getStorageAt",
+    "eth_getTransactionCount", "eth_getTransactionByHash", "eth_getTransactionReceipt",
+    "eth_getBlockByNumber", "eth_getBlockByHash", "eth_getLogs", "eth_syncing",
+    "net_version", "web3_clientVersion", "status", "health", "abci_info", "abci_query",
+    "block", "block_results", "commit", "validators", "tx", "tx_search",
+    "getblockcount", "getblockhash", "getblock", "getblockchaininfo", "getrawtransaction",
+    "getBlockHeight", "getLatestBlockhash", "getBalance", "getAccountInfo", "getHealth",
+})
+_RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def _request_is_replay_safe(work) -> bool:
+    if (work.method or "POST").upper() in ("GET", "HEAD"):
+        # Tendermint also exposes broadcasts over GET. Never replay those.
+        path = urllib.parse.unquote(getattr(work, "raw_path", None) or work.path or "").lower()
+        if any(word in path for word in ("broadcast", "submit", "sendtransaction", "sendrawtransaction")):
+            return False
+        params = urllib.parse.parse_qs(work.query or "")
+        return all(m in _READ_RPC_METHODS for m in params.get("method", []))
+    try:
+        payload = json.loads(work.body)
+        calls = payload if isinstance(payload, list) else [payload]
+        return bool(calls) and all(isinstance(c, dict) and c.get("method") in _READ_RPC_METHODS for c in calls)
+    except (ValueError, TypeError):
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Do not forward credentials or payment authorizations to another host.
+        return None
+
+
 def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
     """Single-lane worker: select/auto-create contract, allocate nonce, sign, forward, return response."""
     t_start = time.time()
+    replay_safe = _request_is_replay_safe(work)
     method = (work.method or "POST").upper()
     service_path = work.path or ""
     query_string = work.query or ""
@@ -6781,6 +6837,8 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 username=bypass_username,
                 password=bypass_password,
             )
+            if replay_safe and int(code or 0) in _RETRYABLE_STATUS:
+                raise BypassError(f"retryable_http_{code}")
             if not isinstance(resp_hdrs, dict):
                 resp_hdrs = {"Content-Type": "application/json"}
             resp_hdrs.setdefault("Content-Type", "application/json")
@@ -6891,6 +6949,9 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 pass
             return {"status": code or 502, "body": resp_body or b"", "headers": resp_hdrs}
         except BypassError as e:
+            if not replay_safe and str(e) != "cooldown_active":
+                return {"status": 502, "body": json.dumps({"error": "upstream_outcome_unknown", "request_id": req_id}),
+                        "headers": {"Content-Type": "application/json"}}
             _log("warning", f"bypass failed ({e}); falling back to arkeo")
             if server_ref is not None and bypass_cooldown > 0 and str(e) != "cooldown_active":
                 server_ref.bypass_cooldown_until = time.time() + bypass_cooldown
@@ -7115,6 +7176,9 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
     last_err = None
     last_err_detail = None
     for idx, cand in enumerate(candidates, start=1):
+        if work.cancelled or (work.deadline and time.time() >= work.deadline):
+            last_err = "request_deadline_exceeded"
+            break
         cand_start = time.time()
         provider_filter = cand.get("provider_pubkey")
         sentinel = _normalize_sentinel_url(
@@ -7535,6 +7599,13 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 server_ref.cooldowns[provider_filter] = time.time() + float(PROXY_PROVIDER_COOLDOWN)
         except Exception:
             pass
+        if replay_safe and int(code or 0) in _RETRYABLE_STATUS:
+            if server_ref is not None:
+                server_ref.cooldowns[provider_filter] = time.time() + max(0, PROXY_PROVIDER_COOLDOWN)
+            _set_top_service_status(listener_id, provider_filter, "Down")
+            last_err = "upstream_unavailable"
+            if idx < len(candidates) and not forced_provider:
+                continue
         # Optional: wrap upstream errors into a JSON error payload for callers that want consistent errors.
         try:
             wrap_errors = _safe_bool(cfg.get("wrap_upstream_errors", PROXY_WRAP_UPSTREAM_ERRORS), bool(PROXY_WRAP_UPSTREAM_ERRORS))
@@ -7836,9 +7907,8 @@ def _sign_message(
     preimage = sign_template.format(contract_id=contract_id, nonce=nonce)
             # signhere has no home/keyring flags; ensure ~/.arkeo -> ARKEOD_HOME exists, then call plainly.
     _ensure_signhere_home()
-    cmd = f'signhere -u "{client_key}" -m "{preimage}" | tail -n 1'
-    code, out = run(cmd)
-    out_clean = out.strip() if isinstance(out, str) else ""
+    code, out = run_list(["signhere", "-u", client_key, "-m", preimage])
+    out_clean = out.strip().splitlines()[-1] if isinstance(out, str) and out.strip() else ""
     if code != 0 or not out_clean:
         return None, f"signhere_exit={code} output={out_clean}"
     sig_hex = _b64_or_hex_to_rs_hex(out_clean).lower()
@@ -7959,7 +8029,7 @@ def _forward_to_bypass(
     data_bytes = body if method != "GET" else None
     req = urllib.request.Request(url, data=data_bytes, headers=final_headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
             return r.status, r.read(), dict(r.getheaders()), url, final_headers
     except urllib.error.HTTPError as e:
         return e.code, e.read(), dict(e.headers), url, final_headers
@@ -7984,23 +8054,19 @@ def _forward_to_sentinel(
     url = f"{sentinel.rstrip('/')}/{service_path.lstrip('/')}"
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     final_headers = dict(headers)
-    qs = query_string or ""
-    if qs and qs.startswith("?"):
-        qs = qs[1:]
+    pairs = urllib.parse.parse_qsl((query_string or "").lstrip("?"), keep_blank_values=True)
+    pairs = [(k, v) for k, v in pairs if k.lower() not in ("arkauth", "arkcontract")]
     if as_header:
         final_headers["arkauth"] = arkauth
     else:
-        # Append arkauth to existing query, preserving any user-supplied params
-        qs_parts = []
-        if qs:
-            qs_parts.append(qs)
-        qs_parts.append(f"arkauth={urllib.parse.quote(arkauth, safe='')}")
-        url = f"{url}?{'&'.join(qs_parts)}" if qs_parts else url
+        pairs.append(("arkauth", arkauth))
+    if pairs:
+        url += "?" + urllib.parse.urlencode(pairs)
     # For GET we must not send a body or urllib will coerce to POST.
     data_bytes = body if method != "GET" else None
     req = urllib.request.Request(url, data=data_bytes, headers=final_headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
+        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
             return r.status, r.read(), dict(r.getheaders()), url, final_headers
     except urllib.error.HTTPError as e:
         return e.code, e.read(), dict(e.headers), url, final_headers
@@ -8629,8 +8695,13 @@ def _do_post_inner_core(self, method: str = "POST"):
     req_id = uuid.uuid4().hex
     try:
         body_len = int(self.headers.get("Content-Length", "0"))
-    except Exception:
-        body_len = 0
+    except (ValueError, TypeError):
+        return self._send_json(400, {"error": "invalid_content_length"})
+    if self.headers.get("Transfer-Encoding"):
+        return self._send_json(400, {"error": "transfer_encoding_not_supported"})
+    if body_len < 0 or body_len > int(os.getenv("PROXY_MAX_REQUEST_BYTES", "1048576")):
+        return self._send_json(413, {"error": "request_too_large"})
+    self.connection.settimeout(float(os.getenv("PROXY_REQUEST_READ_TIMEOUT", "10")))
 
     parsed_path = urllib.parse.urlparse(self.path or "/")
     incoming_path = parsed_path.path or "/"
@@ -8653,8 +8724,10 @@ def _do_post_inner_core(self, method: str = "POST"):
 
     try:
         body = self.rfile.read(body_len) if body_len > 0 else b""
-    except Exception:
-        body = b""
+    except (OSError, TimeoutError):
+        return self._send_json(408, {"error": "request_body_timeout"})
+    if len(body) != body_len:
+        return self._send_json(400, {"error": "incomplete_request_body"})
 
     try:
         self._log("info", f"req start service={service} svc_id={svc_id} bytes={len(body)} method={method}")
@@ -11243,12 +11316,9 @@ def subscriber_totals():
     )
 
 
-_bootstrap_thread = threading.Thread(target=_bootstrap_listeners_from_cache, daemon=True)
-_bootstrap_thread.start()
-_recheck_thread = threading.Thread(target=_down_provider_recheck_loop, daemon=True)
-_recheck_thread.start()
-_telemetry_thread = threading.Thread(target=_telemetry_bootstrap, daemon=True)
-_telemetry_thread.start()
-
 if __name__ == "__main__":
+    _bootstrap_wallets()
+    threading.Thread(target=_bootstrap_listeners_from_cache, daemon=True).start()
+    threading.Thread(target=_down_provider_recheck_loop, daemon=True).start()
+    threading.Thread(target=_telemetry_bootstrap, daemon=True).start()
     app.run(host="0.0.0.0", port=API_PORT)
