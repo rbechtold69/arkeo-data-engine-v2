@@ -36,8 +36,10 @@ funded wallet and contracts unless a distributed payment sequencer is added.
    forwarded-header trust only behind an edge that overwrites those headers and
    cannot be bypassed by direct clients.
 5. Mount writable, persistent nonce storage. Corrupt files and failed durable
-   writes now stop requests. Do not share a funded contract between listeners or
-   hosts without sequencing across all of them. Never reset counters to zero to
+   writes now stop requests. Counters are now locked across local workers and shared by contract ID, with
+   legacy counters migrated upward. Stop old-version workers before upgrading.
+   Use distinct wallets/contracts on different hosts; unique counters alone do
+   not guarantee that concurrent requests arrive in nonce order. Never reset counters to zero to
    recover a funded service.
 6. Apply the separate chain sentinel patch. Set the same randomly generated
    `SENTINEL_ADMIN_TOKEN` (at least 32 characters) in the sentinel and provider
@@ -57,15 +59,15 @@ Safe reads retry HTTP 408/429/500/502/503/504 and primary connection failures.
 Known JSON-RPC reads are allowlisted. Unknown POSTs and transaction broadcasts
 are not automatically replayed after ambiguous failure. A protocol halt or a
 valid business rejection is not an infrastructure outage. HTTP 200 alone does
-not prove a node is current; chain/service-specific freshness checks still need
-implementation and live verification. Subscriber forwarding does not provide
+not prove a node is current; operator-configured identity, sync-state and timestamp checks now gate provider
+selection when enabled. Exact policies still require live verification. Subscriber forwarding does not provide
 WebSocket session recovery.
 
 ## Release gates
 
 - Build pinned chain/sentinel and container images; record exact commits/digests.
   Candidate Dockerfiles pin the companion fork commit
-  `9773a23137916f76cd9b38d1ca6181bac8f7f4cc`. Coordinate any revision with the
+  `e16dbf84f8874e06d52677e4036bbec983baa226`. Coordinate any revision with the
   chain pull request; successful image builds and digest pinning are still required.
 - Run Go/race tests for sentinel and claim settlement. The targeted Go race suite and the three candidate container builds have
   passed in GitHub CI; local Go/Docker execution was unavailable. Recheck final
@@ -93,3 +95,52 @@ Do not merge/deploy this candidate as a readiness sign-off. Back up configuratio
 and counters before migration. Canary read traffic and rehearse rollback without
 rolling nonce counters backwards. An operator must approve the tested image
 and evidence against the gates above before production rollout.
+
+## Enforced pilot profile
+
+Set `ARKEO_INSTITUTIONAL_MODE=true`, `ARKEO_PROVIDER_HEALTH_FILE=/run/arkeo/health.json`,
+and `auto_create=false` on every listener. Preprovision and fund backup contracts
+before enabling traffic. In this mode a missing policy or unavailable health
+check stops use of that provider, and contract creation on the request path is
+rejected. The request starts with a 20-second routing budget; individual socket,
+CLI and queue delays still require measurement (this is not a strict end-to-end SLA).
+Responses are capped at 16 MiB. Unknown writes are never retried after dispatch,
+including authentication failures. A rejected health preflight may safely select
+another provider before the write is sent anywhere.
+
+Start with `docs/provider-health.example.json`. Replace every placeholder with
+approved operator values. Each listener maps `primary` (its direct bypass) and
+exact backup provider pubkeys to an exact configured upstream URL. Checks are
+HTTPS GETs (loopback HTTP allowed for fixtures), limited to 64 KiB and two seconds
+per attempt, without redirects. Positive cache entries are retained for two
+seconds and timestamp age is revalidated on every use. At least one exact network
+identity and one freshness timestamp check are mandatory. Include an explicit
+sync-state requirement and height check for node RPC. For Midgard, require BOTH
+its own indexer freshness and a matching network identity check; probing a healthy
+node alone cannot prove its indexer is current. Field paths are JSON pointers.
+
+Use separate policies for THORNode REST, Comet RPC, Midgard and Maya equivalents.
+The example Comet response paths are not a claim that every advertised provider
+exposes them. Inspect real responses and bind the health target to the same node
+or indexer that serves traffic. Do not use one shared unrelated health endpoint
+for every provider. Public RPC availability does not establish paid service
+capacity, provider independence, or support commitments.
+
+Health policies may contain authorization headers. Mount them read-only with
+restricted permissions; do not commit populated policies or include them in logs.
+Configuration changes take effect on the next request. Deploy independent gateways
+with distinct wallets/contracts and persistent local state, behind an authenticated
+TLS edge and health-aware load balancer. Never clone a funded counter snapshot into
+concurrently active gateways. OS file locks protect local processes, not separately
+hosted replicas, and shared network filesystems are outside this tested profile.
+
+### Outside-access acceptance evidence
+
+The remaining live acceptance run needs: exact primary/backup URLs and credentials;
+registered service IDs and provider pubkeys; approved staging hosts/TLS/ingress;
+distinct staging wallets and a capped funding budget; the operator responsible for
+recovery; and permission to interrupt staging providers. Record identity and indexer
+freshness responses, failure-domain ownership, baseline and sustained-load latency,
+primary/secondary/all-down results, stale/wrong-network rejections, ambiguous-write
+reconciliation, successful settlement, restart/restore, and gateway failover. No
+production merge, deployment or transfer is authorized by this document.

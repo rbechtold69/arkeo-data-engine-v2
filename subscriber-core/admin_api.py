@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import base64
+import fcntl
 import binascii
 import json
 import os
@@ -27,6 +28,7 @@ from datetime import datetime, timezone
 from flask import Flask, jsonify, request
 from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
+from provider_health import HEALTH_GATE, HealthError, read_limited
 
 from cache_fetcher import (
     build_commands as cache_build_commands,
@@ -233,7 +235,7 @@ class NonceStore:
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 value = json.load(f)["nonce"]
-            if not isinstance(value, int) or value < 0:
+            if type(value) is not int or not 0 <= value <= 9223372036854775807:
                 raise ValueError("invalid persisted nonce")
             return value
         except FileNotFoundError:
@@ -261,14 +263,31 @@ class NonceStore:
                 pass
             raise
 
+    @contextmanager
+    def _exclusive(self):
+        # A stable lock inode protects the atomically replaced data file across
+        # workers. The same state directory must be retained across restarts.
+        with self.lock, open(self.path + ".lock", "a+b") as lockfile:
+            fcntl.flock(lockfile, fcntl.LOCK_EX)
+            try:
+                self.nonce = max(self.nonce, self._load())
+                yield
+            finally:
+                fcntl.flock(lockfile, fcntl.LOCK_UN)
+
     def next(self) -> int:
-        with self.lock:
-            self.nonce += 1
-            self._save(self.nonce)
-            return self.nonce
+        with self._exclusive():
+            if self.nonce >= 9223372036854775807:
+                raise ValueError("nonce exhausted")
+            value = self.nonce + 1
+            self._save(value)
+            self.nonce = value
+            return value
 
     def set(self, val: int) -> None:
-        with self.lock:
+        if type(val) is not int or not 0 <= val <= 9223372036854775807:
+            raise ValueError("invalid nonce")
+        with self._exclusive():
             self.nonce = max(self.nonce, int(val))
             self._save(self.nonce)
 
@@ -319,7 +338,7 @@ class SingleLaneExecutor:
                             "body": json.dumps(
                                 {
                                     "error": "worker_exception",
-                                    "detail": str(e),
+                                    "detail": "request processing failed",
                                     "request_id": getattr(work, "request_id", None),
                                 }
                             ),
@@ -6673,9 +6692,17 @@ def _peek_nonce_cache(contract_id: str, client_pub: str) -> int | None:
 
 
 def _nonce_store_path(listener_id: str | None, contract_id: str | None) -> str:
-    lid = str(listener_id or "listener")
-    cid = str(contract_id or "contract")
-    return os.path.join(NONCE_STORE_DIR, f"nonce_store_{lid}_{cid}.json")
+    # Contract IDs are globally unique on a chain. Share their counter across
+    # listeners; a gateway state directory must belong to exactly one chain.
+    cid = str(contract_id or "")
+    if not cid.isdecimal() or int(cid) <= 0:
+        raise ValueError("invalid contract id")
+    path = os.path.join(NONCE_STORE_DIR, f"contract_{int(cid)}.json")
+    # Preserve the highest pre-upgrade counter before using the new shared path.
+    store = NonceStore(path)
+    for old in Path(NONCE_STORE_DIR).glob(f"nonce_store_*_{cid}.json"):
+        store.set(NonceStore(str(old)).nonce)
+    return path
 
 
 # Only known read operations may be replayed after an ambiguous upstream failure.
@@ -6718,6 +6745,11 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
     """Single-lane worker: select/auto-create contract, allocate nonce, sign, forward, return response."""
     t_start = time.time()
     replay_safe = _request_is_replay_safe(work)
+    if os.environ.get("ARKEO_INSTITUTIONAL_MODE", "").lower() == "true":
+        if _safe_bool(cfg.get("auto_create", PROXY_AUTO_CREATE), bool(PROXY_AUTO_CREATE)):
+            return {"status": 503, "body": json.dumps({"error": "preprovisioned_contracts_required"}), "headers": {"Content-Type": "application/json"}}
+        budget = time.time() + 20
+        work.deadline = min(work.deadline, budget) if work.deadline else budget
     method = (work.method or "POST").upper()
     service_path = work.path or ""
     query_string = work.query or ""
@@ -6814,6 +6846,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
         bypass_cooldown = _safe_float(cfg.get("bypass_cooldown_sec"), PROXY_BYPASS_COOLDOWN)
         if bypass_cooldown < 0:
             bypass_cooldown = 0.0
+        bypass_attempted = False
         bypass_username = cfg.get("bypass_username") or ""
         bypass_password = cfg.get("bypass_password") or ""
         try:
@@ -6824,8 +6857,15 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             if cooldown_until and now < cooldown_until:
                 _log("warning", f"bypass cooldown active; skipping for {cooldown_until - now:.0f}s")
                 raise BypassError("cooldown_active")
+            try:
+                HEALTH_GATE.check(listener_id, "primary", bypass_uri, work.deadline)
+            except HealthError as exc:
+                raise BypassError(str(exc)) from None
             bypass_log_url = _redact_url_userinfo(bypass_uri)
             _log("info", f"bypass attempt url={bypass_log_url} timeout={bypass_timeout:.1f}s")
+            bypass_attempted = True
+            if work.deadline:
+                bypass_timeout = max(0.01, min(bypass_timeout, work.deadline - time.time()))
             code, resp_body, resp_hdrs, fwd_url, _fwd_headers = _forward_to_bypass(
                 bypass_uri,
                 raw_path,
@@ -6949,7 +6989,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 pass
             return {"status": code or 502, "body": resp_body or b"", "headers": resp_hdrs}
         except BypassError as e:
-            if not replay_safe and str(e) != "cooldown_active":
+            if not replay_safe and bypass_attempted:
                 return {"status": 502, "body": json.dumps({"error": "upstream_outcome_unknown", "request_id": req_id}),
                         "headers": {"Content-Type": "application/json"}}
             _log("warning", f"bypass failed ({e}); falling back to arkeo")
@@ -7199,6 +7239,13 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 continue
         except Exception:
             pass
+
+        try:
+            HEALTH_GATE.check(listener_id, provider_filter, sentinel, work.deadline)
+        except HealthError as exc:
+            last_err = str(exc)
+            _set_top_service_status(listener_id, provider_filter, "Down")
+            continue
 
         # ---- Contract selection (cache → chain → auto-create)
         contract_fetch_ms = 0
@@ -7514,7 +7561,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 method=method,
                 query_string=query_string,
             )
-            if allow_fallback and _is_arkauth_format_error(code_val, body_val):
+            if replay_safe and allow_fallback and _is_arkauth_format_error(code_val, body_val):
                 _log(
                     "info",
                     f"retrying with {fallback_label} arkauth sentinel={sentinel} svc={service} "
@@ -7552,7 +7599,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             return False
 
         # Sync nonce from sentinel on nonce-related errors, retry once.
-        if _is_nonce_error(code, resp_body):
+        if replay_safe and _is_nonce_error(code, resp_body):
             try:
                 highest = _claims_highest_nonce(sentinel, cid, contract_client)
                 if highest >= 0:
@@ -8030,9 +8077,14 @@ def _forward_to_bypass(
     req = urllib.request.Request(url, data=data_bytes, headers=final_headers, method=method)
     try:
         with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
-            return r.status, r.read(), dict(r.getheaders()), url, final_headers
+            return r.status, read_limited(r, 16 * 1024 * 1024, timeout), dict(r.getheaders()), url, final_headers
     except urllib.error.HTTPError as e:
-        return e.code, e.read(), dict(e.headers), url, final_headers
+        try:
+            return e.code, read_limited(e, 16 * 1024 * 1024, timeout), dict(e.headers), url, final_headers
+        except Exception:
+            raise BypassError("invalid upstream response") from None
+        finally:
+            e.close()
     except (urllib.error.URLError, TimeoutError, socket.timeout) as e:
         raise BypassError(str(e))
     except Exception as e:
@@ -8067,13 +8119,18 @@ def _forward_to_sentinel(
     req = urllib.request.Request(url, data=data_bytes, headers=final_headers, method=method)
     try:
         with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
-            return r.status, r.read(), dict(r.getheaders()), url, final_headers
+            return r.status, read_limited(r, 16 * 1024 * 1024, timeout), dict(r.getheaders()), url, final_headers
     except urllib.error.HTTPError as e:
-        return e.code, e.read(), dict(e.headers), url, final_headers
+        try:
+            return e.code, read_limited(e, 16 * 1024 * 1024, timeout), dict(e.headers), url, final_headers
+        except Exception:
+            return 502, b'{"error":"invalid_upstream_response"}', {"Content-Type":"application/json"}, url, final_headers
+        finally:
+            e.close()
     except Exception as e:
         return (
             502,
-            json.dumps({"error": "proxy_upstream_error", "detail": str(e)}).encode(),
+            json.dumps({"error": "proxy_upstream_error"}).encode(),
             {"Content-Type": "application/json"},
             url,
             final_headers,

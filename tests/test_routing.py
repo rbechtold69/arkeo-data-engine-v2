@@ -62,6 +62,17 @@ class RoutingTests(unittest.TestCase):
             self.assertEqual(self.m._handle_forward_lane(self.work('eth_sendRawTransaction'),self.cfg)['status'],502)
             f.assert_not_called()
 
+    def test_unhealthy_primary_is_not_sent_a_write(self):
+        self.cfg['bypass_uri']='https://primary.example'
+        with patch.object(self.m.HEALTH_GATE,'check',side_effect=[self.m.HealthError('stale'),None]), patch.object(self.m,'_forward_to_bypass') as primary, patch.object(self.m,'_forward_to_sentinel',return_value=self.result(200)) as backup:
+            self.assertEqual(self.m._handle_forward_lane(self.work('eth_sendRawTransaction'),self.cfg)['status'],200)
+            primary.assert_not_called(); self.assertEqual(backup.call_count,1)
+
+    def test_auth_error_never_replays_a_write(self):
+        with patch.object(self.m,'_forward_to_sentinel',return_value=self.result(401)) as forward:
+            self.m._handle_forward_lane(self.work('eth_sendRawTransaction'),self.cfg)
+            self.assertEqual(forward.call_count,1)
+
     def test_client_error_not_retried(self):
         with patch.object(self.m, '_forward_to_sentinel', return_value=self.result(400)) as f:
             self.assertEqual(self.m._handle_forward_lane(self.work(),self.cfg)['status'],400)
