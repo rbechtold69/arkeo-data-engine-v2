@@ -1,0 +1,792 @@
+{
+  "schema": 1,
+  "mode": "fixture",
+  "created_at": "2026-09-22T17:19:25.551321+00:00",
+  "service": "arkeo-mainnet-fullnode",
+  "labels": {
+    "primary": "Liquify role (test server)",
+    "p1": "Backup 1 (test server)",
+    "p2": "Backup 2 (test server)"
+  },
+  "configuration": {
+    "samples_per_phase": 5,
+    "interval_seconds": 0.35,
+    "fault_delay_seconds": 0.15,
+    "cooldown_seconds": 1
+  },
+  "phases": [
+    {
+      "id": "normal",
+      "title": "Liquify serves requests",
+      "started_ms": 0.8,
+      "blocked_roles": [],
+      "expected_provider": "primary"
+    },
+    {
+      "id": "primary-out",
+      "title": "Primary connection interrupted",
+      "started_ms": 1777.64,
+      "blocked_roles": [
+        "primary"
+      ],
+      "expected_provider": "p1"
+    },
+    {
+      "id": "backup-one-out",
+      "title": "First backup also interrupted",
+      "started_ms": 3876.66,
+      "blocked_roles": [
+        "backup-1",
+        "primary"
+      ],
+      "expected_provider": "p2"
+    },
+    {
+      "id": "all-out",
+      "title": "All routes interrupted",
+      "started_ms": 6268.57,
+      "blocked_roles": [
+        "backup-1",
+        "backup-2",
+        "primary"
+      ],
+      "expected_provider": null
+    },
+    {
+      "id": "backups-return",
+      "title": "Backups restored",
+      "started_ms": 7958.12,
+      "blocked_roles": [
+        "primary"
+      ],
+      "expected_provider": "p1"
+    },
+    {
+      "id": "primary-return",
+      "title": "Liquify restored",
+      "started_ms": 10031.94,
+      "blocked_roles": [],
+      "expected_provider": "primary"
+    }
+  ],
+  "requests": [
+    {
+      "id": 1,
+      "phase": "normal",
+      "started_ms": 0.81,
+      "completed_ms": 10.84,
+      "duration_ms": 10.03,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 2,
+      "phase": "normal",
+      "started_ms": 361.29,
+      "completed_ms": 365.81,
+      "duration_ms": 4.53,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 3,
+      "phase": "normal",
+      "started_ms": 715.92,
+      "completed_ms": 718.98,
+      "duration_ms": 3.07,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 4,
+      "phase": "normal",
+      "started_ms": 1069.14,
+      "completed_ms": 1073.09,
+      "duration_ms": 3.96,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 5,
+      "phase": "normal",
+      "started_ms": 1423.26,
+      "completed_ms": 1427.5,
+      "duration_ms": 4.24,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 6,
+      "phase": "primary-out",
+      "started_ms": 1777.67,
+      "completed_ms": 1937.17,
+      "duration_ms": 159.5,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 7,
+      "phase": "primary-out",
+      "started_ms": 2287.3,
+      "completed_ms": 2292.06,
+      "duration_ms": 4.77,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 8,
+      "phase": "primary-out",
+      "started_ms": 2642.18,
+      "completed_ms": 2646.27,
+      "duration_ms": 4.09,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 9,
+      "phase": "primary-out",
+      "started_ms": 2996.39,
+      "completed_ms": 3157.96,
+      "duration_ms": 161.57,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 10,
+      "phase": "primary-out",
+      "started_ms": 3508.09,
+      "completed_ms": 3526.51,
+      "duration_ms": 18.42,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 11,
+      "phase": "backup-one-out",
+      "started_ms": 3876.69,
+      "completed_ms": 4036.16,
+      "duration_ms": 159.47,
+      "status": 200,
+      "ok": true,
+      "provider": "p2"
+    },
+    {
+      "id": 12,
+      "phase": "backup-one-out",
+      "started_ms": 4386.32,
+      "completed_ms": 4542.03,
+      "duration_ms": 155.71,
+      "status": 200,
+      "ok": true,
+      "provider": "p2"
+    },
+    {
+      "id": 13,
+      "phase": "backup-one-out",
+      "started_ms": 4892.15,
+      "completed_ms": 4896.76,
+      "duration_ms": 4.62,
+      "status": 200,
+      "ok": true,
+      "provider": "p2"
+    },
+    {
+      "id": 14,
+      "phase": "backup-one-out",
+      "started_ms": 5246.9,
+      "completed_ms": 5410.33,
+      "duration_ms": 163.44,
+      "status": 200,
+      "ok": true,
+      "provider": "p2"
+    },
+    {
+      "id": 15,
+      "phase": "backup-one-out",
+      "started_ms": 5760.53,
+      "completed_ms": 5918.43,
+      "duration_ms": 157.9,
+      "status": 200,
+      "ok": true,
+      "provider": "p2"
+    },
+    {
+      "id": 16,
+      "phase": "all-out",
+      "started_ms": 6268.6,
+      "completed_ms": 6427.11,
+      "duration_ms": 158.52,
+      "status": 503,
+      "ok": false,
+      "provider": null
+    },
+    {
+      "id": 17,
+      "phase": "all-out",
+      "started_ms": 6777.39,
+      "completed_ms": 6929.35,
+      "duration_ms": 151.96,
+      "status": 503,
+      "ok": false,
+      "provider": null
+    },
+    {
+      "id": 18,
+      "phase": "all-out",
+      "started_ms": 7279.58,
+      "completed_ms": 7607.99,
+      "duration_ms": 328.41,
+      "status": 503,
+      "ok": false,
+      "provider": null
+    },
+    {
+      "id": 19,
+      "phase": "backups-return",
+      "started_ms": 7958.15,
+      "completed_ms": 7970.38,
+      "duration_ms": 12.23,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 20,
+      "phase": "backups-return",
+      "started_ms": 8320.55,
+      "completed_ms": 8324.57,
+      "duration_ms": 4.02,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 21,
+      "phase": "backups-return",
+      "started_ms": 8726.28,
+      "completed_ms": 8972.64,
+      "duration_ms": 246.36,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 22,
+      "phase": "backups-return",
+      "started_ms": 9322.77,
+      "completed_ms": 9327.9,
+      "duration_ms": 5.13,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 23,
+      "phase": "backups-return",
+      "started_ms": 9678.01,
+      "completed_ms": 9681.82,
+      "duration_ms": 3.81,
+      "status": 200,
+      "ok": true,
+      "provider": "p1"
+    },
+    {
+      "id": 24,
+      "phase": "primary-return",
+      "started_ms": 10031.97,
+      "completed_ms": 10038.88,
+      "duration_ms": 6.91,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 25,
+      "phase": "primary-return",
+      "started_ms": 10388.97,
+      "completed_ms": 10392.1,
+      "duration_ms": 3.13,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 26,
+      "phase": "primary-return",
+      "started_ms": 10742.2,
+      "completed_ms": 10745.01,
+      "duration_ms": 2.81,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 27,
+      "phase": "primary-return",
+      "started_ms": 11095.11,
+      "completed_ms": 11100.58,
+      "duration_ms": 5.47,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    },
+    {
+      "id": 28,
+      "phase": "primary-return",
+      "started_ms": 11450.67,
+      "completed_ms": 11453.87,
+      "duration_ms": 3.2,
+      "status": 200,
+      "ok": true,
+      "provider": "primary"
+    }
+  ],
+  "attempts": [
+    {
+      "request": 1,
+      "provider": "primary",
+      "started_ms": 7.18,
+      "duration_ms": 3.44,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 2,
+      "provider": "primary",
+      "started_ms": 362.83,
+      "duration_ms": 2.91,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 3,
+      "provider": "primary",
+      "started_ms": 716.4,
+      "duration_ms": 2.52,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 4,
+      "provider": "primary",
+      "started_ms": 1069.96,
+      "duration_ms": 3.05,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 5,
+      "provider": "primary",
+      "started_ms": 1423.75,
+      "duration_ms": 3.67,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 6,
+      "provider": "primary",
+      "started_ms": 1778.12,
+      "duration_ms": 150.21,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 6,
+      "provider": "p1",
+      "started_ms": 1934.78,
+      "duration_ms": 1.96,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 7,
+      "provider": "p1",
+      "started_ms": 2289.58,
+      "duration_ms": 2.38,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 8,
+      "provider": "p1",
+      "started_ms": 2643.43,
+      "duration_ms": 2.7,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 9,
+      "provider": "primary",
+      "started_ms": 3003.07,
+      "duration_ms": 150.11,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 9,
+      "provider": "p1",
+      "started_ms": 3154.43,
+      "duration_ms": 3.42,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 10,
+      "provider": "p1",
+      "started_ms": 3518.18,
+      "duration_ms": 8.22,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 11,
+      "provider": "p1",
+      "started_ms": 3878.32,
+      "duration_ms": 150.14,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 11,
+      "provider": "p2",
+      "started_ms": 4034.11,
+      "duration_ms": 1.96,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 12,
+      "provider": "primary",
+      "started_ms": 4386.83,
+      "duration_ms": 150.15,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 12,
+      "provider": "p2",
+      "started_ms": 4538.08,
+      "duration_ms": 3.84,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 13,
+      "provider": "p2",
+      "started_ms": 4893.21,
+      "duration_ms": 3.44,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 14,
+      "provider": "p1",
+      "started_ms": 5256.89,
+      "duration_ms": 150.13,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 14,
+      "provider": "p2",
+      "started_ms": 5407.9,
+      "duration_ms": 2.3,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 15,
+      "provider": "primary",
+      "started_ms": 5764.09,
+      "duration_ms": 150.12,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 15,
+      "provider": "p2",
+      "started_ms": 5915.36,
+      "duration_ms": 2.97,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 16,
+      "provider": "p2",
+      "started_ms": 6276.43,
+      "duration_ms": 150.13,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 17,
+      "provider": "p1",
+      "started_ms": 6778.97,
+      "duration_ms": 150.12,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 18,
+      "provider": "primary",
+      "started_ms": 7290.43,
+      "duration_ms": 150.13,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 18,
+      "provider": "p2",
+      "started_ms": 7456.13,
+      "duration_ms": 151.37,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 19,
+      "provider": "p1",
+      "started_ms": 7965.1,
+      "duration_ms": 5.18,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 20,
+      "provider": "p1",
+      "started_ms": 8321.63,
+      "duration_ms": 2.82,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 21,
+      "provider": "primary",
+      "started_ms": 8758.43,
+      "duration_ms": 150.52,
+      "status": 503,
+      "injected_fault": true,
+      "dispatched": false
+    },
+    {
+      "request": 21,
+      "provider": "p1",
+      "started_ms": 8967.78,
+      "duration_ms": 4.75,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 22,
+      "provider": "p1",
+      "started_ms": 9324.03,
+      "duration_ms": 3.45,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 23,
+      "provider": "p1",
+      "started_ms": 9679.15,
+      "duration_ms": 2.56,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 24,
+      "provider": "primary",
+      "started_ms": 10032.49,
+      "duration_ms": 6.31,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 25,
+      "provider": "primary",
+      "started_ms": 10389.48,
+      "duration_ms": 2.41,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 26,
+      "provider": "primary",
+      "started_ms": 10742.77,
+      "duration_ms": 2.18,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 27,
+      "provider": "primary",
+      "started_ms": 11098.38,
+      "duration_ms": 2.13,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    },
+    {
+      "request": 28,
+      "provider": "primary",
+      "started_ms": 11451.18,
+      "duration_ms": 2.63,
+      "status": 200,
+      "injected_fault": false,
+      "dispatched": true
+    }
+  ],
+  "funded_contracts_tested": false,
+  "production_ready": false,
+  "limitations": "Local HTTP test servers stand in for Liquify and both backups. Chain data, contracts and signatures are fixtures. Timings are local measurements, not provider performance.",
+  "cost": {
+    "upstream_dispatches": 25,
+    "reserved_uarkeo": "0",
+    "maximum_uarkeo": "0",
+    "note": "Conservative request-rate reservation, not confirmed settlement; fixture runs have no payments."
+  },
+  "summary": {
+    "phases": [
+      {
+        "id": "normal",
+        "title": "Liquify serves requests",
+        "started_ms": 0.8,
+        "blocked_roles": [],
+        "expected_provider": "primary",
+        "requests": 5,
+        "successful": 5,
+        "failed": 0,
+        "p50_ms": 4.24,
+        "p95_ms": 10.03,
+        "time_to_expected_provider_ms": 10.04,
+        "passed": true
+      },
+      {
+        "id": "primary-out",
+        "title": "Primary connection interrupted",
+        "started_ms": 1777.64,
+        "blocked_roles": [
+          "primary"
+        ],
+        "expected_provider": "p1",
+        "requests": 5,
+        "successful": 5,
+        "failed": 0,
+        "p50_ms": 18.42,
+        "p95_ms": 161.57,
+        "time_to_expected_provider_ms": 159.53,
+        "passed": true
+      },
+      {
+        "id": "backup-one-out",
+        "title": "First backup also interrupted",
+        "started_ms": 3876.66,
+        "blocked_roles": [
+          "backup-1",
+          "primary"
+        ],
+        "expected_provider": "p2",
+        "requests": 5,
+        "successful": 5,
+        "failed": 0,
+        "p50_ms": 157.9,
+        "p95_ms": 163.44,
+        "time_to_expected_provider_ms": 159.5,
+        "passed": true
+      },
+      {
+        "id": "all-out",
+        "title": "All routes interrupted",
+        "started_ms": 6268.57,
+        "blocked_roles": [
+          "backup-1",
+          "backup-2",
+          "primary"
+        ],
+        "expected_provider": null,
+        "requests": 3,
+        "successful": 0,
+        "failed": 3,
+        "p50_ms": 158.52,
+        "p95_ms": 328.41,
+        "time_to_expected_provider_ms": null,
+        "passed": true
+      },
+      {
+        "id": "backups-return",
+        "title": "Backups restored",
+        "started_ms": 7958.12,
+        "blocked_roles": [
+          "primary"
+        ],
+        "expected_provider": "p1",
+        "requests": 5,
+        "successful": 5,
+        "failed": 0,
+        "p50_ms": 5.13,
+        "p95_ms": 246.36,
+        "time_to_expected_provider_ms": 12.26,
+        "passed": true
+      },
+      {
+        "id": "primary-return",
+        "title": "Liquify restored",
+        "started_ms": 10031.94,
+        "blocked_roles": [],
+        "expected_provider": "primary",
+        "requests": 5,
+        "successful": 5,
+        "failed": 0,
+        "p50_ms": 3.2,
+        "p95_ms": 6.91,
+        "time_to_expected_provider_ms": 6.94,
+        "passed": true
+      }
+    ],
+    "requests": 28,
+    "successful": 25,
+    "failed": 3,
+    "passed": true
+  }
+}

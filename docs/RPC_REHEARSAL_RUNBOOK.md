@@ -52,3 +52,8 @@ No messages have been sent to Liquify or other partners. No provider SLA, formal
 Public marketplace signing stores a transaction hash before broadcasting, waits for matching confirmed inclusion, and resumes a pending operation before prompting for another transaction. A timeout is an unknown result, not permission to resubmit. The journal uses session storage: keep the same tab open and record the hash before closing it. If storage is lost, reconcile against the chain before starting again. Bond-then-configure signup retains the confirmed bond receipt through configuration retries. A confirmed open-contract result without a verifiable event remains recorded for manual reconciliation through My Contracts.
 
 Do not enable optional x402 or legacy application hosting in this RPC pilot. They require their own acceptance work.
+
+
+## Visual failover demonstration
+
+Open `rpc-demo.html` for an interactive replay of a measured local rehearsal. See `RPC_DEMO_GUIDE.md` for regenerating evidence and the bounded, separately authorized live runner. The embedded recording uses test providers; it is not live Liquify performance evidence.

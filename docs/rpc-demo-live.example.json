@@ -1,0 +1,35 @@
+{
+  "dedicated_wallet_confirmed": false,
+  "service_id": "REPLACE_FROM_REGISTRY",
+  "service_name": "arkeo-mainnet-fullnode",
+  "network": "arkeo-main-v1",
+  "client_pubkey": "REPLACE_DEMO_WALLET_PUBLIC_KEY",
+  "key_name": "demo-subscriber",
+  "wallet_home": "REPLACE_LOCAL_WALLET_DIRECTORY",
+  "state_dir": "REPLACE_EMPTY_DEMO_STATE_DIRECTORY",
+  "node_rpc": "https://REPLACE_CHAIN_QUERY_RPC.invalid",
+  "health_file": "REPLACE_PROVIDER_BOUND_HEALTH_POLICY_FILE",
+  "providers": [
+    {
+      "label": "Liquify",
+      "pubkey": "arkeopub1addwnpepqdgt6w2qqkt4jydfud507nl740gxeag7gaaj5hzc8w7x9p0ka8ln6e8kkvk",
+      "sentinel_url": "https://arkeo-provider.liquify.com",
+      "contract_id": "REPLACE_FUNDED_CONTRACT_ID",
+      "max_rate_uarkeo": "REPLACE_APPROVED_RATE"
+    },
+    {
+      "label": "Backup 1",
+      "pubkey": "REPLACE_FIRST_BACKUP_PUBLIC_KEY",
+      "sentinel_url": "https://REPLACE_FIRST_BACKUP.invalid",
+      "contract_id": "REPLACE_FUNDED_CONTRACT_ID",
+      "max_rate_uarkeo": "REPLACE_APPROVED_RATE"
+    },
+    {
+      "label": "Backup 2",
+      "pubkey": "REPLACE_SECOND_BACKUP_PUBLIC_KEY",
+      "sentinel_url": "https://REPLACE_SECOND_BACKUP.invalid",
+      "contract_id": "REPLACE_FUNDED_CONTRACT_ID",
+      "max_rate_uarkeo": "REPLACE_APPROVED_RATE"
+    }
+  ]
+}
