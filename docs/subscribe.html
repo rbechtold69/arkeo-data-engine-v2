@@ -845,6 +845,7 @@
   <link rel="stylesheet" href="css/nav.css">
   <script src="js/nav.js"></script>
   <script src="js/marketplace.js"></script>
+  <script src="js/chain-client.js"></script>
 </head>
 <body>
   <!-- Navigation -->
@@ -2832,17 +2833,22 @@ console.log(data);</pre>
       const statusDiv = document.getElementById('contractStatus');
       const btn = document.getElementById('openContractBtn');
       
-      // Warn if no signing key is set
-      if (!signingKey) {
-        const proceed = confirm(
-          '⚠️ No API signing key configured.\n\n' +
-          'Without a signing key, your SDK code will need to use Keplr for every request.\n\n' +
-          'It\'s highly recommended to generate a signing key first.\n\n' +
-          'Continue anyway?'
-        );
-        if (!proceed) return;
+      const pendingService = SERVICE_ID_TO_NAME[selectedProvider?.serviceId || selectedChain?.id];
+      const pendingOperation = ChainClient.operationKey(CONFIG.CHAIN_ID,walletAddress,'open:'+selectedProvider?.pubkey+':'+pendingService);
+      try {
+        if (ChainClient.pending(pendingOperation)) {
+          btn.disabled = true;
+          const tx = await ChainClient.resume(CONFIG.REST_API,pendingOperation,{validateResult:ChainClient.contractId});
+          contractId = ChainClient.contractId(tx);
+          statusDiv.textContent = 'Contract #' + contractId + ' confirmed. Open My Contracts to manage it; restore your saved signing key in your client.';
+          return;
+        }
+      } catch(e) { statusDiv.textContent = e.message; return; }
+      finally { btn.disabled = false; }
+      if (!signingKey?.privateKeyHex) {
+        statusDiv.textContent = 'Generate and save a dedicated API signing key before opening this contract.';
+        return;
       }
-      
       btn.disabled = true;
       btn.textContent = 'Opening Contract...';
       
@@ -2862,20 +2868,10 @@ console.log(data);</pre>
         const depositUarkeo = Marketplace.amountToUnits(depositAmount);
         if (BigInt(depositUarkeo) <= 0n) throw new Error('Deposit must be positive.');
         
-        // Get account info
-        const accountResp = await fetch(`${CONFIG.REST_API}/cosmos/auth/v1beta1/accounts/${walletAddress}`);
-        const accountData = await accountResp.json();
-        const account = accountData.account?.base_account || accountData.account || {};
-        const accountInfo = {
-          accountNumber: account.account_number || '0',
-          sequence: account.sequence || '0'
-        };
-        
-        // Get wallet pubkey for signing
-        const offlineSigner = window.keplr.getOfflineSigner(CONFIG.CHAIN_ID);
-        const accounts = await offlineSigner.getAccounts();
-        const walletPubkeyBytes = accounts[0].pubkey;
-        
+        const accounts = await window.keplr.getOfflineSigner(CONFIG.CHAIN_ID).getAccounts();
+        const activeWallet = accounts.find(a => a.address === walletAddress);
+        if (!activeWallet?.pubkey) throw new Error('Connected wallet changed. Reconnect before signing.');
+        const walletPubkeyBytes = activeWallet.pubkey;
         // Convert pubkey to arkeopub bech32 format (needed for client field)
         const clientPubkey = pubkeyToBech32(walletPubkeyBytes, 'arkeopub');
         if (CONFIG.DEBUG_MODE) console.log('Client pubkey:', clientPubkey);
@@ -2941,106 +2937,12 @@ console.log(data);</pre>
           </div>
         `;
         
-        // Build and sign transaction with proper protobuf encoding
-        const bodyBytes = window.arkeoTx.buildTxBody([msg], 'Contract opened via Arkeo Marketplace');
-        const authInfoBytes = window.arkeoTx.buildAuthInfo(walletPubkeyBytes, parseInt(accountInfo.sequence), '10000', 300000);
-        
-        const signDoc = {
-          bodyBytes: bodyBytes,
-          authInfoBytes: authInfoBytes,
-          chainId: CONFIG.CHAIN_ID,
-          accountNumber: accountInfo.accountNumber
-        };
-        
-        const signResponse = await window.keplr.signDirect(CONFIG.CHAIN_ID, walletAddress, signDoc);
-        
-        statusDiv.innerHTML = `
-          <div class="status-box" style="background: var(--arkeo-dim); border: 1px solid var(--arkeo);">
-            <div class="spinner"></div>
-            <span>Broadcasting transaction...</span>
-          </div>
-        `;
-        
-        // Build TxRaw and broadcast
-        const signatureBytes = window.arkeoTx.base64ToBytes(signResponse.signature.signature);
-        const txRawBytes = window.arkeoTx.buildTxRaw(
-          signResponse.signed.bodyBytes,
-          signResponse.signed.authInfoBytes,
-          [signatureBytes]
-        );
-        const txBytesBase64 = window.arkeoTx.bytesToBase64(txRawBytes);
-        
-        const broadcastResponse = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tx_bytes: txBytesBase64,
-            mode: 'BROADCAST_MODE_SYNC',
-          }),
-        });
-        
-        const result = await broadcastResponse.json();
-        if (CONFIG.DEBUG_MODE) console.log('Broadcast result:', result);
-        
-        if (result.tx_response?.code !== 0) {
-          throw new Error(result.tx_response?.raw_log || 'Transaction failed');
-        }
-        
-        const txHash = result.tx_response.txhash;
-        
-        statusDiv.innerHTML = `
-          <div class="status-box" style="background: var(--arkeo-dim); border: 1px solid var(--arkeo);">
-            <div class="spinner"></div>
-            <span>TX submitted, waiting for confirmation...</span>
-          </div>
-        `;
+        const operation = ChainClient.operationKey(CONFIG.CHAIN_ID,walletAddress,'open:'+selectedProvider.pubkey+':'+serviceName);
+        const confirmedTx = await ChainClient.signAndSubmit({base:CONFIG.REST_API,chainId:CONFIG.CHAIN_ID,address:walletAddress,message:msg,key:operation,options:{validateResult:ChainClient.contractId}});
+        const txHash = confirmedTx.txhash;
+        contractId = ChainClient.contractId(confirmedTx);
+        statusDiv.textContent = 'Contract confirmed. Transaction: ' + txHash;
 
-        // Poll for TX confirmation (up to 30 seconds)
-        let confirmed = false;
-        for (let i = 0; i < 10; i++) {
-          await new Promise(r => setTimeout(r, 3000));
-          try {
-            const txRes = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs/${txHash}`);
-            const txData = await txRes.json();
-            if (txData.tx_response) {
-              if (txData.tx_response.code !== 0) {
-                throw new Error(txData.tx_response.raw_log || 'Transaction failed on-chain');
-              }
-              // Extract contract ID from tx events
-              const openEvent = txData.tx_response.events?.find(e => e.type === 'arkeo.arkeo.EventOpenContract');
-              if (openEvent) {
-                const cidAttr = openEvent.attributes?.find(a => a.key === 'contract_id');
-                if (cidAttr) {
-                  contractId = parseInt(cidAttr.value.replace(/"/g, ''));
-                  if (CONFIG.DEBUG_MODE) console.log('Contract ID:', contractId);
-                }
-              }
-              confirmed = true;
-              break;
-            }
-          } catch (e) {
-            if (e.message.includes('failed on-chain')) throw e;
-            // TX not found yet, keep polling
-          }
-        }
-
-        if (!confirmed) {
-          statusDiv.innerHTML = `
-            <div class="status-box" style="background: rgba(245,158,11,0.1); border: 1px solid var(--warning);">
-              <span>⚠️</span>
-              <span>TX submitted but not yet confirmed. Check TX: ${txHash.slice(0, 16)}...</span>
-            </div>
-          `;
-          return;
-        }
-
-        statusDiv.innerHTML = `
-          <div class="status-box success">
-            <span>✅</span>
-            <span>Contract confirmed! TX: ${txHash.slice(0, 12)}...</span>
-          </div>
-        `;
-        
         // Show signing key reminder if one was generated
         if (signingKey && signingKey.privateKeyHex) {
           const keyReminderDiv = document.createElement('div');
@@ -3066,12 +2968,12 @@ console.log(data);</pre>
         }
         
         // Update final values
-        const rate = selectedProvider.rate || 1;
-        const requests = Math.floor((parseFloat(depositAmount) * CONFIG.ARKEO_DIVISOR) / rate);
+        const rate = BigInt(selectedProvider.rateUarkeo);
+        const requests = rate > 0n ? (BigInt(depositUarkeo) / rate).toLocaleString() : 'No per-request charge';
         
         document.getElementById('finalDeposit').textContent = depositAmount + ' ARKEO';
         document.getElementById('finalDuration').textContent = blocksToHumanTime(contractDurationBlocks);
-        document.getElementById('finalRequests').textContent = '~' + requests.toLocaleString();
+        document.getElementById('finalRequests').textContent = requests;
         // Contract ID will come from tx response in production
         document.getElementById('finalContractId').textContent = contractId ? `#${contractId}` : (txHash ? txHash.slice(0, 12) + '...' : 'Pending...');
         

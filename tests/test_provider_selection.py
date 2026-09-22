@@ -72,3 +72,39 @@ class ProviderSelectionTests(unittest.TestCase):
         rows=data['listeners'][0]['top_services']
         self.assertEqual([r['provider_pubkey'] for r in rows],['independent','liquify'])
         self.assertEqual(rows[1]['last_contract_id'],7)
+
+    def test_runtime_startup_uses_cached_selected_provider_without_losing_priority(self):
+        active={'metadata_uri':'https://primary.example/metadata.json'}
+        with patch.object(self.m,'_active_service_lookup',return_value=active):
+            pk,url,_=self.m._resolve_listener_target({'service_id':'32','top_services':[{'provider_pubkey':'liquify','status':'Down'}]})
+        self.assertEqual((pk,url),('liquify','https://primary.example'))
+
+    def test_endpoint_binding_survives_listener_normalization(self):
+        row=self.m._normalize_top_services([self.primary])[0]
+        self.assertEqual(row['sentinel_url'],'https://primary.example')
+
+    def test_new_listener_auto_creation_is_explicit_and_off_by_default(self):
+        self.assertFalse(self.m.PROXY_AUTO_CREATE)
+        clean,error=self.m._sanitize_listener_payload({'service_id':'32','auto_create':False},set())
+        self.assertIsNone(error);self.assertIs(clean['auto_create'],False)
+        _,error=self.m._sanitize_listener_payload({'auto_create':'false'},set())
+        self.assertIsNotNone(error)
+        with patch.dict(self.m.os.environ,{'ARKEO_INSTITUTIONAL_MODE':'true'}):
+            _,error=self.m._sanitize_listener_payload({'auto_create':True},set())
+            self.assertIn('preprovisioned',error)
+
+    def test_invalid_timeout_and_cooldown_cannot_disable_bounded_failover(self):
+        for field,values in [('bypass_timeout_sec',[0,-1,'NaN','Infinity',31]),('bypass_cooldown_sec',[-1,'NaN',3601])]:
+            for value in values:
+                with self.subTest(field=field,value=value):
+                    _,error=self.m._sanitize_listener_payload({field:value},set())
+                    self.assertIsNotNone(error)
+        clean,error=self.m._sanitize_listener_payload({'bypass_cooldown_sec':0},set())
+        self.assertIsNone(error);self.assertEqual(clean['bypass_cooldown_sec'],0)
+
+    def test_polling_cannot_bypass_the_listener_or_broadcast_transactions(self):
+        for method,payload in [('GET','https://other.example/health'),('GET','/broadcast_tx_commit'),('POST','{"method":"eth_sendRawTransaction"}')]:
+            data={'listeners':[{'id':'pilot','port':3637,'health_method':method,'health_payload':payload}]}
+            with self.subTest(method=method,payload=payload),patch.object(self.m,'_ensure_listeners_file',return_value=data),patch.object(self.m,'_test_listener_port') as forward,self.m.app.test_request_context('/'):
+                response,status=self.m.test_listener('pilot')
+                self.assertEqual(status,400);forward.assert_not_called()

@@ -30,7 +30,7 @@ RUN ls -al $(go env GOPATH)/bin/
 
 
 # ---------- Stage 2: build admin UI bundle ----------
-FROM node:20-bullseye AS ui-builder
+FROM node:24-bookworm AS ui-builder
 WORKDIR /app/admin
 
 COPY admin/package*.json ./

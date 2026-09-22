@@ -10,6 +10,7 @@
   <script src="js/arkeo-tx.js"></script>
   <script src="js/coingecko-cache.js"></script>
   <style>
+    [data-x402-entry][hidden] { display: none !important; }
     :root {
       --bg-main: #0C0E14;
       --bg-card: #151820;
@@ -642,6 +643,7 @@
   <link rel="stylesheet" href="css/nav.css">
   <script src="js/nav.js"></script>
   <script src="js/marketplace.js"></script>
+  <script src="js/chain-client.js"></script>
 </head>
 <body>
   <!-- Navigation -->
@@ -1208,7 +1210,7 @@
         
         <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
           <button class="btn btn-primary" onclick="goToStep(6)">Next: Configure Sentinel →</button>
-          <button class="btn btn-secondary" onclick="goToStep(7)" style="border: 2px solid #8b5cf6; color: #a78bfa;">
+          <button class="btn btn-secondary" hidden data-x402-entry onclick="goToStep(7)" style="border: 2px solid #8b5cf6; color: #a78bfa;">
             ⚡ Enable x402 Payments (Optional)
           </button>
           <a href="index.html" class="btn btn-secondary">View Marketplace</a>
@@ -1385,7 +1387,7 @@ chmod +x /usr/local/bin/arkeo-failover.sh
       </div>
 
       <div style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;">
-        <button class="btn btn-primary" onclick="goToStep(7)" style="background: linear-gradient(135deg, #8b5cf6, #3b82f6);">⚡ Enable x402 Payments (USDC)</button>
+        <button class="btn btn-primary" hidden data-x402-entry onclick="goToStep(7)" style="background: linear-gradient(135deg, #8b5cf6, #3b82f6);">⚡ Enable x402 Payments (USDC)</button>
         <a href="index.html" class="btn btn-secondary">View Marketplace</a>
         <a href="subscribe.html" class="btn btn-secondary">Test Your Provider</a>
       </div>
@@ -1502,7 +1504,7 @@ sudo systemctl enable fail2ban
         </div>
 
         <div style="margin-top: 2rem; display: flex; gap: 1rem;">
-          <button class="btn btn-primary" onclick="goToStep(7)" style="flex: 1;">⚡ Enable x402 Payments →</button>
+          <button class="btn btn-primary" hidden data-x402-entry onclick="goToStep(7)" style="flex: 1;">⚡ Enable x402 Payments →</button>
           <button class="btn btn-secondary" onclick="showToast('Provider setup complete! You are live on the Arkeo marketplace.', 'success')" style="flex: 1;">✅ Skip — I'm Done</button>
         </div>
 
@@ -1662,8 +1664,9 @@ sudo systemctl enable fail2ban
     </div>
   </div>
 
+    <script>document.addEventListener("DOMContentLoaded",()=>{ if(CONFIG.ENABLE_X402===true) document.querySelectorAll("[data-x402-entry]").forEach(el=>el.hidden=false); });</script>
     <!-- Accept x402 Payments (collapsible) -->
-    <div style="margin-top: 2rem; background: var(--bg-card); border: 1px solid rgba(139,92,246,0.4); border-radius: 1rem; overflow: hidden;">
+    <div hidden data-x402-entry style="margin-top: 2rem; background: var(--bg-card); border: 1px solid rgba(139,92,246,0.4); border-radius: 1rem; overflow: hidden;">
       <button onclick="this.parentElement.querySelector('.x402-body').classList.toggle('hidden'); this.querySelector('.x402-arrow').textContent = this.querySelector('.x402-arrow').textContent === '▸' ? '▾' : '▸';"
         style="width: 100%; padding: 1.25rem 1.5rem; background: none; border: none; color: #a78bfa; font-size: 1.1rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 0.75rem; text-align: left;">
         <span class="x402-arrow">▸</span> ⚡ Accept x402 Payments (USDC Micropayments)
@@ -2583,6 +2586,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
     // STEP NAVIGATION
     // ============================================================
     function goToStep(step) {
+      if (step === 7 && CONFIG.ENABLE_X402 !== true) return;
       // Hide all steps
       for (let i = 1; i <= 7; i++) {
         const el = document.getElementById('step' + i);
@@ -2861,7 +2865,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         const accountInfo1 = await getAccountInfo(state.walletAddress);
         
         // Use Direct signing with proper protobuf encoding
-        const offlineSigner = window.keplr.getOfflineSignerOnlyAmino(CONFIG.CHAIN_ID);
+        // On-chain messages use direct protobuf signing through the shared client.
         
         const bondMsg = {
           typeUrl: '/arkeo.arkeo.MsgBondProvider',
@@ -2875,7 +2879,12 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         
         if (CONFIG.DEBUG_MODE) console.log('Bond message:', JSON.stringify(bondMsg, null, 2));
         
-        const bondResult = await signAndBroadcastDirect(bondMsg, accountInfo1);
+        const bondReceiptKey = ChainClient.operationKey(CONFIG.CHAIN_ID,state.walletAddress,'registration-bond:'+state.selectedService.name);
+        const previousBond = sessionStorage.getItem(bondReceiptKey);
+        const bondResult = previousBond
+          ? {code:0,transactionHash:(await ChainClient.confirm(CONFIG.REST_API,previousBond)).txhash}
+          : await signAndBroadcastDirect(bondMsg, accountInfo1);
+        sessionStorage.setItem(bondReceiptKey,bondResult.transactionHash);
         
         if (bondResult.code !== 0) {
           throw new Error(`Bond failed: ${bondResult.rawLog || 'Unknown error'}`);
@@ -2895,19 +2904,9 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         
         showLoading('Transaction 2 of 2', 'Waiting for chain to confirm bond...');
         
-        // Wait for the bond TX to be confirmed and sequence to update
-        // Poll until sequence increments (up to 30 seconds)
-        const prevSeq = accountInfo1.sequence;
-        let accountInfo2 = null;
-        for (let i = 0; i < 15; i++) {
-          await new Promise(r => setTimeout(r, 2000));
-          accountInfo2 = await getAccountInfo(state.walletAddress);
-          if (parseInt(accountInfo2.sequence) > parseInt(prevSeq)) break;
-        }
-        if (!accountInfo2 || parseInt(accountInfo2.sequence) <= parseInt(prevSeq)) {
-          throw new Error('Bond submitted, but account confirmation timed out. Wait for confirmation before retrying configuration.');
-        }
-        
+        // signAndBroadcastDirect returns only after confirmed inclusion.
+        const accountInfo2 = await getAccountInfo(state.walletAddress);
+
         showLoading('Transaction 2 of 2', 'Configure Service - Approve in Keplr');
         
         // Build metadata URL from sentinel URL
@@ -2941,6 +2940,8 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
         }
         
         modTxHash = modResult.transactionHash;
+        sessionStorage.removeItem(bondReceiptKey);
+        sessionStorage.removeItem(ChainClient.operationKey(CONFIG.CHAIN_ID,state.walletAddress,bondMsg.typeUrl+':'+bondMsg.value.service));
         tx2Icon.textContent = '✅';
         tx2Status.style.background = 'var(--success-dim)';
         tx2Status.style.borderColor = 'var(--success)';
@@ -3000,103 +3001,14 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       }
     }
     
-    async function getAccountInfo(address) {
-      const response = await fetch(`${CONFIG.REST_API}/cosmos/auth/v1beta1/accounts/${address}`);
-      const data = await response.json();
-      
-      const account = data.account?.base_account || data.account || {};
-      return {
-        accountNumber: account.account_number || '0',
-        sequence: account.sequence || '0',
-      };
+    async function getAccountInfo(address) { return ChainClient.account(CONFIG.REST_API, address); }
+
+    async function signAndBroadcastDirect(msg) {
+      const key = ChainClient.operationKey(CONFIG.CHAIN_ID, state.walletAddress, msg.typeUrl + ':' + msg.value.service);
+      const tx = await ChainClient.signAndSubmit({base:CONFIG.REST_API,chainId:CONFIG.CHAIN_ID,address:state.walletAddress,message:msg,key,options:{retainConfirmed:msg.typeUrl.endsWith('.MsgBondProvider')}});
+      return {code:0,transactionHash:tx.txhash,rawLog:tx.raw_log};
     }
-    
-    async function signAndBroadcastDirect(msg, accountInfo) {
-      // Initialize the Arkeo TX helper
-      await window.arkeoTx.init();
-      
-      if (CONFIG.DEBUG_MODE) console.log('Signing message:', msg);
-      if (CONFIG.DEBUG_MODE) console.log('Account info:', accountInfo);
-      
-      // Get pubkey bytes from state
-      const pubkeyBytes = state.walletPubkeyBytes;
-      if (!pubkeyBytes) {
-        throw new Error('No wallet pubkey bytes available');
-      }
-      
-      // Build TxBody
-      const bodyBytes = window.arkeoTx.buildTxBody([msg], 'Registered via Arkeo Marketplace');
-      if (CONFIG.DEBUG_MODE) console.log('TxBody bytes:', bodyBytes);
-      
-      // Build AuthInfo
-      const authInfoBytes = window.arkeoTx.buildAuthInfo(
-        pubkeyBytes,
-        parseInt(accountInfo.sequence),
-        '10000',  // fee amount
-        300000    // gas limit
-      );
-      if (CONFIG.DEBUG_MODE) console.log('AuthInfo bytes:', authInfoBytes);
-      
-      // Create SignDoc for Keplr
-      const signDoc = {
-        bodyBytes: bodyBytes,
-        authInfoBytes: authInfoBytes,
-        chainId: CONFIG.CHAIN_ID,
-        accountNumber: accountInfo.accountNumber
-      };
-      
-      if (CONFIG.DEBUG_MODE) console.log('SignDoc:', signDoc);
-      
-      // Sign with Keplr's signDirect
-      const signResponse = await window.keplr.signDirect(
-        CONFIG.CHAIN_ID,
-        state.walletAddress,
-        signDoc
-      );
-      
-      if (CONFIG.DEBUG_MODE) console.log('Sign response:', signResponse);
-      
-      // Build TxRaw with signature
-      const signatureBytes = window.arkeoTx.base64ToBytes(signResponse.signature.signature);
-      const txRawBytes = window.arkeoTx.buildTxRaw(
-        signResponse.signed.bodyBytes,
-        signResponse.signed.authInfoBytes,
-        [signatureBytes]
-      );
-      
-      if (CONFIG.DEBUG_MODE) console.log('TxRaw bytes length:', txRawBytes.length);
-      
-      // Convert to base64 for broadcast
-      const txBytesBase64 = window.arkeoTx.bytesToBase64(txRawBytes);
-      if (CONFIG.DEBUG_MODE) console.log('TX bytes (base64):', txBytesBase64.substring(0, 100) + '...');
-      
-      // Broadcast via REST
-      const broadcastResponse = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tx_bytes: txBytesBase64,
-          mode: 'BROADCAST_MODE_SYNC',
-        }),
-      });
-      
-      const result = await broadcastResponse.json();
-      if (CONFIG.DEBUG_MODE) console.log('Broadcast result:', result);
-      
-      if (result.tx_response) {
-        if (result.tx_response.code !== 0) {
-          throw new Error(`TX failed: ${result.tx_response.raw_log}`);
-        }
-        return {
-          code: result.tx_response.code || 0,
-          transactionHash: result.tx_response.txhash,
-          rawLog: result.tx_response.raw_log,
-        };
-      }
-      
-      throw new Error(result.message || JSON.stringify(result));
-    }
-    
+
     function bufferToHex(buffer) {
       return Array.from(new Uint8Array(buffer))
         .map(b => b.toString(16).padStart(2, '0'))
@@ -3870,6 +3782,7 @@ services:
     }
     
     async function createX402BackingContract() {
+      if (CONFIG.ENABLE_X402 !== true) throw new Error("x402 is outside the RPC pilot");
       const btn = document.getElementById('x402CreateContractBtn');
       const statusDiv = document.getElementById('x402ContractStatus');
       

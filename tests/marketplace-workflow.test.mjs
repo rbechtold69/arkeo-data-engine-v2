@@ -118,3 +118,24 @@ test('a single-provider contract wizard does not promise that backup contracts o
   assert.match(d.querySelector('#failoverStatus').textContent,/Requires subscriber setup/);
   assert.match(d.querySelector('#failoverInfo').textContent,/does not configure routing or fund backup/);
 });
+
+test('contract management loads later-page provider bonds and preserves exact unbond amounts',async t=>{
+ const {w,d,calls}=await page(t,'my-contracts.html');
+ w.eval("state.walletPubkey='arkeopub1independent';state.services={};");
+ await w.loadBonds();
+ assert.equal(d.querySelectorAll('[data-unbond-index]').length,2);
+ assert.match(d.querySelector('#bondsBody').textContent,/thorchain-mainnet-fullnode/);
+ assert.match(d.querySelector('#bondsBody').textContent,/maya-mainnet-rpc/);
+ let selected;w.unbondProvider=(...args)=>selected=args;
+ d.querySelector('[data-unbond-index="1"]').click();
+ assert.equal(selected[1],'maya-mainnet-rpc');assert.equal(selected[2],'100000000');
+ assert.ok(calls.filter(p=>p==='/arkeo/providers').length>=2);
+});
+
+test('first provider claim is available before on-chain nonce advances and metadata renders as text',async t=>{
+ const {w,d}=await page(t,'my-contracts.html');
+ w.eval(`state.walletPubkey='provider';state.services={'32':'<img src=x onerror=alert(1)>'};state.contracts=[{id:'9007199254740993',provider:'provider',client:'client',service:'32',deposit:'100',paid:'0',nonce:'0',height:'1',duration:'1000',active:true,isClient:false}];renderContracts();`);
+ assert.equal(d.querySelectorAll('.claim-btn').length,1);
+ assert.equal(d.querySelectorAll('#contractsBody img').length,0);
+ let id;w.claimEarnings=value=>id=value;d.querySelector('.claim-btn').click();assert.equal(id,'9007199254740993');
+});

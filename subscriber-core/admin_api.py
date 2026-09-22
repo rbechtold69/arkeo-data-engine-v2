@@ -23,6 +23,7 @@ import urllib.parse
 import yaml
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import logging
+import math
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 from flask import Flask, jsonify, request
@@ -2440,7 +2441,7 @@ ADMIN_PASSWORD_PATH = os.getenv("ADMIN_PASSWORD_PATH") or (
 )
 
 # PAYG proxy defaults (can be overridden via env; per-listener overrides later)
-PROXY_AUTO_CREATE = True
+PROXY_AUTO_CREATE = os.getenv("PROXY_AUTO_CREATE", "false").lower() == "true"
 # Default to 0 so we compute deposit = duration * qpm * rate when unset.
 PROXY_CREATE_DEPOSIT = os.getenv("PROXY_CREATE_DEPOSIT", "0")
 PROXY_CREATE_DURATION = os.getenv("PROXY_CREATE_DURATION", "5000")
@@ -3830,16 +3831,6 @@ def osmosis_quote_usdc_to_arkeo():
         return jsonify({"error": "invalid amount"}), 400
     quote, err = _osmosis_quote_usdc_to_arkeo(amt_f)
     if err:
-        if custom_top is not None:
-            _telemetry_error(
-                "provider_service_add_failed",
-                err,
-                {
-                    "listener_id": listener_id,
-                    "service_id": payload.get("service_id") or payload.get("service") or "",
-                },
-                scope=str(listener_id),
-            )
         return jsonify({"error": err}), 400
     return jsonify(quote or {})
 
@@ -5044,7 +5035,7 @@ def _ensure_listeners_file() -> dict:
                 try:
                     print(
                         f"[listeners] malformed listeners.json, backed up to {backup}; "
-                        f"error={e}; preview={raw_preview!r}"
+                        f"error={type(e).__name__}"
                     )
                 except Exception:
                     pass
@@ -5172,7 +5163,9 @@ def _normalize_top_services(entries) -> list[dict]:
         # keep service id for dedup/lookup, but avoid padding with empty string
         if svc not in (None, ""):
             entry["service_id"] = str(svc)
-        # Persist dynamic/runtime fields; static metadata is hydrated from caches.
+        if item.get("sentinel_url"):
+            entry["sentinel_url"] = _normalize_sentinel_url(item["sentinel_url"])
+        # Persist dynamic/runtime fields; other metadata is hydrated from caches.
         for key in (
             "status",
             "status_updated_at",
@@ -5609,8 +5602,8 @@ def _start_listener_server(listener: dict) -> tuple[bool, str | None]:
         return False, "invalid port"
 
     provider_pubkey, sentinel_url, provider_moniker = _resolve_listener_target(listener)
-    sentinel_url = _normalize_sentinel_url(sentinel_url or SENTINEL_URI_DEFAULT)
-    if not sentinel_url:
+    sentinel_url = _normalize_sentinel_url(sentinel_url)
+    if not sentinel_url and not listener.get("bypass_uri"):
         return False, "no sentinel URL available for listener"
 
     service_meta = _service_lookup(listener.get("service_id"))
@@ -6387,44 +6380,13 @@ def _resolve_listener_target(listener: dict) -> tuple[str | None, str | None, st
     """Return (provider_pubkey, sentinel_url, provider_moniker)."""
     if not isinstance(listener, dict):
         return None, None, None
-    # Prefer top_services ordering first
-    top = listener.get("top_services") or []
-    for ts in top if isinstance(top, list) else []:
-        if not isinstance(ts, dict):
-            continue
-        ts_status = str(ts.get("status") or "").lower()
-        if ts_status == "down":
-            continue
-        pk = ts.get("provider_pubkey") or listener.get("provider_pubkey")
-        sent = ts.get("sentinel_url")
-        mon = ts.get("provider_moniker") or listener.get("provider_moniker")
-        meta_uri = ts.get("metadata_uri")
-        if not sent and _is_external(meta_uri):
-            sent = _sentinel_from_metadata_uri(meta_uri)
-        sent = _normalize_sentinel_url(sent)
-        if pk and sent:
-            return pk, sent, mon
-    # Fall back to stored values
-    pk = listener.get("provider_pubkey")
-    sent = _normalize_sentinel_url(listener.get("sentinel_url"))
-    mon = listener.get("provider_moniker")
-    if pk and sent:
-        return pk, sent, mon
-    # Try active_services cache for sentinel/moniker
-    try:
-        svc_id = listener.get("service_id") or listener.get("service")
-        active = _active_service_lookup(pk, svc_id)
-        if active:
-            mu = active.get("metadata_uri") or (active.get("raw") or {}).get("metadata_uri")
-            if _is_external(mu):
-                sent = _sentinel_from_metadata_uri(mu)
-            if not mon:
-                mon = _active_provider_moniker(pk)
-            if pk and sent:
-                return pk, sent, mon
-    except Exception:
-        pass
-    return pk, sent, mon
+    cfg = dict(listener)
+    cfg["provider_sentinel_api"] = listener.get("provider_sentinel_api") or listener.get("sentinel_url")
+    candidates = _candidate_providers(cfg)
+    if not candidates:
+        return None, None, None
+    primary = candidates[0]
+    return primary.get("provider_pubkey"), primary.get("sentinel_url"), primary.get("provider_moniker")
 
 
 def _read_arkeo_status_cache(max_age_sec: float | None = None) -> dict | None:
@@ -6634,7 +6596,7 @@ def _select_active_contract(
             return False
         if _safe_int(c.get("settlement_height")) != 0:
             return False
-        if _safe_int(c.get("deposit")) <= 0:
+        if _safe_int(c.get("deposit")) <= max(0, _safe_int(c.get("paid"))):
             return False
         if (_safe_int(c.get("height")) + _safe_int(c.get("duration"))) <= effective_height:
             return False
@@ -6859,7 +6821,10 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             _log("info", f"bypass attempt url={bypass_log_url} timeout={bypass_timeout:.1f}s")
             bypass_attempted = True
             if work.deadline:
-                bypass_timeout = max(0.01, min(bypass_timeout, work.deadline - time.time()))
+                remaining = work.deadline - time.time()
+                if remaining <= 0:
+                    raise BypassError("request_deadline_exceeded")
+                bypass_timeout = min(bypass_timeout, remaining)
             code, resp_body, resp_hdrs, fwd_url, _fwd_headers = _forward_to_bypass(
                 bypass_uri,
                 raw_path,
@@ -7105,6 +7070,8 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
 
     height_start = time.time()
     cur_height, height_from_cache = _get_height_with_source(node)
+    if not isinstance(cur_height, int) or cur_height <= 0:
+        return {"status":503,"body":json.dumps({"error":"chain_height_unavailable"}),"headers":{"Content-Type":"application/json"}}
     height_ms = int((time.time() - height_start) * 1000)
 
     try:
@@ -7127,7 +7094,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             return False
         if _safe_int(c.get("settlement_height")) != 0:
             return False
-        if _safe_int(c.get("deposit")) <= 0:
+        if _safe_int(c.get("deposit")) <= max(0, _safe_int(c.get("paid"))):
             return False
         if (_safe_int(c.get("height")) + _safe_int(c.get("duration"))) <= effective_height:
             return False
@@ -7503,6 +7470,12 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             continue
 
         timeout_secs = _safe_int(cfg.get("timeout_secs", PROXY_TIMEOUT_SECS), PROXY_TIMEOUT_SECS)
+        if work.deadline:
+            remaining = work.deadline - time.time()
+            if remaining <= 0:
+                last_err = "request_deadline_exceeded"
+                break
+            timeout_secs = min(timeout_secs, remaining)
         as_header = _safe_bool(cfg.get("arkauth_as_header", PROXY_ARKAUTH_AS_HEADER), bool(PROXY_ARKAUTH_AS_HEADER))
         arkauth_format = str(cfg.get("arkauth_format", PROXY_ARKAUTH_FORMAT) or "").strip().lower()
         arkauth_format = arkauth_format.replace("-", "").replace("_", "")
@@ -9701,6 +9674,13 @@ def cache_counts():
 
 def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_id: str | None = None):
     """Validate listener payload and return (listener_dict, error_str_or_None)."""
+    if not isinstance(payload, dict):
+        return None, "listener payload must be an object"
+    auto_create = payload.get("auto_create")
+    if auto_create is not None and not isinstance(auto_create, bool):
+        return None, "auto_create must be a boolean"
+    if auto_create and os.environ.get("ARKEO_INSTITUTIONAL_MODE", "").lower() == "true":
+        return None, "institutional listeners require preprovisioned contracts"
     target = ""  # notes removed
     status = (payload.get("status") or "").strip() or "inactive"
     service_id_val = payload.get("service_id") or payload.get("service")
@@ -9717,9 +9697,13 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
             payload.get("cors_allowed_origins") or payload.get("corsAllowedOrigins") or ""
         ).strip()
     health_method_raw = (payload.get("health_method") or payload.get("healthMethod") or "POST").strip().upper()
-    health_method = "GET" if health_method_raw == "GET" else "POST"
+    if health_method_raw not in ("GET", "POST"):
+        return None, "health_method must be GET or POST"
+    health_method = health_method_raw
     health_payload = (payload.get("health_payload") or payload.get("healthPayload") or "").strip()
     health_header = (payload.get("health_header") or payload.get("healthHeader") or "").strip()
+    if health_method == "GET" and (urllib.parse.urlsplit(health_payload).scheme or health_payload.startswith("//")):
+        return None, "health_payload must be a relative listener path"
     bypass_uri = None
     if "bypass_uri" in payload or "bypassUri" in payload:
         bypass_uri = (payload.get("bypass_uri") or payload.get("bypassUri") or "").strip()
@@ -9733,22 +9717,26 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
         bypass_password = (payload.get("bypass_password") or payload.get("bypassPassword") or "").strip()
     bypass_timeout_sec = None
     if "bypass_timeout_sec" in payload or "bypassTimeoutSec" in payload:
-        raw_timeout = payload.get("bypass_timeout_sec") or payload.get("bypassTimeoutSec") or ""
+        raw_timeout = payload.get("bypass_timeout_sec", payload.get("bypassTimeoutSec", ""))
         raw_timeout = str(raw_timeout).strip()
         if raw_timeout:
             try:
                 bypass_timeout_sec = float(raw_timeout)
+                if not math.isfinite(bypass_timeout_sec) or not 0.05 <= bypass_timeout_sec <= 30:
+                    return None, "bypass_timeout_sec must be between 0.05 and 30"
             except Exception:
                 return None, "bypass_timeout_sec must be a number"
         else:
             bypass_timeout_sec = ""
     bypass_cooldown_sec = None
     if "bypass_cooldown_sec" in payload or "bypassCooldownSec" in payload:
-        raw_cooldown = payload.get("bypass_cooldown_sec") or payload.get("bypassCooldownSec") or ""
+        raw_cooldown = payload.get("bypass_cooldown_sec", payload.get("bypassCooldownSec", ""))
         raw_cooldown = str(raw_cooldown).strip()
         if raw_cooldown:
             try:
                 bypass_cooldown_sec = float(raw_cooldown)
+                if not math.isfinite(bypass_cooldown_sec) or not 0 <= bypass_cooldown_sec <= 3600:
+                    return None, "bypass_cooldown_sec must be between 0 and 3600"
             except Exception:
                 return None, "bypass_cooldown_sec must be a number"
         else:
@@ -9767,6 +9755,7 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
             return None, f"port {port} already in use"
     return {
         "target": target,
+        "auto_create": auto_create,
         "status": status,
         "port": port,
         "service_id": service_id,
@@ -9838,6 +9827,7 @@ def create_listener():
         "id": payload.get("id") or str(int(time.time() * 1000)),
         "target": "",
         "status": clean["status"],
+        "auto_create": clean["auto_create"] if clean["auto_create"] is not None else PROXY_AUTO_CREATE,
         "port": port,
         "service_id": clean.get("service_id") or "",
         "location": clean.get("location") or "",
@@ -9929,6 +9919,8 @@ def update_listener(listener_id: str):
             l["port"] = clean["port"]
         l["target"] = ""
         l["status"] = clean["status"]
+        if clean["auto_create"] is not None:
+            l["auto_create"] = clean["auto_create"]
         l["service_id"] = clean.get("service_id") or ""
         if clean.get("location") is not None:
             l["location"] = clean.get("location") or ""
@@ -10038,6 +10030,8 @@ def update_listener(listener_id: str):
                 l["port"] = clean["port"]
             l["target"] = ""
             l["status"] = clean["status"]
+            if clean["auto_create"] is not None:
+                l["auto_create"] = clean["auto_create"]
             l["service_id"] = clean.get("service_id") or ""
             # Preserve persisted per-provider fields when custom top_services is provided.
             existing_top = l.get("top_services") if isinstance(l.get("top_services"), list) else []
@@ -10323,6 +10317,11 @@ def test_listener(listener_id: str):
         hm = (target.get("health_method") or "POST").upper()
         hp = target.get("health_payload") or ""
         hh = target.get("health_header") or ""
+        if hm == "GET" and (urllib.parse.urlsplit(hp).scheme or hp.startswith("//")):
+            return jsonify({"error": "health_payload must be a relative listener path"}), 400
+        probe = WorkItem(hm, hp if hm == "GET" else "", "", {}, hp.encode() if hm != "GET" else b"", "127.0.0.1")
+        if not _request_is_replay_safe(probe):
+            return jsonify({"error": "health probes must use a supported read-only method"}), 400
         headers = {}
         if hh:
             headers["Content-Type"] = hh

@@ -160,3 +160,8 @@ volatile counters were removed in favor of a dedicated local subscriber. It stil
 requires separate dependency packaging and approved facilitator/funded acceptance;
 it is not part of the gateway readiness result. Public marketplace transaction
 wizards also require wallet interaction and chain acceptance tests before use.
+
+
+## September 22 pre-live rehearsal update
+
+See `RPC_REHEARSAL_RUNBOOK.md` for executable local outage drills and offline deployment validation. The marketplace transaction wizards now have confirmed-inclusion and pending-hash recovery, exact integer signing and repaired close/claim encoding; they still require the funded browser acceptance gate above. Provider and subscriber admin dependency trees now pass npm audit with zero reported advisories. This is dependency evidence, not a formal security certification. The rollout still requires the pinned companion sentinel, approved compatible endpoints, distinct funded gateway contracts, staging infrastructure and measured live acceptance. No live system was changed by this review branch.

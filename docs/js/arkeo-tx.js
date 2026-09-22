@@ -410,6 +410,8 @@ class ArkeoTxHelper {
         msgBytes = this.encodeCloseContract(msg.value);
       } else if (msg.typeUrl === '/arkeo.arkeo.MsgClaimContractIncome') {
         msgBytes = this.encodeClaimContractIncome(msg.value);
+      } else {
+        throw new Error('Unsupported Arkeo message type: ' + msg.typeUrl);
       }
       
       return this.Any.create({

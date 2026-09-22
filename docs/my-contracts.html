@@ -324,6 +324,8 @@
   </style>
   <link rel="stylesheet" href="css/nav.css">
   <script src="js/nav.js"></script>
+  <script src="js/chain-client.js"></script>
+  <script src="js/marketplace.js"></script>
 </head>
 <body>
     <div id="arkeo-nav" data-active="network"></div>
@@ -529,28 +531,18 @@
 
       // Fetch services for name resolution
       try {
-        const svcRes = await fetch(`${CONFIG.REST_API}/arkeo/services`);
-        const svcData = await svcRes.json();
+        const services = await Marketplace.collection(CONFIG.REST_API,'services',['services','service']);
         state.services = {};
-        (svcData.services || []).forEach(s => { state.services[s.service_id] = s.name; });
+        services.forEach(s => { state.services[s.service_id] = s.name; });
       } catch (e) { state.services = {}; }
 
-      // Fetch all contracts (paginated)
-      let allContracts = [];
-      let nextKey = null;
-      do {
-        let url = `${CONFIG.REST_API}/arkeo/contracts?pagination.limit=100`;
-        if (nextKey) url += `&pagination.key=${encodeURIComponent(nextKey)}`;
-        try {
-          const res = await fetch(url);
-          const data = await res.json();
-          if (data.contract) allContracts = allContracts.concat(data.contract);
-          nextKey = data.pagination?.next_key || null;
-        } catch (e) {
-          console.error('Failed to fetch contracts:', e);
-          nextKey = null;
-        }
-      } while (nextKey);
+      let allContracts;
+      try { allContracts = await Marketplace.collection(CONFIG.REST_API,'contracts',['contract','contracts']); }
+      catch(e) {
+        document.getElementById('loadingState').style.display = 'none';
+        showToast('Contract registry unavailable. Retry before taking action.', 'error');
+        return;
+      }
 
       // Filter for user's contracts
       state.contracts = allContracts.filter(c => {
@@ -615,6 +607,7 @@
 
       const tbody = document.getElementById('contractsBody');
       tbody.innerHTML = filtered.map(c => {
+        if (!/^\d+$/.test(String(c.id))) return '';
         const deposit = parseInt(c.deposit) || 0;
         const paid = parseInt(c.paid) || 0;
         const rate = c.rate ? `${(parseInt(c.rate.amount) / CONFIG.ARKEO_DIVISOR).toFixed(4)}` : '-';
@@ -627,8 +620,8 @@
           return pubkey?.slice(0, 20) + '...';
         }
         const counterparty = c.isClient
-          ? `<span title="${c.provider}">${resolveName(c.provider)}</span>`
-          : `<span title="${c.client}">${resolveName(c.client)}</span>`;
+          ? `<span title="${escapeText(c.provider)}">${escapeText(resolveName(c.provider))}</span>`
+          : `<span title="${escapeText(c.client)}">${escapeText(resolveName(c.client))}</span>`;
         
         // Calculate time remaining
         const height = parseInt(c.height) || 0;
@@ -654,20 +647,20 @@
         const isAlsoProvider = c.provider === state.walletPubkey;
         const isDelegate = c.delegate === state.walletPubkey;
         const canClose = c.active && (c.isClient || isAlsoProvider || isDelegate);
-        const canClaim = c.active && (isAlsoProvider || isDelegate) && parseInt(c.nonce) > 0;
+        const canClaim = isAlsoProvider && BigInt(c.deposit || '0') > BigInt(c.paid || '0');
         if (canClaim && canClose) {
-          actionBtn = `<button class="action-btn claim-btn" onclick="claimEarnings(${c.id})">Claim</button> <button class="action-btn close-btn" onclick="closeContract(${c.id})">Close</button>`;
+          actionBtn = `<button class="action-btn claim-btn" onclick="claimEarnings('${c.id}')">Claim</button> <button class="action-btn close-btn" onclick="closeContract('${c.id}')">Close</button>`;
         } else if (canClose) {
-          actionBtn = `<button class="action-btn close-btn" onclick="closeContract(${c.id})">Close</button>`;
+          actionBtn = `<button class="action-btn close-btn" onclick="closeContract('${c.id}')">Close</button>`;
         } else if (canClaim) {
-          actionBtn = `<button class="action-btn claim-btn" onclick="claimEarnings(${c.id})">Claim</button>`;
+          actionBtn = `<button class="action-btn claim-btn" onclick="claimEarnings('${c.id}')">Claim</button>`;
         }
 
         return `<tr>
           <td>${c.id}</td>
           <td>${roleLabel}</td>
           <td>${counterparty}</td>
-          <td>${service}</td>
+          <td>${escapeText(service)}</td>
           <td>${contractType}</td>
           <td>${(deposit / CONFIG.ARKEO_DIVISOR).toFixed(2)}</td>
           <td>${(paid / CONFIG.ARKEO_DIVISOR).toFixed(2)}</td>
@@ -679,54 +672,15 @@
       }).join('');
     }
 
+    function escapeText(value) { const span=document.createElement('span');span.textContent=String(value ?? '');return span.innerHTML.replaceAll('\"','&quot;').replaceAll("'",'&#39;'); }
+
     // Get account info for signing
-    async function getAccountInfo() {
-      const res = await fetch(`${CONFIG.REST_API}/cosmos/auth/v1beta1/accounts/${state.walletAddress}`);
-      const data = await res.json();
-      const account = data.account;
-      return {
-        accountNumber: account.account_number,
-        sequence: account.sequence || '0'
-      };
-    }
+    async function getAccountInfo() { return ChainClient.account(CONFIG.REST_API,state.walletAddress); }
 
-    // Sign and broadcast (same pattern as become-provider.html)
     async function signAndBroadcastDirect(msg) {
-      await window.arkeoTx.init();
-      const pubkeyBytes = state.walletPubkeyBytes;
-      if (!pubkeyBytes) throw new Error('No wallet pubkey bytes available');
-
-      const accountInfo = await getAccountInfo();
-      const bodyBytes = window.arkeoTx.buildTxBody([msg], 'via Arkeo Marketplace');
-      const authInfoBytes = window.arkeoTx.buildAuthInfo(
-        pubkeyBytes, parseInt(accountInfo.sequence), '10000', 300000
-      );
-
-      const signDoc = {
-        bodyBytes, authInfoBytes,
-        chainId: CONFIG.CHAIN_ID,
-        accountNumber: accountInfo.accountNumber
-      };
-
-      const signResponse = await window.keplr.signDirect(CONFIG.CHAIN_ID, state.walletAddress, signDoc);
-      const signatureBytes = window.arkeoTx.base64ToBytes(signResponse.signature.signature);
-      const txRawBytes = window.arkeoTx.buildTxRaw(
-        signResponse.signed.bodyBytes,
-        signResponse.signed.authInfoBytes,
-        [signatureBytes]
-      );
-      const txBytesBase64 = window.arkeoTx.bytesToBase64(txRawBytes);
-
-      const broadcastRes = await fetch(`${CONFIG.REST_API}/cosmos/tx/v1beta1/txs`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tx_bytes: txBytesBase64, mode: 'BROADCAST_MODE_SYNC' })
-      });
-      const result = await broadcastRes.json();
-      if (result.tx_response?.code !== 0) {
-        throw new Error(`TX failed: ${result.tx_response?.raw_log || 'Unknown error'}`);
-      }
-      return result.tx_response;
+      const operation = msg.typeUrl + ':' + (msg.value.contract_id ?? msg.value.contractId ?? msg.value.service ?? '');
+      const key = ChainClient.operationKey(CONFIG.CHAIN_ID,state.walletAddress,operation);
+      return ChainClient.signAndSubmit({base:CONFIG.REST_API,chainId:CONFIG.CHAIN_ID,address:state.walletAddress,message:msg,key});
     }
 
     // Close Contract
@@ -759,18 +713,12 @@
       const contract = state.contracts.find(c => c.id == contractId);
       if (!contract) return;
 
-      const deposit = parseInt(contract.deposit) || 0;
-      const paid = parseInt(contract.paid) || 0;
-      const nonce = parseInt(contract.nonce) || 0;
+      const deposit = BigInt(contract.deposit || '0');
+      const paid = BigInt(contract.paid || '0');
       const unclaimed = deposit - paid;
 
       if (unclaimed <= 0) {
         showToast('No unclaimed earnings on this contract.', 'error');
-        return;
-      }
-
-      if (nonce === 0) {
-        showToast('No queries have been made on this contract yet — nothing to claim.', 'error');
         return;
       }
 
@@ -787,20 +735,12 @@
       if (!sentinelUrl) {
         try {
           showToast('Looking up provider sentinel...', 'info');
-          // Query all provider services to find metadata_uri
-          const provRes = await fetch(`${CONFIG.REST_API}/arkeo/providers`);
-          const provData = await provRes.json();
-          const provEntry = provData.provider?.find(p => p.pubkey === providerPubkey);
+          const entries = await Marketplace.collection(CONFIG.REST_API,'providers',['provider','providers']);
+          const provEntry = entries.find(p => p.pub_key === providerPubkey && String(p.service) === String(contract.service));
           if (provEntry?.metadata_uri) {
-            // Validate URL before fetching — only allow HTTPS
-            const metaUrl = new URL(provEntry.metadata_uri);
-            if (metaUrl.protocol !== 'https:') {
-              console.warn('Rejecting non-HTTPS metadata URI:', provEntry.metadata_uri);
-            } else {
-              const metaRes = await fetch(provEntry.metadata_uri);
-              const meta = await metaRes.json();
-              // Derive sentinel URL from metadata_uri domain (use HTTPS, sentinel proxied via nginx)
-              sentinelUrl = `https://${metaUrl.hostname}`;
+            const uri = new URL(provEntry.metadata_uri);
+            if (uri.protocol === 'https:' && !uri.username && !uri.password && !uri.search && !uri.hash && uri.pathname.endsWith('/metadata.json')) {
+              sentinelUrl = uri.href.slice(0,-'/metadata.json'.length);
             }
           }
         } catch (e) {
@@ -817,9 +757,7 @@
       showToast('Fetching claim from sentinel...', 'info');
       let claim;
       try {
-        const claimRes = await fetch(`${sentinelUrl}/claim/${contractId}`);
-        if (!claimRes.ok) throw new Error(`Sentinel returned ${claimRes.status}`);
-        claim = await claimRes.json();
+        claim = await Marketplace.json(`${sentinelUrl}/claim/${contractId}`);
       } catch (e) {
         showToast(`Could not reach sentinel at ${sentinelUrl}: ${e.message}`, 'error');
         return;
@@ -835,15 +773,24 @@
         return;
       }
 
-      const claimNonce = parseInt(claim.nonce);
-      const earnings = claimNonce * (parseInt(contract.rate?.amount) || 0);
-      const earningsArkeo = (earnings / CONFIG.ARKEO_DIVISOR).toFixed(4);
-      const alreadyPaid = (paid / CONFIG.ARKEO_DIVISOR).toFixed(4);
-      const newEarnings = ((earnings - paid) / CONFIG.ARKEO_DIVISOR).toFixed(4);
+      const claimNonce = String(claim.nonce);
+      if (!/^\d+$/.test(claimNonce) || BigInt(claimNonce) <= 0n || BigInt(claimNonce) > 9223372036854775807n || !/^[0-9a-fA-F]{128}(?:[0-9a-fA-F]{2})?$/.test(claim.signature)) {
+        showToast('Sentinel returned invalid claim data.', 'error'); return;
+      }
+      if (claim.contract_id != null && String(claim.contract_id) !== String(contractId)) {
+        showToast('Sentinel claim belongs to a different contract.', 'error'); return;
+      }
+      const earned = BigInt(claimNonce) * BigInt(contract.rate?.amount || '0');
+      const earnings = earned > deposit ? deposit : earned;
+      if (earnings <= paid) { showToast('This claim contains no additional payable earnings.', 'error'); return; }
+      const formatAmount = n => `${n / 100000000n}.${String(n % 100000000n).padStart(8,'0')}`;
+      const earningsArkeo = formatAmount(earnings);
+      const alreadyPaid = formatAmount(paid);
+      const newEarnings = formatAmount(earnings - paid);
 
       if (!confirm(
         `Claim earnings from contract #${contractId}?\n\n` +
-        `Sentinel nonce: ${claimNonce} (${claimNonce} queries served)\n` +
+        `Sentinel nonce: ${claimNonce} (payment counter)\n` +
         `Total earned: ${earningsArkeo} ARKEO\n` +
         `Already paid: ${alreadyPaid} ARKEO\n` +
         `New to claim: ${newEarnings} ARKEO\n\n` +
@@ -880,9 +827,7 @@
       document.getElementById('bondsEmpty').style.display = 'none';
 
       try {
-        const res = await fetch(`${CONFIG.REST_API}/arkeo/providers`);
-        const data = await res.json();
-        const providers = data.provider || [];
+        const providers = await Marketplace.collection(CONFIG.REST_API,'providers',['provider','providers']);
 
         // Filter for providers matching this wallet's pubkey
         const myBonds = providers.filter(p => p.pub_key === state.walletPubkey);
@@ -897,31 +842,32 @@
         // Fetch services for name resolution
         if (!state.services || Object.keys(state.services).length === 0) {
           try {
-            const svcRes = await fetch(`${CONFIG.REST_API}/arkeo/services`);
-            const svcData = await svcRes.json();
+            const services = await Marketplace.collection(CONFIG.REST_API,'services',['services','service']);
             state.services = {};
-            (svcData.services || []).forEach(s => { state.services[s.service_id] = s.name; });
+            services.forEach(s => { state.services[s.service_id] = s.name; });
           } catch (e) { state.services = {}; }
         }
 
         document.getElementById('bondsTable').style.display = 'block';
         const tbody = document.getElementById('bondsBody');
-        tbody.innerHTML = myBonds.map(p => {
-          const bond = parseInt(p.bond) || 0;
+        tbody.innerHTML = myBonds.map((p,index) => {
+          const bond = String(p.bond || '0');
+          if (!/^[0-9]+$/.test(bond)) return '';
           const serviceName = state.services?.[p.service] || p.service;
           const statusColor = p.status === 'ONLINE' ? 'var(--success)' : 'var(--error)';
           return `<tr style="border-bottom: 1px solid var(--border);">
-            <td style="padding: 0.75rem; font-size: 0.9rem;">${serviceName}</td>
-            <td style="padding: 0.75rem; text-align: right; font-size: 0.9rem;">${(bond / CONFIG.ARKEO_DIVISOR).toFixed(2)} ARKEO</td>
-            <td style="padding: 0.75rem; text-align: right;"><span style="color: ${statusColor}; font-size: 0.85rem; font-weight: 600;">${p.status}</span></td>
+            <td style="padding: 0.75rem; font-size: 0.9rem;">${escapeText(serviceName)}</td>
+            <td style="padding: 0.75rem; text-align: right; font-size: 0.9rem;">${(Number(bond) / CONFIG.ARKEO_DIVISOR).toFixed(2)} ARKEO</td>
+            <td style="padding: 0.75rem; text-align: right;"><span style="color: ${statusColor}; font-size: 0.85rem; font-weight: 600;">${escapeText(p.status)}</span></td>
             <td style="padding: 0.75rem; text-align: right;">
-              <button onclick="unbondProvider('${p.pub_key}', '${serviceName}', ${bond})" 
+              <button data-unbond-index="${index}"
                 style="padding: 0.4rem 0.8rem; background: rgba(239,68,68,0.1); border: 1px solid var(--error); border-radius: 0.5rem; color: var(--error); font-size: 0.8rem; cursor: pointer; font-weight: 600;">
                 Unbond
               </button>
             </td>
           </tr>`;
         }).join('');
+        tbody.querySelectorAll('[data-unbond-index]').forEach(button=>button.addEventListener('click',()=>{const p=myBonds[Number(button.dataset.unbondIndex)];unbondProvider(p.pub_key,state.services[p.service],String(p.bond));}));
       } catch (e) {
         console.error(e);
         document.getElementById('bondsLoading').textContent = 'Failed to load bonds.';
@@ -930,6 +876,7 @@
 
     // Unbond provider
     async function unbondProvider(pubkey, serviceName, currentBond) {
+      if (pubkey !== state.walletPubkey || !serviceName || !/^[1-9][0-9]*$/.test(String(currentBond))) {showToast('Cannot verify provider bond. Reload before signing.','error');return;}
       const bondArkeo = (currentBond / CONFIG.ARKEO_DIVISOR).toFixed(2);
       if (!confirm(`⚠️ WARNING: This will PERMANENTLY REMOVE your provider from the Arkeo marketplace!\n\nYou are about to unbond ${bondArkeo} ARKEO from "${serviceName}". Your provider will be deleted from the network and you will need to re-register from scratch.\n\nThe ${bondArkeo} ARKEO will be returned to your wallet.\n\nAre you absolutely sure?`)) return;
       if (!confirm(`FINAL CONFIRMATION: Remove your provider and unbond ${bondArkeo} ARKEO?\n\nThis cannot be undone.`)) return;

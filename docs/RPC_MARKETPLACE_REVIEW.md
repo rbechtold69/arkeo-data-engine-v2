@@ -20,7 +20,7 @@ Liquify's known full public key is preferred in the pilot listings. Static provi
 - The consumer wizard displayed “Failover Protection Active” and promised automatic backup contracts even though it only opened one contract. The unsupported checkbox/status is replaced by accurate subscriber setup guidance. It also no longer guesses a sentinel endpoint from a provider’s marketing website.
 - Consumer pricing no longer invents a fallback rate or loses the exact integer signing amount. Deposit conversion avoids floating-point rounding. The wizard rechecks provider identity, service, registration, rate, duration and settlement terms before signing.
 - Provider metadata updates previously queried the Arkeo service regardless of the selected service. Updates now target the exact selection and preserve its current on-chain contract terms and status.
-- Post-registration account polling no longer guesses the next sequence using an undefined variable when confirmation is late. It stops and tells the operator to wait before retrying configuration.
+- Marketplace transactions now journal their hash before submission and require confirmed chain inclusion. Ambiguous responses resume confirmation without automatic resubmission. Provider signup retains the confirmed bond through configuration retries, and account/contract IDs retain integer precision.
 - Provider registration verification now checks the complete registry for the exact wallet public key and service, rather than an address prefix.
 - Subscriber backup selection could inherit a different provider's sentinel URL. Only the matching provider can inherit its parent endpoint, and cross-service backups are excluded.
 - A primary's historical Down label could exclude it while a backup remained Up. Configured order is now retained; runtime cooldowns and fresh health checks govern eligibility.
@@ -30,6 +30,14 @@ Liquify's known full public key is preferred in the pilot listings. Static provi
 - The subscriber Poll action previously reordered live routing during tests and then saved price/latency ordering. It now uses the existing forced-provider test route without rewriting listener settings or changing the primary.
 - Public landing/navigation copy focuses on RPC. Uniswap/Aave application cards and frontend-hosting links are removed from the active entry flow. Legacy application files are retained to avoid destroying unrelated assets; no application-hosting offering is promoted in this rollout.
 
+## Additional pre-live repairs
+
+- Public close/claim/unbond flows now use the shared confirmed transaction client. The older close page previously broadcast JSON in place of protobuf. Contract and bond lists paginate, unbond signing preserves the exact amount, and first provider claims no longer require an already-advanced on-chain nonce. Registry text is escaped in contract/bond rendering.
+- Listener `auto_create` is explicitly configurable and defaults off. Institutional mode rejects automatic spending, absolute health probe URLs and write probes. Bound backup endpoints survive edits. Missing chain height and exhausted contracts fail closed. Sensitive raw configuration previews are no longer logged.
+- Both admin bundles replace old Osmosis aggregate dependencies with a narrow, wire-tested swap codec and updated CosmJS/protobuf packages. npm audit reports zero advisories for both updated trees (previously 15 each, including one critical). Signing refreshes wallet identity, checks the RPC network, rejects rounded amounts and fixes IBC timeout units and source/destination height confusion. Node 24 is used in the admin build stage.
+- Optional x402 signup controls are hidden and guarded unless explicitly enabled. They remain outside pilot acceptance.
+- `scripts/rehearse_rpc.py` runs seven local HTTP outage scenarios. `scripts/rpc_preflight.py` rejects inconsistent deployment inputs and unresolved example templates without starting services or spending funds. See [RPC_REHEARSAL_RUNBOOK.md](RPC_REHEARSAL_RUNBOOK.md).
+
 ## Verification and limits
 
 Run from the repository root:
@@ -38,11 +46,13 @@ Run from the repository root:
 python -m pip install flask pyyaml -r docs/sdk/python/requirements.txt
 npm ci --ignore-scripts --prefix docs/sdk
 npm ci --ignore-scripts --prefix tests
+npm ci --ignore-scripts --prefix subscriber-core/admin
+npm ci --ignore-scripts --prefix provider-core/admin
 python -m unittest discover -s tests -v
 node --test docs/sdk/client.test.mjs tests/*.test.mjs
 ```
 
-Final local result: **41 Python tests and 32 JavaScript tests pass (73 total)**. Modified HTML inline scripts parse successfully and `git diff --check` is clean.
+Final local result: **59 Python tests and 46 JavaScript tests pass (105 total)**. Modified HTML inline scripts parse successfully and `git diff --check` is clean.
 
 Tests exercise actual Flask routing and candidate selection, payment nonce durability, raw signature/transaction encoding, health policy checks, SDK failures and local HTTP failover. New DOM tests load the actual marketplace HTML and scripts using paginated fixtures, click through provider/consumer choices, test directory filters and failure states, and verify provider detail rendering. A subscriber Poll regression checks that probes never PUT a replacement routing order.
 
