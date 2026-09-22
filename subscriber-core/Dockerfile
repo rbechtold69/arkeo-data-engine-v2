@@ -1,12 +1,17 @@
 # ---------- Stage 1: build arkeod, api, indexer, sentinel, tools ----------
-FROM golang:1.22 AS builder
+FROM golang:1.24 AS builder
 
 RUN apt-get update && apt-get install -y git make build-essential curl jq && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
-# Clone latest Arkeo source (public repo, default branch)
-RUN git clone --depth 1 --single-branch https://github.com/arkeonetwork/arkeo.git
+# Reproducible candidate source; coordinate changes with the sentinel review.
+ARG ARKEO_REPOSITORY=https://github.com/rbechtold69/arkeo.git
+ARG ARKEO_REF=e16dbf84f8874e06d52677e4036bbec983baa226
+RUN git init arkeo && cd arkeo \
+    && git remote add origin "${ARKEO_REPOSITORY}" \
+    && git fetch --depth 1 origin "${ARKEO_REF}" \
+    && git checkout --detach FETCH_HEAD
 
 WORKDIR /src/arkeo
 
@@ -24,11 +29,11 @@ RUN curl -L https://github.com/osmosis-labs/osmosis/releases/download/v25.0.0/os
 RUN ls -al $(go env GOPATH)/bin/
 
 # ---------- Stage 2: build admin UI bundle ----------
-FROM node:20-bullseye AS ui-builder
+FROM node:24-bookworm AS ui-builder
 WORKDIR /app/admin
 
 COPY admin/package*.json ./
-RUN npm install
+RUN npm ci --ignore-scripts
 COPY admin/src ./src
 RUN mkdir -p vendor && npm run build
 
@@ -63,6 +68,7 @@ COPY config/ /app/config/
 COPY admin/ /app/admin/
 COPY --from=ui-builder /app/admin/vendor/cosmos.bundle.js /app/admin/vendor/cosmos.bundle.js
 COPY admin_api.py /app/admin_api.py
+COPY provider_health.py /app/provider_health.py
 COPY cache_fetcher.py /app/cache_fetcher.py
 # Copy helper scripts (including lane smoke test)
 COPY scripts/ /app/scripts/

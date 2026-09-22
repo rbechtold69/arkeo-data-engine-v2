@@ -1,0 +1,21 @@
+{
+  "listeners": [
+    {
+      "id": "thorchain-rest",
+      "port": 11001,
+      "service_id": "REPLACE_REGISTRY_SERVICE_ID",
+      "service_name": "REPLACE_REGISTRY_SERVICE_NAME",
+      "auto_create": false,
+      "bypass_uri": "https://REPLACE_LIQUIFY.invalid",
+      "bypass_timeout_sec": 2,
+      "bypass_cooldown_sec": 5,
+      "top_services": [
+        {
+          "provider_pubkey": "REPLACE_BACKUP_PROVIDER_PUBLIC_KEY",
+          "service_id": "REPLACE_REGISTRY_SERVICE_ID",
+          "sentinel_url": "https://REPLACE_BACKUP.invalid"
+        }
+      ]
+    }
+  ]
+}

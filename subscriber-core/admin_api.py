@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import base64
+import fcntl
 import binascii
 import json
 import os
@@ -22,10 +23,13 @@ import urllib.parse
 import yaml
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import logging
+import math
 from logging.handlers import RotatingFileHandler
 from datetime import datetime, timezone
 from flask import Flask, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
 import uuid
+from provider_health import HEALTH_GATE, HealthError, read_limited
 
 from cache_fetcher import (
     build_commands as cache_build_commands,
@@ -231,9 +235,11 @@ class NonceStore:
     def _load(self) -> int:
         try:
             with open(self.path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return int(data.get("nonce", 0))
-        except Exception:
+                value = json.load(f)["nonce"]
+            if type(value) is not int or not 0 <= value <= 9223372036854775807:
+                raise ValueError("invalid persisted nonce")
+            return value
+        except FileNotFoundError:
             return 0
 
     def _save(self, val: int) -> None:
@@ -242,26 +248,48 @@ class NonceStore:
             Path(self.path).parent.mkdir(parents=True, exist_ok=True)
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump({"nonce": val}, f)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp, self.path)
+            # Persist the rename as well as file contents before authorizing payment.
+            fd = os.open(str(Path(self.path).parent), os.O_RDONLY)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
         except Exception:
             try:
-                if os.path.exists(tmp):
-                    os.remove(tmp)
-            except Exception:
+                os.unlink(tmp)
+            except OSError:
                 pass
+            raise
+
+    @contextmanager
+    def _exclusive(self):
+        # A stable lock inode protects the atomically replaced data file across
+        # workers. The same state directory must be retained across restarts.
+        with self.lock, open(self.path + ".lock", "a+b") as lockfile:
+            fcntl.flock(lockfile, fcntl.LOCK_EX)
+            try:
+                self.nonce = max(self.nonce, self._load())
+                yield
+            finally:
+                fcntl.flock(lockfile, fcntl.LOCK_UN)
 
     def next(self) -> int:
-        with self.lock:
-            self.nonce += 1
-            self._save(self.nonce)
-            return self.nonce
+        with self._exclusive():
+            if self.nonce >= 9223372036854775807:
+                raise ValueError("nonce exhausted")
+            value = self.nonce + 1
+            self._save(value)
+            self.nonce = value
+            return value
 
     def set(self, val: int) -> None:
-        with self.lock:
-            try:
-                self.nonce = int(val)
-            except Exception:
-                return
+        if type(val) is not int or not 0 <= val <= 9223372036854775807:
+            raise ValueError("invalid nonce")
+        with self._exclusive():
+            self.nonce = max(self.nonce, int(val))
             self._save(self.nonce)
 
 
@@ -311,7 +339,7 @@ class SingleLaneExecutor:
                             "body": json.dumps(
                                 {
                                     "error": "worker_exception",
-                                    "detail": str(e),
+                                    "detail": "request processing failed",
                                     "request_id": getattr(work, "request_id", None),
                                 }
                             ),
@@ -2413,7 +2441,7 @@ ADMIN_PASSWORD_PATH = os.getenv("ADMIN_PASSWORD_PATH") or (
 )
 
 # PAYG proxy defaults (can be overridden via env; per-listener overrides later)
-PROXY_AUTO_CREATE = True
+PROXY_AUTO_CREATE = os.getenv("PROXY_AUTO_CREATE", "false").lower() == "true"
 # Default to 0 so we compute deposit = duration * qpm * rate when unset.
 PROXY_CREATE_DEPOSIT = os.getenv("PROXY_CREATE_DEPOSIT", "0")
 PROXY_CREATE_DURATION = os.getenv("PROXY_CREATE_DURATION", "5000")
@@ -2433,8 +2461,8 @@ PROXY_BYPASS_TIMEOUT = _safe_float(os.getenv("PROXY_BYPASS_TIMEOUT") or "3.0", 3
 PROXY_BYPASS_COOLDOWN = _safe_float(os.getenv("PROXY_BYPASS_COOLDOWN") or "60.0", 60.0)
 PROXY_PROVIDER_COOLDOWN = _safe_float(os.getenv("PROXY_PROVIDER_COOLDOWN") or "60.0", 60.0)
 PROXY_HEIGHT_SKEW = int(os.getenv("PROXY_HEIGHT_SKEW", "6"))
-PROXY_WHITELIST_IPS = os.getenv("PROXY_WHITELIST_IPS", "0.0.0.0")
-PROXY_TRUST_FORWARDED = str(os.getenv("PROXY_TRUST_FORWARDED", "true")).lower() in ("1", "true", "yes", "on")
+PROXY_WHITELIST_IPS = os.getenv("PROXY_WHITELIST_IPS", "127.0.0.1,::1")
+PROXY_TRUST_FORWARDED = str(os.getenv("PROXY_TRUST_FORWARDED", "false")).lower() in ("1", "true", "yes", "on")
 PROXY_DECORATE_RESPONSE = str(os.getenv("PROXY_DECORATE_RESPONSE", "true")).lower() in ("1", "true", "yes", "on")
 PROXY_ARKAUTH_AS_HEADER = str(os.getenv("PROXY_ARKAUTH_AS_HEADER", "false")).lower() in ("1", "true", "yes", "on")
 PROXY_WRAP_UPSTREAM_ERRORS = str(os.getenv("PROXY_WRAP_UPSTREAM_ERRORS", "false")).lower() in ("1", "true", "yes", "on")
@@ -2461,7 +2489,7 @@ os.environ.setdefault("FOUNDRY_DISABLE_NIGHTLY_WARNING", "1")
 def run(cmd: str) -> tuple[int, str]:
     """Run a shell command and return (exit_code, output)."""
     try:
-        out = subprocess.check_output(cmd, shell=True, stderr=subprocess.STDOUT)
+        out = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT, timeout=30)
         return 0, out.decode("utf-8")
     except subprocess.CalledProcessError as e:
         return e.returncode, e.output.decode("utf-8")
@@ -2511,16 +2539,28 @@ def _load_admin_password() -> str:
 
 
 def _write_admin_password(password: str) -> bool:
-    """Persist admin password; returns True on success."""
+    """Store a salted password hash in an owner-only file."""
     if not ADMIN_PASSWORD_PATH:
         return False
     try:
-        os.makedirs(os.path.dirname(ADMIN_PASSWORD_PATH), exist_ok=True)
-        with open(ADMIN_PASSWORD_PATH, "w", encoding="utf-8") as f:
-            f.write(password.strip())
+        os.makedirs(os.path.dirname(ADMIN_PASSWORD_PATH) or ".", exist_ok=True)
+        fd = os.open(ADMIN_PASSWORD_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            os.fchmod(f.fileno(), 0o600)
+            f.write(generate_password_hash(password.strip()))
         return True
     except OSError:
         return False
+
+
+def _verify_admin_password(stored: str, submitted: str) -> bool:
+    if stored.startswith(("scrypt:", "pbkdf2:")):
+        try:
+            return check_password_hash(stored, submitted)
+        except (ValueError, TypeError):
+            return False
+    # Preserve access for existing installs; migrate legacy plaintext after login.
+    return secrets.compare_digest(stored, submitted)
 
 
 def _remove_admin_password() -> bool:
@@ -2591,38 +2631,33 @@ def _auth_exempt(path: str) -> bool:
 def _origin_allowed(origin: str | None) -> bool:
     if not origin:
         return False
-    try:
-        parsed = urllib.parse.urlparse(origin)
-    except Exception:
-        return False
-    origin_host = parsed.netloc or parsed.path
-    if not origin_host:
-        return False
-    try:
-        ui_parsed = urllib.parse.urlparse(ADMIN_UI_ORIGIN)
-        ui_host = ui_parsed.netloc or ui_parsed.path
-        if origin_host == ui_host:
-            return True
-    except Exception:
-        pass
-    api_host = request.host.split(":")[0] if request.host else ""
-    if api_host and origin_host.startswith(api_host):
-        return True
-    return False
+    # Compare full origins, never hostname prefixes or arbitrary reflected input.
+    def canonical(value):
+        try:
+            u = urllib.parse.urlsplit(value)
+            if u.scheme not in ("http", "https") or not u.hostname or u.username or u.password:
+                return None
+            if u.path not in ("", "/") or u.query or u.fragment:
+                return None
+            return (u.scheme, u.hostname.lower(), u.port or (443 if u.scheme == "https" else 80))
+        except ValueError:
+            return None
+    candidate = canonical(origin)
+    return candidate is not None and candidate in (canonical(ADMIN_UI_ORIGIN), canonical(request.host_url))
 
 
 def _cors_headers():
     origin = request.headers.get("Origin")
-    headers = {}
-    if _origin_allowed(origin):
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Vary"] = "Origin"
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With, Cache-Control"
-        # allow full CRUD for listener/admin operations
-        headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS, PATCH"
-        headers["Access-Control-Max-Age"] = "3600"
-    return headers
+    if not _origin_allowed(origin):
+        return {}
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Vary": "Origin",
+        "Access-Control-Allow-Credentials": "true",
+        "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Requested-With, Cache-Control",
+        "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS, PATCH",
+        "Access-Control-Max-Age": "3600",
+    }
 
 def _is_auth_required() -> bool:
     return bool(_load_admin_password())
@@ -3033,7 +3068,6 @@ def _bootstrap_wallets():
         print(f"[boot] wallet bootstrap failed: {e}")
 
 
-_bootstrap_wallets()
 
 
 @app.after_request
@@ -3046,16 +3080,17 @@ def add_cors(resp):
 
 @app.before_request
 def _require_auth():
-    """Require session auth when admin password is set."""
+    """Fail closed until an operator initializes a password locally."""
+    origin = request.headers.get("Origin")
+    if origin and not _origin_allowed(origin):
+        return jsonify({"error": "origin_not_allowed"}), 403
     if request.method == "OPTIONS":
-        resp = app.make_response(("", 204, _cors_headers()))
-        return resp
+        return app.make_response(("", 204, _cors_headers()))
     if _auth_exempt(request.path):
         return
     if not _is_auth_required():
-        return
-    token = request.cookies.get(ADMIN_SESSION_NAME)
-    if _validate_session(token):
+        return jsonify({"error": "admin_setup_required"}), 503
+    if _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
         return
     return jsonify({"error": "unauthorized"}), 401
 
@@ -3796,16 +3831,6 @@ def osmosis_quote_usdc_to_arkeo():
         return jsonify({"error": "invalid amount"}), 400
     quote, err = _osmosis_quote_usdc_to_arkeo(amt_f)
     if err:
-        if custom_top is not None:
-            _telemetry_error(
-                "provider_service_add_failed",
-                err,
-                {
-                    "listener_id": listener_id,
-                    "service_id": payload.get("service_id") or payload.get("service") or "",
-                },
-                scope=str(listener_id),
-            )
         return jsonify({"error": err}), 400
     return jsonify(quote or {})
 
@@ -4461,27 +4486,28 @@ def subscriber_settings_save():
 
 @app.get("/api/admin-password")
 def admin_password_get():
-    """Return whether an admin password is set and the current value (for local UI use)."""
-    pwd = _load_admin_password()
-    return jsonify({"enabled": bool(pwd), "path": ADMIN_PASSWORD_PATH, "password": pwd})
+    """Public setup status only. Never return a password or its hash."""
+    return jsonify({"enabled": bool(_load_admin_password())})
 
 
 @app.post("/api/admin-password")
 def admin_password_set():
-    """Set or clear admin password (empty disables)."""
     payload = request.get_json(force=True, silent=True) or {}
     password = (payload.get("password") or "").strip() if isinstance(payload, dict) else ""
-    # If a password is set, require valid session to change it
-    if _is_auth_required() and not _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
-        return jsonify({"error": "unauthorized"}), 401
-    if not password:
-        ok = _remove_admin_password()
-        ADMIN_SESSIONS.clear()
-        return jsonify({"status": "disabled", "enabled": False, "ok": ok, "path": ADMIN_PASSWORD_PATH})
-    ok = _write_admin_password(password)
-    if not ok:
-        return jsonify({"error": "failed to write admin password", "path": ADMIN_PASSWORD_PATH}), 500
-    return jsonify({"status": "saved", "enabled": True, "ok": True, "path": ADMIN_PASSWORD_PATH})
+    if _is_auth_required():
+        if not _validate_session(request.cookies.get(ADMIN_SESSION_NAME)):
+            return jsonify({"error": "unauthorized"}), 401
+    else:
+        setup_token = os.getenv("ADMIN_SETUP_TOKEN", "")
+        supplied_token = request.headers.get("X-Admin-Setup-Token", "")
+        if not _is_local_request() or len(setup_token) < 32 or not secrets.compare_digest(setup_token, supplied_token):
+            return jsonify({"error": "local_setup_token_required"}), 403
+    if len(password) < 12:
+        return jsonify({"error": "password_must_have_at_least_12_characters"}), 400
+    if not _write_admin_password(password):
+        return jsonify({"error": "failed_to_write_admin_password"}), 500
+    ADMIN_SESSIONS.clear()
+    return jsonify({"status": "saved", "enabled": True, "ok": True})
 
 
 @app.post("/api/admin-password/check")
@@ -4492,7 +4518,7 @@ def admin_password_check():
     stored = _load_admin_password()
     if not stored:
         return jsonify({"ok": True, "enabled": False})
-    ok = stored == submitted
+    ok = _verify_admin_password(stored, submitted)
     return jsonify({"ok": ok, "enabled": True})
 
 
@@ -4505,15 +4531,18 @@ def admin_login():
     if not stored:
         resp = jsonify({"ok": True, "enabled": False})
         return resp
-    if submitted != stored:
+    if not _verify_admin_password(stored, submitted):
         return jsonify({"ok": False, "enabled": True, "error": "invalid_password"}), 401
+    if not stored.startswith(("scrypt:", "pbkdf2:")):
+        if not _write_admin_password(submitted):
+            return jsonify({"error": "password_migration_failed"}), 503
     token = _generate_session_token()
     resp = jsonify({"ok": True, "enabled": True})
     resp.set_cookie(
         ADMIN_SESSION_NAME,
         token,
         httponly=True,
-        secure=False,
+        secure=request.is_secure or os.getenv("ADMIN_COOKIE_SECURE", "").lower() == "true",
         samesite="Lax",
         max_age=3600,
         path="/",
@@ -4535,7 +4564,7 @@ def admin_logout():
 def admin_session_status():
     """Return whether auth is enabled and whether current session is valid."""
     enabled = _is_auth_required()
-    authed = _validate_session(request.cookies.get(ADMIN_SESSION_NAME)) if enabled else True
+    authed = _validate_session(request.cookies.get(ADMIN_SESSION_NAME)) if enabled else False
     return jsonify({"enabled": enabled, "authed": authed})
 
 
@@ -5006,7 +5035,7 @@ def _ensure_listeners_file() -> dict:
                 try:
                     print(
                         f"[listeners] malformed listeners.json, backed up to {backup}; "
-                        f"error={e}; preview={raw_preview!r}"
+                        f"error={type(e).__name__}"
                     )
                 except Exception:
                     pass
@@ -5134,7 +5163,9 @@ def _normalize_top_services(entries) -> list[dict]:
         # keep service id for dedup/lookup, but avoid padding with empty string
         if svc not in (None, ""):
             entry["service_id"] = str(svc)
-        # Persist dynamic/runtime fields; static metadata is hydrated from caches.
+        if item.get("sentinel_url"):
+            entry["sentinel_url"] = _normalize_sentinel_url(item["sentinel_url"])
+        # Persist dynamic/runtime fields; other metadata is hydrated from caches.
         for key in (
             "status",
             "status_updated_at",
@@ -5154,6 +5185,15 @@ def _normalize_top_services(entries) -> list[dict]:
                 entry[key] = item.get(key)
         normalized.append(entry)
     return normalized
+
+
+def _listener_provider_selection(existing, custom, discovered, service_changed=False):
+    """A service change cannot inherit contracts or providers for the previous service."""
+    if service_changed:
+        return discovered
+    if custom is not None:
+        return _merge_top_services_persisted_fields(existing, custom)
+    return existing or discovered
 
 
 def _merge_top_services_persisted_fields(existing: list, incoming: list) -> list[dict]:
@@ -5562,8 +5602,8 @@ def _start_listener_server(listener: dict) -> tuple[bool, str | None]:
         return False, "invalid port"
 
     provider_pubkey, sentinel_url, provider_moniker = _resolve_listener_target(listener)
-    sentinel_url = _normalize_sentinel_url(sentinel_url or SENTINEL_URI_DEFAULT)
-    if not sentinel_url:
+    sentinel_url = _normalize_sentinel_url(sentinel_url)
+    if not sentinel_url and not listener.get("bypass_uri"):
         return False, "no sentinel URL available for listener"
 
     service_meta = _service_lookup(listener.get("service_id"))
@@ -6237,9 +6277,7 @@ def _lookup_settlement_duration(provider_pubkey: str | None, service_id: str | i
 def _candidate_providers(cfg: dict) -> list[dict]:
     """Build an ordered list of provider candidates for failover."""
     candidates: list[dict] = []
-    top = cfg.get("top_services")
-    if not top:
-        return []
+    top = cfg.get("top_services") or []
     svc_id_for_lookup = cfg.get("service_id") or cfg.get("service")
     # cache lookups for active services/providers
     active_lookup = {}
@@ -6271,37 +6309,26 @@ def _candidate_providers(cfg: dict) -> list[dict]:
                     prov_meta_cache[pk] = p
     except Exception:
         pass
-    include_down = True
-    # If we have at least one healthy entry, skip "Down"/misconfigured providers from the live candidate set.
-    # This keeps a failed provider in the UI list but avoids routing to it during normal operation.
+    # Keep configured order. Runtime cooldowns and fresh health checks decide eligibility;
+    # a historical UI "down" result must not permanently prevent primary recovery.
     if isinstance(top, list):
-        try:
-            include_down = not any(
-                str(ts.get("status") or "").lower() in ("up", "ok") and ts.get("cors_configured") is not False
-                for ts in top
-                if isinstance(ts, dict)
-            )
-        except Exception:
-            include_down = True
         for ts in top:
             if not isinstance(ts, dict):
                 continue
-            if not include_down:
-                ts_status = str(ts.get("status") or "").lower()
-                if ts_status == "down" or ts.get("cors_configured") is False:
-                    continue
             pk = ts.get("provider_pubkey")
             if not pk:
                 continue
             svc_for_ts = ts.get("service_id") or ts.get("service") or svc_id_for_lookup
+            if str(svc_for_ts) != str(svc_id_for_lookup):
+                continue  # A different service is never a compatible backup.
             active = active_lookup.get((str(pk), str(svc_for_ts))) or _active_service_lookup(pk, svc_for_ts)
-            active_raw = active.get("raw") if isinstance(active, dict) else {}
+            active_raw = (active.get("raw") or {}) if isinstance(active, dict) else {}
             mu = (active.get("metadata_uri") if isinstance(active, dict) else None) or active_raw.get("metadata_uri")
             sentinel_url = _normalize_sentinel_url(ts.get("sentinel_url")) if ts.get("sentinel_url") else None
             if not sentinel_url and _is_external(mu):
                 sentinel_url = _sentinel_from_metadata_uri(mu)
-            if not sentinel_url:
-                # fallback: try parent cfg sentinel
+            if not sentinel_url and pk == cfg.get("provider_pubkey"):
+                # Only this exact provider may inherit its configured sentinel
                 sentinel_url = _normalize_sentinel_url(cfg.get("provider_sentinel_api"))
             if not sentinel_url:
                 continue  # skip candidates without a usable sentinel URL
@@ -6333,12 +6360,10 @@ def _candidate_providers(cfg: dict) -> list[dict]:
     # ensure configured provider is included (first if not already)
     cfg_pk = cfg.get("provider_pubkey")
     cfg_sent = cfg.get("provider_sentinel_api")
-    if cfg_pk:
+    if cfg_pk and cfg_sent:
         exists = any(c.get("provider_pubkey") == cfg_pk for c in candidates)
         if not exists:
             candidates.insert(0, {"provider_pubkey": cfg_pk, "provider_moniker": cfg.get("provider_moniker"), "sentinel_url": cfg_sent})
-    if not candidates:
-        candidates.append({"provider_pubkey": cfg_pk, "provider_moniker": cfg.get("provider_moniker"), "sentinel_url": cfg_sent})
     # dedupe while preserving order
     seen = set()
     deduped = []
@@ -6355,44 +6380,13 @@ def _resolve_listener_target(listener: dict) -> tuple[str | None, str | None, st
     """Return (provider_pubkey, sentinel_url, provider_moniker)."""
     if not isinstance(listener, dict):
         return None, None, None
-    # Prefer top_services ordering first
-    top = listener.get("top_services") or []
-    for ts in top if isinstance(top, list) else []:
-        if not isinstance(ts, dict):
-            continue
-        ts_status = str(ts.get("status") or "").lower()
-        if ts_status == "down":
-            continue
-        pk = ts.get("provider_pubkey") or listener.get("provider_pubkey")
-        sent = ts.get("sentinel_url")
-        mon = ts.get("provider_moniker") or listener.get("provider_moniker")
-        meta_uri = ts.get("metadata_uri")
-        if not sent and _is_external(meta_uri):
-            sent = _sentinel_from_metadata_uri(meta_uri)
-        sent = _normalize_sentinel_url(sent)
-        if pk and sent:
-            return pk, sent, mon
-    # Fall back to stored values
-    pk = listener.get("provider_pubkey")
-    sent = _normalize_sentinel_url(listener.get("sentinel_url"))
-    mon = listener.get("provider_moniker")
-    if pk and sent:
-        return pk, sent, mon
-    # Try active_services cache for sentinel/moniker
-    try:
-        svc_id = listener.get("service_id") or listener.get("service")
-        active = _active_service_lookup(pk, svc_id)
-        if active:
-            mu = active.get("metadata_uri") or (active.get("raw") or {}).get("metadata_uri")
-            if _is_external(mu):
-                sent = _sentinel_from_metadata_uri(mu)
-            if not mon:
-                mon = _active_provider_moniker(pk)
-            if pk and sent:
-                return pk, sent, mon
-    except Exception:
-        pass
-    return pk, sent, mon
+    cfg = dict(listener)
+    cfg["provider_sentinel_api"] = listener.get("provider_sentinel_api") or listener.get("sentinel_url")
+    candidates = _candidate_providers(cfg)
+    if not candidates:
+        return None, None, None
+    primary = candidates[0]
+    return primary.get("provider_pubkey"), primary.get("sentinel_url"), primary.get("provider_moniker")
 
 
 def _read_arkeo_status_cache(max_age_sec: float | None = None) -> dict | None:
@@ -6602,7 +6596,7 @@ def _select_active_contract(
             return False
         if _safe_int(c.get("settlement_height")) != 0:
             return False
-        if _safe_int(c.get("deposit")) <= 0:
+        if _safe_int(c.get("deposit")) <= max(0, _safe_int(c.get("paid"))):
             return False
         if (_safe_int(c.get("height")) + _safe_int(c.get("duration"))) <= effective_height:
             return False
@@ -6654,14 +6648,64 @@ def _peek_nonce_cache(contract_id: str, client_pub: str) -> int | None:
 
 
 def _nonce_store_path(listener_id: str | None, contract_id: str | None) -> str:
-    lid = str(listener_id or "listener")
-    cid = str(contract_id or "contract")
-    return os.path.join(NONCE_STORE_DIR, f"nonce_store_{lid}_{cid}.json")
+    # Contract IDs are globally unique on a chain. Share their counter across
+    # listeners; a gateway state directory must belong to exactly one chain.
+    cid = str(contract_id or "")
+    if not cid.isdecimal() or int(cid) <= 0:
+        raise ValueError("invalid contract id")
+    path = os.path.join(NONCE_STORE_DIR, f"contract_{int(cid)}.json")
+    # Preserve the highest pre-upgrade counter before using the new shared path.
+    store = NonceStore(path)
+    for old in Path(NONCE_STORE_DIR).glob(f"nonce_store_*_{cid}.json"):
+        store.set(NonceStore(str(old)).nonce)
+    return path
+
+
+# Only known read operations may be replayed after an ambiguous upstream failure.
+_READ_RPC_METHODS = frozenset({
+    "eth_blockNumber", "eth_chainId", "eth_call", "eth_estimateGas", "eth_gasPrice",
+    "eth_feeHistory", "eth_getBalance", "eth_getCode", "eth_getStorageAt",
+    "eth_getTransactionCount", "eth_getTransactionByHash", "eth_getTransactionReceipt",
+    "eth_getBlockByNumber", "eth_getBlockByHash", "eth_getLogs", "eth_syncing",
+    "net_version", "web3_clientVersion", "status", "health", "abci_info", "abci_query",
+    "block", "block_results", "commit", "validators", "tx", "tx_search",
+    "getblockcount", "getblockhash", "getblock", "getblockchaininfo", "getrawtransaction",
+    "getBlockHeight", "getLatestBlockhash", "getBalance", "getAccountInfo", "getHealth",
+})
+_RETRYABLE_STATUS = frozenset({408, 429, 500, 502, 503, 504})
+
+
+def _request_is_replay_safe(work) -> bool:
+    if (work.method or "POST").upper() in ("GET", "HEAD"):
+        # Tendermint also exposes broadcasts over GET. Never replay those.
+        path = urllib.parse.unquote(getattr(work, "raw_path", None) or work.path or "").lower()
+        if any(word in path for word in ("broadcast", "submit", "sendtransaction", "sendrawtransaction")):
+            return False
+        params = urllib.parse.parse_qs(work.query or "")
+        return all(m in _READ_RPC_METHODS for m in params.get("method", []))
+    try:
+        payload = json.loads(work.body)
+        calls = payload if isinstance(payload, list) else [payload]
+        return bool(calls) and all(isinstance(c, dict) and c.get("method") in _READ_RPC_METHODS for c in calls)
+    except (ValueError, TypeError):
+        return False
+
+
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Do not forward credentials or payment authorizations to another host.
+        return None
 
 
 def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
     """Single-lane worker: select/auto-create contract, allocate nonce, sign, forward, return response."""
     t_start = time.time()
+    replay_safe = _request_is_replay_safe(work)
+    if os.environ.get("ARKEO_INSTITUTIONAL_MODE", "").lower() == "true":
+        if _safe_bool(cfg.get("auto_create", PROXY_AUTO_CREATE), bool(PROXY_AUTO_CREATE)):
+            return {"status": 503, "body": json.dumps({"error": "preprovisioned_contracts_required"}), "headers": {"Content-Type": "application/json"}}
+        budget = time.time() + 20
+        work.deadline = min(work.deadline, budget) if work.deadline else budget
     method = (work.method or "POST").upper()
     service_path = work.path or ""
     query_string = work.query or ""
@@ -6758,6 +6802,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
         bypass_cooldown = _safe_float(cfg.get("bypass_cooldown_sec"), PROXY_BYPASS_COOLDOWN)
         if bypass_cooldown < 0:
             bypass_cooldown = 0.0
+        bypass_attempted = False
         bypass_username = cfg.get("bypass_username") or ""
         bypass_password = cfg.get("bypass_password") or ""
         try:
@@ -6768,8 +6813,18 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             if cooldown_until and now < cooldown_until:
                 _log("warning", f"bypass cooldown active; skipping for {cooldown_until - now:.0f}s")
                 raise BypassError("cooldown_active")
+            try:
+                HEALTH_GATE.check(listener_id, "primary", bypass_uri, work.deadline)
+            except HealthError as exc:
+                raise BypassError(str(exc)) from None
             bypass_log_url = _redact_url_userinfo(bypass_uri)
             _log("info", f"bypass attempt url={bypass_log_url} timeout={bypass_timeout:.1f}s")
+            bypass_attempted = True
+            if work.deadline:
+                remaining = work.deadline - time.time()
+                if remaining <= 0:
+                    raise BypassError("request_deadline_exceeded")
+                bypass_timeout = min(bypass_timeout, remaining)
             code, resp_body, resp_hdrs, fwd_url, _fwd_headers = _forward_to_bypass(
                 bypass_uri,
                 raw_path,
@@ -6781,6 +6836,8 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 username=bypass_username,
                 password=bypass_password,
             )
+            if replay_safe and int(code or 0) in _RETRYABLE_STATUS:
+                raise BypassError(f"retryable_http_{code}")
             if not isinstance(resp_hdrs, dict):
                 resp_hdrs = {"Content-Type": "application/json"}
             resp_hdrs.setdefault("Content-Type", "application/json")
@@ -6891,6 +6948,9 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 pass
             return {"status": code or 502, "body": resp_body or b"", "headers": resp_hdrs}
         except BypassError as e:
+            if not replay_safe and bypass_attempted:
+                return {"status": 502, "body": json.dumps({"error": "upstream_outcome_unknown", "request_id": req_id}),
+                        "headers": {"Content-Type": "application/json"}}
             _log("warning", f"bypass failed ({e}); falling back to arkeo")
             if server_ref is not None and bypass_cooldown > 0 and str(e) != "cooldown_active":
                 server_ref.bypass_cooldown_until = time.time() + bypass_cooldown
@@ -7010,6 +7070,8 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
 
     height_start = time.time()
     cur_height, height_from_cache = _get_height_with_source(node)
+    if not isinstance(cur_height, int) or cur_height <= 0:
+        return {"status":503,"body":json.dumps({"error":"chain_height_unavailable"}),"headers":{"Content-Type":"application/json"}}
     height_ms = int((time.time() - height_start) * 1000)
 
     try:
@@ -7032,7 +7094,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             return False
         if _safe_int(c.get("settlement_height")) != 0:
             return False
-        if _safe_int(c.get("deposit")) <= 0:
+        if _safe_int(c.get("deposit")) <= max(0, _safe_int(c.get("paid"))):
             return False
         if (_safe_int(c.get("height")) + _safe_int(c.get("duration"))) <= effective_height:
             return False
@@ -7115,6 +7177,9 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
     last_err = None
     last_err_detail = None
     for idx, cand in enumerate(candidates, start=1):
+        if work.cancelled or (work.deadline and time.time() >= work.deadline):
+            last_err = "request_deadline_exceeded"
+            break
         cand_start = time.time()
         provider_filter = cand.get("provider_pubkey")
         sentinel = _normalize_sentinel_url(
@@ -7135,6 +7200,13 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 continue
         except Exception:
             pass
+
+        try:
+            HEALTH_GATE.check(listener_id, provider_filter, sentinel, work.deadline)
+        except HealthError as exc:
+            last_err = str(exc)
+            _set_top_service_status(listener_id, provider_filter, "Down")
+            continue
 
         # ---- Contract selection (cache → chain → auto-create)
         contract_fetch_ms = 0
@@ -7398,6 +7470,12 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             continue
 
         timeout_secs = _safe_int(cfg.get("timeout_secs", PROXY_TIMEOUT_SECS), PROXY_TIMEOUT_SECS)
+        if work.deadline:
+            remaining = work.deadline - time.time()
+            if remaining <= 0:
+                last_err = "request_deadline_exceeded"
+                break
+            timeout_secs = min(timeout_secs, remaining)
         as_header = _safe_bool(cfg.get("arkauth_as_header", PROXY_ARKAUTH_AS_HEADER), bool(PROXY_ARKAUTH_AS_HEADER))
         arkauth_format = str(cfg.get("arkauth_format", PROXY_ARKAUTH_FORMAT) or "").strip().lower()
         arkauth_format = arkauth_format.replace("-", "").replace("_", "")
@@ -7450,7 +7528,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 method=method,
                 query_string=query_string,
             )
-            if allow_fallback and _is_arkauth_format_error(code_val, body_val):
+            if replay_safe and allow_fallback and _is_arkauth_format_error(code_val, body_val):
                 _log(
                     "info",
                     f"retrying with {fallback_label} arkauth sentinel={sentinel} svc={service} "
@@ -7488,7 +7566,7 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
             return False
 
         # Sync nonce from sentinel on nonce-related errors, retry once.
-        if _is_nonce_error(code, resp_body):
+        if replay_safe and _is_nonce_error(code, resp_body):
             try:
                 highest = _claims_highest_nonce(sentinel, cid, contract_client)
                 if highest >= 0:
@@ -7535,6 +7613,13 @@ def _handle_forward_lane(work: WorkItem, cfg: dict) -> dict:
                 server_ref.cooldowns[provider_filter] = time.time() + float(PROXY_PROVIDER_COOLDOWN)
         except Exception:
             pass
+        if replay_safe and int(code or 0) in _RETRYABLE_STATUS:
+            if server_ref is not None:
+                server_ref.cooldowns[provider_filter] = time.time() + max(0, PROXY_PROVIDER_COOLDOWN)
+            _set_top_service_status(listener_id, provider_filter, "Down")
+            last_err = "upstream_unavailable"
+            if idx < len(candidates) and not forced_provider:
+                continue
         # Optional: wrap upstream errors into a JSON error payload for callers that want consistent errors.
         try:
             wrap_errors = _safe_bool(cfg.get("wrap_upstream_errors", PROXY_WRAP_UPSTREAM_ERRORS), bool(PROXY_WRAP_UPSTREAM_ERRORS))
@@ -7836,9 +7921,8 @@ def _sign_message(
     preimage = sign_template.format(contract_id=contract_id, nonce=nonce)
             # signhere has no home/keyring flags; ensure ~/.arkeo -> ARKEOD_HOME exists, then call plainly.
     _ensure_signhere_home()
-    cmd = f'signhere -u "{client_key}" -m "{preimage}" | tail -n 1'
-    code, out = run(cmd)
-    out_clean = out.strip() if isinstance(out, str) else ""
+    code, out = run_list(["signhere", "-u", client_key, "-m", preimage])
+    out_clean = out.strip().splitlines()[-1] if isinstance(out, str) and out.strip() else ""
     if code != 0 or not out_clean:
         return None, f"signhere_exit={code} output={out_clean}"
     sig_hex = _b64_or_hex_to_rs_hex(out_clean).lower()
@@ -7959,10 +8043,15 @@ def _forward_to_bypass(
     data_bytes = body if method != "GET" else None
     req = urllib.request.Request(url, data=data_bytes, headers=final_headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read(), dict(r.getheaders()), url, final_headers
+        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
+            return r.status, read_limited(r, 16 * 1024 * 1024, timeout), dict(r.getheaders()), url, final_headers
     except urllib.error.HTTPError as e:
-        return e.code, e.read(), dict(e.headers), url, final_headers
+        try:
+            return e.code, read_limited(e, 16 * 1024 * 1024, timeout), dict(e.headers), url, final_headers
+        except Exception:
+            raise BypassError("invalid upstream response") from None
+        finally:
+            e.close()
     except (urllib.error.URLError, TimeoutError, socket.timeout) as e:
         raise BypassError(str(e))
     except Exception as e:
@@ -7984,30 +8073,31 @@ def _forward_to_sentinel(
     url = f"{sentinel.rstrip('/')}/{service_path.lstrip('/')}"
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     final_headers = dict(headers)
-    qs = query_string or ""
-    if qs and qs.startswith("?"):
-        qs = qs[1:]
+    pairs = urllib.parse.parse_qsl((query_string or "").lstrip("?"), keep_blank_values=True)
+    pairs = [(k, v) for k, v in pairs if k.lower() not in ("arkauth", "arkcontract")]
     if as_header:
         final_headers["arkauth"] = arkauth
     else:
-        # Append arkauth to existing query, preserving any user-supplied params
-        qs_parts = []
-        if qs:
-            qs_parts.append(qs)
-        qs_parts.append(f"arkauth={urllib.parse.quote(arkauth, safe='')}")
-        url = f"{url}?{'&'.join(qs_parts)}" if qs_parts else url
+        pairs.append(("arkauth", arkauth))
+    if pairs:
+        url += "?" + urllib.parse.urlencode(pairs)
     # For GET we must not send a body or urllib will coerce to POST.
     data_bytes = body if method != "GET" else None
     req = urllib.request.Request(url, data=data_bytes, headers=final_headers, method=method)
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            return r.status, r.read(), dict(r.getheaders()), url, final_headers
+        with urllib.request.build_opener(_NoRedirect()).open(req, timeout=timeout) as r:
+            return r.status, read_limited(r, 16 * 1024 * 1024, timeout), dict(r.getheaders()), url, final_headers
     except urllib.error.HTTPError as e:
-        return e.code, e.read(), dict(e.headers), url, final_headers
+        try:
+            return e.code, read_limited(e, 16 * 1024 * 1024, timeout), dict(e.headers), url, final_headers
+        except Exception:
+            return 502, b'{"error":"invalid_upstream_response"}', {"Content-Type":"application/json"}, url, final_headers
+        finally:
+            e.close()
     except Exception as e:
         return (
             502,
-            json.dumps({"error": "proxy_upstream_error", "detail": str(e)}).encode(),
+            json.dumps({"error": "proxy_upstream_error"}).encode(),
             {"Content-Type": "application/json"},
             url,
             final_headers,
@@ -8629,8 +8719,13 @@ def _do_post_inner_core(self, method: str = "POST"):
     req_id = uuid.uuid4().hex
     try:
         body_len = int(self.headers.get("Content-Length", "0"))
-    except Exception:
-        body_len = 0
+    except (ValueError, TypeError):
+        return self._send_json(400, {"error": "invalid_content_length"})
+    if self.headers.get("Transfer-Encoding"):
+        return self._send_json(400, {"error": "transfer_encoding_not_supported"})
+    if body_len < 0 or body_len > int(os.getenv("PROXY_MAX_REQUEST_BYTES", "1048576")):
+        return self._send_json(413, {"error": "request_too_large"})
+    self.connection.settimeout(float(os.getenv("PROXY_REQUEST_READ_TIMEOUT", "10")))
 
     parsed_path = urllib.parse.urlparse(self.path or "/")
     incoming_path = parsed_path.path or "/"
@@ -8653,8 +8748,10 @@ def _do_post_inner_core(self, method: str = "POST"):
 
     try:
         body = self.rfile.read(body_len) if body_len > 0 else b""
-    except Exception:
-        body = b""
+    except (OSError, TimeoutError):
+        return self._send_json(408, {"error": "request_body_timeout"})
+    if len(body) != body_len:
+        return self._send_json(400, {"error": "incomplete_request_body"})
 
     try:
         self._log("info", f"req start service={service} svc_id={svc_id} bytes={len(body)} method={method}")
@@ -9577,6 +9674,13 @@ def cache_counts():
 
 def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_id: str | None = None):
     """Validate listener payload and return (listener_dict, error_str_or_None)."""
+    if not isinstance(payload, dict):
+        return None, "listener payload must be an object"
+    auto_create = payload.get("auto_create")
+    if auto_create is not None and not isinstance(auto_create, bool):
+        return None, "auto_create must be a boolean"
+    if auto_create and os.environ.get("ARKEO_INSTITUTIONAL_MODE", "").lower() == "true":
+        return None, "institutional listeners require preprovisioned contracts"
     target = ""  # notes removed
     status = (payload.get("status") or "").strip() or "inactive"
     service_id_val = payload.get("service_id") or payload.get("service")
@@ -9593,9 +9697,13 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
             payload.get("cors_allowed_origins") or payload.get("corsAllowedOrigins") or ""
         ).strip()
     health_method_raw = (payload.get("health_method") or payload.get("healthMethod") or "POST").strip().upper()
-    health_method = "GET" if health_method_raw == "GET" else "POST"
+    if health_method_raw not in ("GET", "POST"):
+        return None, "health_method must be GET or POST"
+    health_method = health_method_raw
     health_payload = (payload.get("health_payload") or payload.get("healthPayload") or "").strip()
     health_header = (payload.get("health_header") or payload.get("healthHeader") or "").strip()
+    if health_method == "GET" and (urllib.parse.urlsplit(health_payload).scheme or health_payload.startswith("//")):
+        return None, "health_payload must be a relative listener path"
     bypass_uri = None
     if "bypass_uri" in payload or "bypassUri" in payload:
         bypass_uri = (payload.get("bypass_uri") or payload.get("bypassUri") or "").strip()
@@ -9609,22 +9717,26 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
         bypass_password = (payload.get("bypass_password") or payload.get("bypassPassword") or "").strip()
     bypass_timeout_sec = None
     if "bypass_timeout_sec" in payload or "bypassTimeoutSec" in payload:
-        raw_timeout = payload.get("bypass_timeout_sec") or payload.get("bypassTimeoutSec") or ""
+        raw_timeout = payload.get("bypass_timeout_sec", payload.get("bypassTimeoutSec", ""))
         raw_timeout = str(raw_timeout).strip()
         if raw_timeout:
             try:
                 bypass_timeout_sec = float(raw_timeout)
+                if not math.isfinite(bypass_timeout_sec) or not 0.05 <= bypass_timeout_sec <= 30:
+                    return None, "bypass_timeout_sec must be between 0.05 and 30"
             except Exception:
                 return None, "bypass_timeout_sec must be a number"
         else:
             bypass_timeout_sec = ""
     bypass_cooldown_sec = None
     if "bypass_cooldown_sec" in payload or "bypassCooldownSec" in payload:
-        raw_cooldown = payload.get("bypass_cooldown_sec") or payload.get("bypassCooldownSec") or ""
+        raw_cooldown = payload.get("bypass_cooldown_sec", payload.get("bypassCooldownSec", ""))
         raw_cooldown = str(raw_cooldown).strip()
         if raw_cooldown:
             try:
                 bypass_cooldown_sec = float(raw_cooldown)
+                if not math.isfinite(bypass_cooldown_sec) or not 0 <= bypass_cooldown_sec <= 3600:
+                    return None, "bypass_cooldown_sec must be between 0 and 3600"
             except Exception:
                 return None, "bypass_cooldown_sec must be a number"
         else:
@@ -9643,6 +9755,7 @@ def _sanitize_listener_payload(payload: dict, existing_ports: set[int], current_
             return None, f"port {port} already in use"
     return {
         "target": target,
+        "auto_create": auto_create,
         "status": status,
         "port": port,
         "service_id": service_id,
@@ -9714,6 +9827,7 @@ def create_listener():
         "id": payload.get("id") or str(int(time.time() * 1000)),
         "target": "",
         "status": clean["status"],
+        "auto_create": clean["auto_create"] if clean["auto_create"] is not None else PROXY_AUTO_CREATE,
         "port": port,
         "service_id": clean.get("service_id") or "",
         "location": clean.get("location") or "",
@@ -9800,22 +9914,19 @@ def update_listener(listener_id: str):
         if str(l.get("id")) != str(listener_id):
             continue
         old_snapshot = dict(l)
+        service_changed = str(l.get("service_id") or "") != str(clean.get("service_id") or "")
         if clean["port"] is not None:
             l["port"] = clean["port"]
         l["target"] = ""
         l["status"] = clean["status"]
+        if clean["auto_create"] is not None:
+            l["auto_create"] = clean["auto_create"]
         l["service_id"] = clean.get("service_id") or ""
         if clean.get("location") is not None:
             l["location"] = clean.get("location") or ""
         # top services ordering: use custom if provided, else keep existing unless service changed or empty
         existing_top = l.get("top_services") if isinstance(l.get("top_services"), list) else []
-        if custom_top is not None:
-            # Honor explicit (even empty) input, but preserve persisted per-provider fields.
-            new_top = _merge_top_services_persisted_fields(existing_top, custom_top)
-        else:
-            new_top = existing_top
-            if str(l.get("service_id")) != str(clean.get("service_id") or "") or not new_top:
-                new_top = best
+        new_top = _listener_provider_selection(existing_top, custom_top, best, service_changed)
         l["top_services"] = _normalize_top_services(new_top)
         # derive provider/sentinel from top services primary (new order wins)
         if l["top_services"]:
@@ -9914,19 +10025,17 @@ def update_listener(listener_id: str):
                 continue
             if str(l.get("id")) != str(listener_id):
                 continue
+            service_changed = str(l.get("service_id") or "") != str(clean.get("service_id") or "")
             if clean["port"] is not None:
                 l["port"] = clean["port"]
             l["target"] = ""
             l["status"] = clean["status"]
+            if clean["auto_create"] is not None:
+                l["auto_create"] = clean["auto_create"]
             l["service_id"] = clean.get("service_id") or ""
             # Preserve persisted per-provider fields when custom top_services is provided.
             existing_top = l.get("top_services") if isinstance(l.get("top_services"), list) else []
-            if custom_top is not None:
-                new_top = _merge_top_services_persisted_fields(existing_top, custom_top)
-            else:
-                new_top = existing_top
-                if str(l.get("service_id")) != str(clean.get("service_id") or "") or not new_top:
-                    new_top = best
+            new_top = _listener_provider_selection(existing_top, custom_top, best, service_changed)
             l["top_services"] = _normalize_top_services(new_top)
             if clean.get("location") is not None:
                 l["location"] = clean.get("location") or ""
@@ -10138,8 +10247,10 @@ def get_active_providers():
 
 @app.post("/api/listeners/<listener_id>/refresh-top-services")
 def refresh_listener_top_services(listener_id: str):
-    """Recompute top_services for a single listener."""
+    """Refresh discovery while retaining consumer priorities and funded contract state."""
     updated: dict | None = None
+    payload = request.get_json(silent=True) or {}
+    reset_order = isinstance(payload, dict) and payload.get("reset_order") is True
 
     def _mut(data: dict) -> bool:
         nonlocal updated
@@ -10156,7 +10267,11 @@ def refresh_listener_top_services(listener_id: str):
             best = _normalize_top_services(
                 _top_active_services_by_payg(svc_id, limit=3, preferred_location=preferred_location)
             )
-            l["top_services"] = best
+            existing = l.get("top_services") or []
+            # Changing the primary requires an explicit reset or manual reorder.
+            # New providers remain selectable through the provider picker.
+            selected = best if reset_order or not existing else existing
+            l["top_services"] = _normalize_top_services(_merge_top_services_persisted_fields(existing, selected))
             l["updated_at"] = _timestamp()
             updated = l
             return True
@@ -10202,6 +10317,11 @@ def test_listener(listener_id: str):
         hm = (target.get("health_method") or "POST").upper()
         hp = target.get("health_payload") or ""
         hh = target.get("health_header") or ""
+        if hm == "GET" and (urllib.parse.urlsplit(hp).scheme or hp.startswith("//")):
+            return jsonify({"error": "health_payload must be a relative listener path"}), 400
+        probe = WorkItem(hm, hp if hm == "GET" else "", "", {}, hp.encode() if hm != "GET" else b"", "127.0.0.1")
+        if not _request_is_replay_safe(probe):
+            return jsonify({"error": "health probes must use a supported read-only method"}), 400
         headers = {}
         if hh:
             headers["Content-Type"] = hh
@@ -11243,12 +11363,9 @@ def subscriber_totals():
     )
 
 
-_bootstrap_thread = threading.Thread(target=_bootstrap_listeners_from_cache, daemon=True)
-_bootstrap_thread.start()
-_recheck_thread = threading.Thread(target=_down_provider_recheck_loop, daemon=True)
-_recheck_thread.start()
-_telemetry_thread = threading.Thread(target=_telemetry_bootstrap, daemon=True)
-_telemetry_thread.start()
-
 if __name__ == "__main__":
+    _bootstrap_wallets()
+    threading.Thread(target=_bootstrap_listeners_from_cache, daemon=True).start()
+    threading.Thread(target=_down_provider_recheck_loop, daemon=True).start()
+    threading.Thread(target=_telemetry_bootstrap, daemon=True).start()
     app.run(host="0.0.0.0", port=API_PORT)

@@ -1,7 +1,7 @@
 """
 ArkeoClient — Python SDK for Arkeo PAYG authenticated RPC calls
 
-Automatically signs requests using ADR-036 signatures with incrementing nonces.
+Automatically signs requests using chain PAYG preimages with incrementing nonces.
 Provides a transparent proxy to any Arkeo sentinel service.
 
 @version 1.0.0
@@ -11,6 +11,9 @@ Provides a transparent proxy to any Arkeo sentinel service.
 import json
 import hashlib
 import requests
+import threading
+from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+from bip32utils import BIP32Key, BIP32_HARDEN
 from typing import Optional, Dict, Any
 from ecdsa import SigningKey, SECP256k1
 from ecdsa.util import sigencode_string_canonize
@@ -73,9 +76,12 @@ def bech32_encode(prefix, data):
 def private_key_from_mnemonic(mnemonic_phrase: str) -> bytes:
     """Derive private key from mnemonic (simplified BIP-39)"""
     mnemo = Mnemonic("english")
-    seed = mnemo.to_seed(mnemonic_phrase)
-    # Simplified derivation (for production use proper BIP-32)
-    return hashlib.sha256(seed).digest()[:32]
+    if not mnemo.check(mnemonic_phrase):
+        raise ValueError("Invalid BIP-39 mnemonic")
+    key = BIP32Key.fromEntropy(mnemo.to_seed(mnemonic_phrase))
+    for child in (44 + BIP32_HARDEN, 118 + BIP32_HARDEN, BIP32_HARDEN, 0, 0):
+        key = key.ChildKey(child)
+    return key.PrivateKey()
 
 
 def encode_pubkey_bech32(pubkey_bytes: bytes) -> str:
@@ -125,7 +131,7 @@ class ArkeoClient:
     """
     Arkeo PAYG Client
     
-    Automatically signs RPC requests using ADR-036 signatures.
+    Automatically signs RPC requests using chain PAYG preimages.
     """
     
     def __init__(
@@ -167,7 +173,9 @@ class ArkeoClient:
         self.address = pubkey_to_address(self.public_key)
         
         # Nonce tracking
-        self.current_nonce = start_nonce
+        self.current_nonce = 0
+        self._lock = threading.RLock()
+        self.set_nonce(start_nonce)
     
     def get_nonce(self) -> int:
         """Get current nonce"""
@@ -175,32 +183,27 @@ class ArkeoClient:
     
     def set_nonce(self, nonce: int):
         """Set nonce manually (useful for persistence/recovery)"""
-        self.current_nonce = nonce
+        with self._lock:
+            if not isinstance(nonce, int) or isinstance(nonce, bool) or nonce <= 0 or nonce < self.current_nonce:
+                raise ValueError("Nonce must be positive and cannot move backwards")
+            self.current_nonce = nonce
     
     def sign(self, preimage: str) -> str:
         """
-        Sign a message using ADR-036 format
+        Sign a message using the chain PAYG preimage
         
         Args:
-            preimage: Message to sign: "{contractId}:{pubkey}:{nonce}"
+            preimage: Message to sign: "{contractId}:{nonce}:"
         
         Returns:
             Hex-encoded signature
         """
-        # Build ADR-036 StdSignDoc
-        sign_doc = build_adr036_signdoc(self.address, preimage.encode('utf-8'))
-        
-        # Hash the sign doc
-        hash_bytes = hashlib.sha256(sign_doc.encode('utf-8')).digest()
-        
-        # Sign the hash (with low-S normalization via sigencode_string_canonize)
-        sig_bytes = self.signing_key.sign_digest(
-            hash_bytes,
-            sigencode=sigencode_string_canonize
+        hash_bytes = hashlib.sha256(preimage.encode('utf-8')).digest()
+        sig_bytes = self.signing_key.sign_digest_deterministic(
+            hash_bytes, hashfunc=hashlib.sha256, sigencode=sigencode_string_canonize
         )
-        
         return sig_bytes.hex()
-    
+
     def generate_arkauth(self) -> str:
         """
         Generate arkauth header
@@ -208,7 +211,7 @@ class ArkeoClient:
         Returns:
             arkauth value (contractId:pubkey:nonce:signature)
         """
-        preimage = f"{self.contract_id}:{self.public_key_bech32}:{self.current_nonce}"
+        preimage = f"{self.contract_id}:{self.current_nonce}:"
         signature = self.sign(preimage)
         
         # Format: contractId:pubkey:nonce:signature
@@ -225,21 +228,24 @@ class ArkeoClient:
         Returns:
             requests.Response object
         """
-        arkauth = self.generate_arkauth()
-        
-        # Build URL with arkauth query parameter
-        separator = '&' if '?' in path else '?'
-        url = f"{self.sentinel_url}/{self.service}{path}{separator}arkauth={arkauth}"
-        
-        # Make request
-        response = requests.get(url, **kwargs)
-        
-        # Auto-increment nonce on success
-        if response.ok:
-            self.current_nonce += 1
-        
-        return response
-    
+        with self._lock:
+            if not path.startswith('/') or '#' in path:
+                raise ValueError("RPC path must be relative")
+            arkauth = self.generate_arkauth()
+            self.current_nonce += 1  # Failed requests may already have consumed this authorization.
+            persist = kwargs.pop('save_nonce', None)
+            if persist is not None:
+                persist(self.current_nonce)
+            url = urlsplit(f"{self.sentinel_url}/{self.service}{path}")
+            query = [(k,v) for k,v in parse_qsl(url.query, keep_blank_values=True) if k.lower() not in ('arkauth','arkcontract')]
+            target = urlunsplit((url.scheme,url.netloc,url.path,urlencode(query),''))
+            headers = {k:v for k,v in kwargs.pop('headers', {}).items() if k.lower() != 'arkauth'}
+            headers['arkauth'] = arkauth
+            method = kwargs.pop('method', 'GET')
+            kwargs.setdefault('timeout', 10)
+            kwargs['allow_redirects'] = False
+            return requests.request(method, target, headers=headers, **kwargs)
+
     def rpc_json(self, path: str, **kwargs) -> Dict[str, Any]:
         """
         Make authenticated RPC call and return JSON

@@ -1,91 +1,44 @@
-/**
- * Cloudflare Pages Function: /health-check
- *
- * Proxies Arkeo sentinel health checks server-side, bypassing the browser's
- * mixed-content block (marketplace is HTTPS, most sentinels are HTTP-only).
- *
- * Usage: GET /health-check?url=http://arkeo-provider.liquify.com:3636/metadata.json
- *
- * Returns:
- *   { ok: true,  latencyMs: 234, data: { ... metadata ... } }
- *   { ok: false, error: "timeout" | "network" | "bad_status", latencyMs: 234 }
- */
-
+/** Metadata probe. Operators must explicitly allow each complete metadata URL. */
 const TIMEOUT_MS = 7000;
-const ALLOWED_PROTOCOLS = ['http:', 'https:'];
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Cache-Control': 'no-cache, no-store',
-};
+const MAX_BYTES = 65536;
+const HEADERS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, OPTIONS', 'Cache-Control': 'no-store' };
+const reply = (data, status = 200) => Response.json(data, { status, headers: HEADERS });
 
-export async function onRequest(context) {
-  const { request } = context;
-
-  // Handle preflight
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
-  }
-
-  const reqUrl = new URL(request.url);
-  const targetUrl = reqUrl.searchParams.get('url');
-
-  if (!targetUrl) {
-    return Response.json(
-      { ok: false, error: 'missing_param', message: 'url parameter required' },
-      { status: 400, headers: CORS_HEADERS }
-    );
-  }
-
-  // Validate URL
-  let parsed;
+export async function onRequest({ request, env = {} }) {
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: HEADERS });
+  if (request.method !== 'GET') return reply({ ok: false, error: 'method_not_allowed' }, 405);
+  let target;
   try {
-    parsed = new URL(targetUrl);
-  } catch {
-    return Response.json(
-      { ok: false, error: 'invalid_url' },
-      { status: 400, headers: CORS_HEADERS }
-    );
-  }
-
-  if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
-    return Response.json(
-      { ok: false, error: 'protocol_not_allowed' },
-      { status: 400, headers: CORS_HEADERS }
-    );
-  }
-
-  // Fetch with timeout
+    target = new URL(new URL(request.url).searchParams.get('url'));
+    if (!['https:', 'http:'].includes(target.protocol) || target.username || target.password || target.hash) throw Error();
+  } catch { return reply({ ok: false, error: 'invalid_url' }, 400); }
+  // Exact URLs prevent this public endpoint from becoming an arbitrary server-side proxy.
+  // Only trusted operator-managed hosts may be added; never populate this from user input.
+  const allowed = String(env.HEALTH_CHECK_ALLOWED_URLS || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!allowed.length) return reply({ ok: false, error: 'health_check_not_configured' }, 503);
+  if (!allowed.includes(target.href)) return reply({ ok: false, error: 'target_not_allowed' }, 403);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  const t0 = Date.now();
-
+  const start = Date.now();
   try {
-    const resp = await fetch(targetUrl, {
-      signal: controller.signal,
-      headers: { Accept: 'application/json' },
-      cf: { cacheTtl: 0 },  // Don't cache in Cloudflare edge
-    });
-    clearTimeout(timer);
-    const latencyMs = Date.now() - t0;
-
-    let data = null;
-    const ct = resp.headers.get('content-type') || '';
-    if (ct.includes('application/json')) {
-      try { data = await resp.json(); } catch { data = null; }
+    const response = await fetch(target, { signal: controller.signal, redirect: 'error', headers: { Accept: 'application/json' }, cf: { cacheTtl: 0 } });
+    if (!response.ok) { await response.body?.cancel(); return reply({ ok: false, error: 'bad_status', status: response.status }, 502); }
+    if (!response.headers.get('content-type')?.includes('application/json')) { await response.body?.cancel(); return reply({ ok: false, error: 'invalid_metadata' }, 502); }
+    const reader = response.body?.getReader();
+    if (!reader) return reply({ ok: false, error: 'empty_metadata' }, 502);
+    const chunks = []; let size = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_BYTES) { await reader.cancel(); return reply({ ok: false, error: 'metadata_too_large' }, 502); }
+      chunks.push(value);
     }
-
-    return Response.json(
-      { ok: resp.ok, status: resp.status, latencyMs, data },
-      { headers: CORS_HEADERS }
-    );
-  } catch (err) {
-    clearTimeout(timer);
-    const latencyMs = Date.now() - t0;
-    const isTimeout = err.name === 'AbortError';
-    return Response.json(
-      { ok: false, error: isTimeout ? 'timeout' : 'network', latencyMs },
-      { status: 502, headers: CORS_HEADERS }
-    );
-  }
+    const bytes = new Uint8Array(size); let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.length; }
+    const data = JSON.parse(new TextDecoder().decode(bytes));
+    return reply({ ok: true, status: response.status, latencyMs: Date.now() - start, data });
+  } catch (error) {
+    return reply({ ok: false, error: controller.signal.aborted ? 'timeout' : 'network_or_invalid_metadata', latencyMs: Date.now() - start }, 502);
+  } finally { clearTimeout(timer); }
 }
