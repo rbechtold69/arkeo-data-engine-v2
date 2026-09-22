@@ -641,6 +641,7 @@
   </style>
   <link rel="stylesheet" href="css/nav.css">
   <script src="js/nav.js"></script>
+  <script src="js/marketplace.js"></script>
 </head>
 <body>
   <!-- Navigation -->
@@ -716,6 +717,7 @@
         </div>
       </div>
       
+      <div id="serviceScope"></div>
       <div id="loadingChains" class="status-box testing">
         <div class="spinner"></div>
         <span>Loading available chains from Arkeo network...</span>
@@ -2181,164 +2183,63 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
     }
 
     // ============================================================
-    // LOAD SERVICES FROM BLOCKCHAIN (sorted by marketplace demand)
+    // LOAD CURRENT SERVICES FROM BLOCKCHAIN
     // ============================================================
-    async function fetchAllContracts() {
-      let allContracts = [];
-      let nextKey = null;
-      let page = 0;
-      const maxPages = 20;
-      
-      do {
-        const params = nextKey ? `?pagination.key=${encodeURIComponent(nextKey)}` : '';
-        const response = await fetch(`${CONFIG.REST_API}/arkeo/contracts${params}`);
-        if (!response.ok) throw new Error(`Contracts API returned ${response.status}`);
-        const data = await response.json();
-        const contracts = data.contract || data.contracts || [];
-        allContracts = allContracts.concat(contracts);
-        nextKey = data.pagination?.next_key || null;
-        page++;
-      } while (nextKey && page < maxPages);
-      
-      if (CONFIG.DEBUG_MODE) console.log(`Loaded ${allContracts.length} contracts across ${page} pages`);
-      return allContracts;
-    }
-    
-    function computeServiceDemand(contracts) {
-      // Count active (deposit > paid) and total contracts per service
-      const demand = {};
-      for (const c of contracts) {
-        const svc = c.service || c.service_id || '';
-        if (!svc) continue;
-        if (!demand[svc]) demand[svc] = { active: 0, total: 0 };
-        demand[svc].total++;
-        const deposit = parseInt(c.deposit || '0');
-        const paid = parseInt(c.paid || '0');
-        if (deposit > paid) demand[svc].active++;
-      }
-      return demand;
-    }
-    
-    function getDemandIndicator(active) {
-      if (active >= 5) return { icon: '🔥', label: 'High demand', cls: 'demand-high' };
-      if (active >= 2) return { icon: '⚡', label: 'Growing', cls: 'demand-growing' };
-      if (active >= 1) return { icon: '📊', label: 'Some activity', cls: 'demand-some' };
-      return { icon: '—', label: 'No contracts yet', cls: 'demand-none' };
-    }
-    
     async function loadServices() {
       const loadingDiv = document.getElementById('loadingChains');
       
       try {
-        // Fetch services, contracts, and providers in parallel
-        const [servicesRes, contracts, providersRes] = await Promise.all([
-          fetch(`${CONFIG.REST_API}/arkeo/services`).then(r => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); }),
-          fetchAllContracts().catch(err => { console.warn('Contract fetch failed:', err); return []; }),
-          fetch(`${CONFIG.REST_API}/arkeo/providers`).then(r => r.ok ? r.json() : null).catch(() => null),
-        ]);
-        
-        // Count providers per service
+        const { services, providers } = await Marketplace.registry(CONFIG.REST_API);
         const providerCounts = {};
-        if (providersRes) {
-          const providers = providersRes.provider || providersRes.providers || [];
-          for (const p of providers) {
-            const svc = p.service || '';
-            if (svc) providerCounts[svc] = (providerCounts[svc] || 0) + 1;
-          }
+        for (const p of providers.filter(Marketplace.registered)) {
+          const svc = Marketplace.resolveService(p.service, services);
+          if (svc) providerCounts[svc.id] = (providerCounts[svc.id] || 0) + 1;
         }
-        
-        // Parse services
-        let services = servicesRes.services || servicesRes.service || [];
-        if (Array.isArray(servicesRes)) services = servicesRes;
-        
-        state.services = services.map(s => ({
-          id: s.service_id || s.id || s.service,
-          name: s.name || `Service ${s.service_id || s.id}`,
-          description: s.description || '',
-        }));
-        
-        if (state.services.length === 0) {
-          state.services = getDefaultServices();
-        }
-        
-        // Compute demand from contracts
-        state.serviceDemand = computeServiceDemand(contracts);
-        
-        // Enrich services with demand data and provider counts
-        for (const svc of state.services) {
-          const d = state.serviceDemand[svc.name] || state.serviceDemand[svc.id] || { active: 0, total: 0 };
-          svc.activeContracts = d.active;
-          svc.totalContracts = d.total;
-          svc.providerCount = providerCounts[svc.name] || providerCounts[svc.id] || 0;
-        }
-        
-        // Sort by active contracts (desc), then total contracts (desc), then name (asc)
-        state.services.sort((a, b) => {
-          if (b.activeContracts !== a.activeContracts) return b.activeContracts - a.activeContracts;
-          if (b.totalContracts !== a.totalContracts) return b.totalContracts - a.totalContracts;
-          return a.name.localeCompare(b.name);
-        });
+        state.services = services;
+        for (const svc of state.services) svc.providerCount = providerCounts[svc.id] || 0;
+        state.services.sort((a,b) => a.name.localeCompare(b.name));
         
         loadingDiv.classList.add('hidden');
         renderServices(state.services);
         
       } catch (err) {
         console.error('Failed to load services:', err);
-        state.services = getDefaultServices();
-        state.serviceDemand = {};
-        for (const svc of state.services) { svc.activeContracts = 0; svc.totalContracts = 0; }
-        loadingDiv.innerHTML = `
-          <span style="color: var(--warning);">⚠️ Using cached chain list (API unavailable)</span>
-        `;
-        setTimeout(() => {
-          loadingDiv.classList.add('hidden');
-          renderServices(state.services);
-        }, 2000);
+        state.services = [];
+        state.selectedService = null;
+        document.getElementById('nextBtn1').disabled = true;
+        document.getElementById('chainGrid').textContent = '';
+        loadingDiv.classList.remove('hidden');
+        loadingDiv.textContent = 'Cannot load the current service registry. No service IDs have been assumed. ';
+        const retry = document.createElement('button'); retry.textContent = 'Retry'; retry.onclick = loadServices; loadingDiv.appendChild(retry);
       }
     }
-    
-    function getDefaultServices() {
-      return [
-        { id: 1, name: 'arkeo-mainnet-fullnode', description: 'Arkeo Mainnet Full Node' },
-        { id: 2, name: 'arkeo-mainnet-rest', description: 'Arkeo Mainnet REST API' },
-        { id: 20, name: 'eth-mainnet-fullnode', description: 'Ethereum Mainnet Full Node' },
-        { id: 21, name: 'eth-mainnet-archive', description: 'Ethereum Mainnet Archive' },
-        { id: 30, name: 'btc-mainnet-fullnode', description: 'Bitcoin Mainnet Full Node' },
-        { id: 40, name: 'cosmos-mainnet-fullnode', description: 'Cosmos Hub Full Node' },
-        { id: 50, name: 'osmosis-mainnet-fullnode', description: 'Osmosis Mainnet Full Node' },
-        { id: 74, name: 'thorchain-mainnet-fullnode', description: 'THORChain Mainnet Full Node' },
-        { id: 89, name: 'base-mainnet-fullnode', description: 'Base Mainnet Full Node' },
-      ];
-    }
-    
+
+    let showAllServices = false;
     function renderServices(services) {
+      services = services.filter(s => showAllServices || Marketplace.inScope(s));
       const grid = document.getElementById('chainGrid');
       
       grid.innerHTML = services.map(s => {
-        const active = s.activeContracts || 0;
-        const total = s.totalContracts || 0;
         const providerCount = s.providerCount || 0;
-        const d = getDemandIndicator(active);
-        const countText = active > 0 ? `${active} active contract${active !== 1 ? 's' : ''}` : (total > 0 ? `${total} total` : '');
         const displayName = getChainDisplayName(s.name);
         const icon = getChainIcon(s.name);
         
         return `
-        <div class="chain-option" onclick="selectService(${s.id}, '${escapeHtml(s.name)}')">
+        <div class="chain-option" data-service-id="${escapeHtml(s.id)}">
           <div style="font-size: 1.5rem; margin-bottom: 0.5rem;">${icon}</div>
           <div class="chain-name">${escapeHtml(displayName)}</div>
           <div class="chain-id">${escapeHtml(s.name)}</div>
-          <div class="chain-demand ${d.cls}" title="${d.label}">
-            <span>${d.icon}</span>
-            <span class="demand-text">${countText || d.label}</span>
-          </div>
           <div style="font-size: 0.65rem; color: var(--text-dim); margin-top: 0.25rem;">
             ${providerCount > 0 ? `👥 ${providerCount} provider${providerCount !== 1 ? 's' : ''}` : '🆕 No providers yet'}
           </div>
         </div>`;
       }).join('');
+      grid.querySelectorAll('[data-service-id]').forEach(el => el.addEventListener('click', () => { const s = services.find(s => s.id === el.dataset.serviceId); if (s) selectService(s.id, s.name, el); }));
+      if (!services.length) grid.textContent = 'No services in this scope are registered yet. Request a service or view all registered services.';
     }
     
+    Marketplace.mountScope('serviceScope', all => { showAllServices = all; filterChains(); });
+
     function filterChains() {
       const search = document.getElementById('chainSearch').value.toLowerCase().trim();
       if (!search) { renderServices(state.services); return; }
@@ -2359,14 +2260,15 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       renderServices(filtered);
     }
     
-    function selectService(id, name) {
+    function selectService(id, name, element) {
+      if (!state.services.some(s => s.id === String(id) && s.name === name)) return;
       state.selectedService = { id, name };
       
       // Update UI
       document.querySelectorAll('.chain-option').forEach(el => {
         el.classList.remove('selected');
       });
-      event.currentTarget.classList.add('selected');
+      element?.classList.add('selected');
       
       document.getElementById('nextBtn1').disabled = false;
       document.getElementById('selectedChainName').textContent = getChainDisplayName(name);
@@ -2755,7 +2657,8 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
     }
     
     function updateSummary() {
-      const rate = parseInt(document.getElementById('paygRate').value) || 25000;
+      const rawRate = document.getElementById('paygRate').value.trim();
+      const rate = /^\d+$/.test(rawRate) ? rawRate : null;
       state.paygRate = rate;
       
       // Update summary card
@@ -2764,7 +2667,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       const rpcEl = document.getElementById('summarySentinel') || document.getElementById('summaryRpc');
       if (rpcEl) rpcEl.textContent = state.rpcUrl || '-';
       const rateEl = document.getElementById('summaryRate');
-      if (rateEl) rateEl.textContent = `${rate.toLocaleString()} uarkeo/req`;
+      if (rateEl) rateEl.textContent = rate === null ? 'Enter a whole number of uarkeo' : `${BigInt(rate).toLocaleString()} uarkeo/req`;
       
       // Update price calculator
       const arkeoPerReq = rate / 100000000;
@@ -2942,6 +2845,10 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
       let modTxHash = null;
       
       try {
+        if (!state.selectedService) throw new Error('Select a registered service before signing.');
+        if (!/^\d+$/.test(String(state.paygRate))) throw new Error('Enter a valid whole-number PAYG rate before signing.');
+        const currentService = await Marketplace.service(CONFIG.REST_API, state.selectedService.name);
+        if (currentService.id !== String(state.selectedService.id)) throw new Error('Service registry changed. Reload and select the service again.');
         // ============================================================
         // TRANSACTION 1: Bond Provider
         // ============================================================
@@ -2998,8 +2905,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
           if (parseInt(accountInfo2.sequence) > parseInt(prevSeq)) break;
         }
         if (!accountInfo2 || parseInt(accountInfo2.sequence) <= parseInt(prevSeq)) {
-          // Force increment as fallback
-          accountInfo2 = { ...accountInfo, sequence: String(parseInt(prevSeq) + 1) };
+          throw new Error('Bond submitted, but account confirmation timed out. Wait for confirmation before retrying configuration.');
         }
         
         showLoading('Transaction 2 of 2', 'Configure Service - Approve in Keplr');
@@ -3019,7 +2925,7 @@ app.listen(<span style="color: #79c0ff;">3637</span>);</pre>
             minContractDuration: String(state.minContractDuration || 10),
             maxContractDuration: String(Math.min(state.maxContractDuration || 5256000, 5256000)),
             subscriptionRate: [{ denom: CONFIG.ARKEO_DENOM, amount: '1' }],  // Must be positive
-            payAsYouGoRate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate || '1') }],
+            payAsYouGoRate: [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate) }],
             settlementDuration: '10',
           }
         };
@@ -3588,22 +3494,16 @@ services:
         resultsDiv.appendChild(t3);
 
         try {
-          const chainResp = await fetch(`${CONFIG.REST_API}/arkeo/providers`, { signal: AbortSignal.timeout(8000) });
-          if (chainResp.ok) {
-            const chainData = await chainResp.json();
-            const allProviders = chainData.provider || chainData.providers || [];
-            const myProviders = allProviders.filter(p => {
-              const pk = p.pub_key || '';
-              return state.walletPubkeyBytes && pk === state.walletPubkey ||
-                pk.startsWith((state.walletAddress || '').substring(0, 10));
-            });
-
-            const anyOnline = myProviders.some(p => p.status === 'ONLINE' && parseInt(p.bond || 0) > 0);
+          const allProviders = await Marketplace.collection(CONFIG.REST_API, 'providers', ['provider','providers']);
+          {
+            const currentService = state.selectedService && await Marketplace.service(CONFIG.REST_API, state.selectedService.name);
+            const myProviders = allProviders.filter(p => p.pub_key === state.walletPubkeyBech32 && currentService && (String(p.service) === currentService.id || p.service === currentService.name));
+            const anyOnline = myProviders.some(Marketplace.registered);
             const anyRegistered = myProviders.length > 0;
 
             if (anyOnline) {
               t3.className = 'status-box success';
-              t3.innerHTML = `<span>✅</span><span>Provider found on-chain and ONLINE. Bond active.</span>`;
+              t3.innerHTML = `<span>✅</span><span>Selected provider service is registered online with an active bond. This does not verify live availability.</span>`;
             } else if (anyRegistered) {
               t3.className = 'status-box warning';
               t3.innerHTML = `<span>⚠️</span><div>
@@ -3617,9 +3517,6 @@ services:
                 <br><code style="font-size:0.8rem;color:var(--text-dim);">Fix: bond ARKEO tokens first via Step 4</code>
               </div>`;
             }
-          } else {
-            t3.className = 'status-box warning';
-            t3.innerHTML = `<span>⚠️</span><span>Could not check on-chain status (API error). Verify manually on the explorer.</span>`;
           }
         } catch(e) {
           t3.className = 'status-box warning';
@@ -3703,19 +3600,14 @@ services:
           </div>
         `;
         
-        // If user skipped to step 6, fetch provider info from chain
-        let serviceName = state.selectedService?.name || '';
-        let providerData = null;
-        if (state.walletPubkeyBech32) {
-          try {
-            const provResp = await fetch(`${CONFIG.REST_API}/arkeo/provider/${state.walletPubkeyBech32}/arkeo-mainnet-fullnode`);
-            if (provResp.ok) {
-              providerData = (await provResp.json()).provider;
-              if (!serviceName) serviceName = 'arkeo-mainnet-fullnode';
-            }
-          } catch (e) { console.warn('Could not fetch provider from chain:', e); }
+        const serviceName = state.selectedService?.name;
+        if (!serviceName) throw new Error('Select the service you want to update first.');
+        const currentService = await Marketplace.service(CONFIG.REST_API, serviceName);
+        const providerData = await Marketplace.provider(CONFIG.REST_API, state.walletPubkeyBech32, currentService.name);
+        if (String(providerData.service) !== currentService.id && providerData.service !== currentService.name) throw new Error('Provider service does not match your selection.');
+        for (const field of ['min_contract_duration','max_contract_duration','settlement_duration','subscription_rate','pay_as_you_go_rate','status']) {
+          if (providerData[field] == null) throw new Error('Incomplete on-chain provider terms; metadata update cancelled.');
         }
-        if (!serviceName) serviceName = 'arkeo-mainnet-fullnode';
 
         const accountInfo = await getAccountInfo(state.walletAddress);
         
@@ -3727,12 +3619,12 @@ services:
             service: serviceName,
             metadataUri: metadataUri,
             metadataNonce: String(Date.now()), // Increment nonce to signal update
-            status: 1, // ONLINE
-            minContractDuration: String(providerData?.min_contract_duration || state.minContractDuration || 10),
-            maxContractDuration: String(providerData?.max_contract_duration || Math.min(state.maxContractDuration || 5256000, 5256000)),
-            subscriptionRate: providerData?.subscription_rate || [{ denom: CONFIG.ARKEO_DENOM, amount: '1' }],
-            payAsYouGoRate: providerData?.pay_as_you_go_rate || [{ denom: CONFIG.ARKEO_DENOM, amount: String(state.paygRate || 25000) }],
-            settlementDuration: providerData?.settlement_duration || '10',
+            status: providerData.status === 'ONLINE' || providerData.status === 1 || providerData.status === '1' ? 1 : 0, // Preserve availability
+            minContractDuration: String(providerData.min_contract_duration),
+            maxContractDuration: String(providerData.max_contract_duration),
+            subscriptionRate: providerData.subscription_rate,
+            payAsYouGoRate: providerData.pay_as_you_go_rate,
+            settlementDuration: String(providerData.settlement_duration),
           }
         };
         

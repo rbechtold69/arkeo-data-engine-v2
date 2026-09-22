@@ -844,6 +844,7 @@
   </script>
   <link rel="stylesheet" href="css/nav.css">
   <script src="js/nav.js"></script>
+  <script src="js/marketplace.js"></script>
 </head>
 <body>
   <!-- Navigation -->
@@ -882,6 +883,7 @@
       <p class="wizard-subtitle">Select the blockchain you want to access.</p>
       
       <div class="form-group">
+        <div id="serviceScope"></div>
         <input type="text" class="form-input" placeholder="🔍 Search chains..." id="chainSearch" oninput="filterChains()">
       </div>
       
@@ -1216,52 +1218,14 @@ console.log(data);</pre>
         </div>
       </div>
       
-      <!-- Failover Protection -->
       <div class="form-group">
-        <label class="form-label">Uptime Protection</label>
-        <div style="background: var(--bg-input); border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem;">
-          <label style="display: flex; align-items: flex-start; gap: 0.75rem; cursor: pointer;">
-            <input type="checkbox" id="enableFailover" checked onchange="failoverEnabled = this.checked; saveState();" style="margin-top: 0.25rem; width: 18px; height: 18px; accent-color: var(--arkeo);">
-            <div>
-              <div style="font-weight: 600; margin-bottom: 0.25rem;">🛡️ Enable Auto-Failover</div>
-              <div style="font-size: 0.85rem; color: var(--text-dim); line-height: 1.4;">
-                Automatically creates overlapping backup contracts and routes to best available providers.
-              </div>
-            </div>
-          </label>
-          
-          <div id="failoverDetails" style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
-            <div style="font-size: 0.85rem; margin-bottom: 0.75rem;">
-              <strong>How providers are ranked:</strong>
-            </div>
-            <div style="display: flex; flex-direction: column; gap: 0.5rem; font-size: 0.85rem;">
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="background: var(--arkeo); color: #000; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">1</span>
-                <span><strong>Location match</strong> — Providers in your region first</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="background: var(--arkeo); color: #000; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">2</span>
-                <span><strong>Lowest rate</strong> — Cheapest pay-as-you-go rate</span>
-              </div>
-              <div style="display: flex; align-items: center; gap: 0.5rem;">
-                <span style="background: var(--arkeo); color: #000; width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; font-weight: 700;">3</span>
-                <span><strong>Top 5 queued</strong> — Best alternatives ready to switch</span>
-              </div>
-            </div>
-            <div style="margin-top: 1rem; display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; font-size: 0.85rem;">
-              <div style="background: rgba(59, 224, 255, 0.1); padding: 0.75rem; border-radius: 0.5rem;">
-                <div style="color: var(--text-dim); margin-bottom: 0.25rem;">Overlap Threshold</div>
-                <div style="font-weight: 600; color: var(--arkeo);">20% remaining</div>
-              </div>
-              <div style="background: rgba(16, 185, 129, 0.1); padding: 0.75rem; border-radius: 0.5rem;">
-                <div style="color: var(--text-dim); margin-bottom: 0.25rem;">Backup Contracts</div>
-                <div style="font-weight: 600; color: #10b981;">Auto-created</div>
-              </div>
-            </div>
-          </div>
+        <label class="form-label">Failover setup</label>
+        <div style="background:var(--bg-input);border:1px solid var(--border);border-radius:.5rem;padding:1rem;">
+          This wizard opens a contract with your selected provider. To protect your application, configure its subscriber with a primary and compatible backups, fund their contracts, and verify health checks.
+          <a href="rpc-rollout.html" target="_blank" rel="noopener" style="color:var(--arkeo)">View setup guidance →</a>
         </div>
       </div>
-      
+
       <!-- API Signing Key Section -->
       <div class="form-group" style="margin-top: 2rem;">
         <label class="form-label">🔑 API Signing Key</label>
@@ -1407,25 +1371,17 @@ console.log(data);</pre>
             <span class="summary-value" id="finalContractId">#12345</span>
           </div>
           <div class="summary-row" id="failoverStatus">
-            <span class="summary-label">Auto-Failover</span>
-            <span class="summary-value" style="color: #10b981;">🛡️ Enabled</span>
+            <span class="summary-label">Failover</span>
+            <span class="summary-value">Requires subscriber setup</span>
           </div>
         </div>
         
-        <div id="failoverInfo" style="background: rgba(16, 185, 129, 0.1); border: 1px solid #10b981; border-radius: 0.5rem; padding: 1rem; margin: 1rem 0; text-align: left;">
-          <div style="font-weight: 600; margin-bottom: 0.5rem;">🛡️ Failover Protection Active</div>
-          <div style="font-size: 0.85rem; color: var(--text-dim); line-height: 1.5;">
-            When your contract reaches 20% remaining, an overlapping backup contract is auto-created.
-            If your provider goes down, traffic routes to the next best provider instantly.
-          </div>
-          <div style="margin-top: 0.75rem; font-size: 0.85rem;">
-            <strong>Ranked backup providers:</strong>
-          </div>
-          <div id="backupProvidersList" style="margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.85rem;">
-            <!-- Populated by JS -->
-          </div>
+        <div id="failoverInfo" style="background:var(--bg-card);border:1px solid var(--border);border-radius:.5rem;padding:1rem;margin:1rem 0;text-align:left;">
+          <strong>Next: configure and test your backups</strong>
+          <p>Opening this contract does not configure routing or fund backup providers. Keep your chosen primary, add compatible alternatives in your subscriber, and test failure and recovery before relying on failover.</p>
+          <a href="rpc-rollout.html" style="color:var(--arkeo)">RPC rollout guide →</a>
         </div>
-        
+
         <!-- Developer Integration Section -->
         <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 0.75rem; padding: 1.5rem; margin: 2rem 0; text-align: left;">
           <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem;">🚀 Start Making Queries</h3>
@@ -1618,14 +1574,8 @@ console.log(data);</pre>
     // KNOWN_PROVIDERS loaded from js/providers.js (included via script tag)
     
     // Helper to find known provider by pubkey (use canonical function from providers.js if available)
-    const findKnown = typeof findKnownProvider === 'function' ? findKnownProvider : function(pk) {
-      if (typeof KNOWN_PROVIDERS === 'undefined') return null;
-      if (KNOWN_PROVIDERS[pk]) return KNOWN_PROVIDERS[pk];
-      const match = Object.keys(KNOWN_PROVIDERS).find(k =>
-        k.startsWith(pk.slice(0, 40)) || pk.startsWith(k.slice(0, 40)));
-      return match ? KNOWN_PROVIDERS[match] : null;
-    };
-    
+    const findKnown = findKnownProvider;
+
     // Display name mapping for services
     const CHAIN_DISPLAY_NAMES = {
       'arkeo-mainnet-rpc': 'Arkeo (RPC)',
@@ -1680,44 +1630,9 @@ console.log(data);</pre>
     };
     
     // Service ID to actual service name (for API calls)
-    const SERVICE_ID_TO_NAME = {
-      0: 'unknown', 1: 'mock', 2: 'arkeo-mainnet-fullnode', 3: 'avax-mainnet-fullnode',
-      4: 'avax-mainnet-archivenode', 5: 'bch-mainnet-fullnode', 6: 'bch-mainnet-lightnode',
-      7: 'bnb-mainnet-fullnode', 8: 'bsc-mainnet-fullnode', 9: 'bsc-mainnet-archivenode',
-      10: 'btc-mainnet-fullnode', 11: 'btc-mainnet-lightnode', 12: 'cardano-mainnet-relaynode',
-      13: 'gaia-mainnet-rpc', 14: 'doge-mainnet-fullnode', 15: 'doge-mainnet-lightnode',
-      16: 'etc-mainnet-archivenode', 17: 'etc-mainnet-fullnode', 18: 'etc-mainnet-lightnode',
-      19: 'eth-mainnet-archivenode', 20: 'eth-mainnet-fullnode', 21: 'eth-mainnet-lightnode',
-      22: 'ltc-mainnet-fullnode', 23: 'ltc-mainnet-lightnode', 24: 'optimism-mainnet-fullnode',
-      25: 'osmosis-mainnet-fullnode', 26: 'polkadot-mainnet-fullnode', 27: 'polkadot-mainnet-lightnode',
-      28: 'polkadot-mainnet-archivenode', 29: 'polygon-mainnet-fullnode', 30: 'polygon-mainnet-archivenode',
-      31: 'sol-mainnet-fullnode', 32: 'thorchain-mainnet-fullnode', 33: 'bch-mainnet-unchained',
-      34: 'btc-mainnet-unchained', 35: 'bnb-mainnet-unchained', 36: 'bsc-mainnet-unchained',
-      38: 'gaia-mainnet-unchained', 39: 'doge-mainnet-unchained', 40: 'eth-mainnet-unchained',
-      41: 'avax-mainnet-unchained', 42: 'ltc-mainnet-unchained', 43: 'osmosis-mainnet-unchained',
-      44: 'thorchain-mainnet-unchained', 45: 'optimism-mainnet-unchained', 46: 'gaia-mainnet-grpc',
-      47: 'btc-mainnet-blockbook', 48: 'ltc-mainnet-blockbook', 49: 'bch-mainnet-blockbook',
-      50: 'doge-mainnet-blockbook', 51: 'agoric-mainnet-archivenode', 52: 'agoric-mainnet-fullnode',
-      55: 'akash-mainnet-archivenode', 56: 'akash-mainnet-fullnode', 63: 'aptos-mainnet-fullnode',
-      65: 'arbitrum-mainnet-archivenode', 66: 'arbitrum-mainnet-fullnode', 67: 'arbitrum-mainnet-unchained',
-      74: 'arkeo-mainnet-archivenode', 75: 'arkeo-mainnet-unchained', 77: 'arkeo-testnet-fullnode',
-      80: 'avax-fuji-testnet-fullnode', 83: 'azero-mainnet-fullnode', 86: 'babylon-mainnet-fullnode',
-      88: 'base-mainnet-archivenode', 89: 'base-mainnet-fullnode', 90: 'base-mainnet-unchained',
-      92: 'base-testnet-fullnode', 97: 'bera-mainnet-archivenode', 98: 'bera-mainnet-fullnode',
-      102: 'blast-mainnet-archivenode', 103: 'blast-mainnet-fullnode', 108: 'bsc-testnet-fullnode',
-      115: 'celo-mainnet-archivenode', 116: 'celo-mainnet-fullnode', 125: 'cro-mainnet-archivenode',
-      126: 'cro-mainnet-fullnode', 140: 'dym-mainnet-archivenode', 141: 'dym-mainnet-fullnode',
-      150: 'eth-holesky-testnet-fullnode', 152: 'eth-mainnet-blockbook', 154: 'eth-sepolia-testnet-fullnode',
-      156: 'evmos-mainnet-archivenode', 157: 'evmos-mainnet-fullnode', 160: 'fil-mainnet-fullnode',
-      163: 'flare-mainnet-archivenode', 164: 'flare-mainnet-fullnode', 169: 'flow-mainnet-fullnode',
-      172: 'frx-mainnet-archivenode', 173: 'frx-mainnet-fullnode', 178: 'ftm-mainnet-archivenode',
-      179: 'ftm-mainnet-fullnode', 183: 'fuse-mainnet-archivenode', 184: 'fuse-mainnet-fullnode',
-      187: 'gaia-mainnet-archivenode', 188: 'gaia-mainnet-fullnode', 189: 'gaia-mainnet-fullnode-grpc',
-      192: 'glmr-mainnet-archivenode', 193: 'glmr-mainnet-fullnode',
-    };
+    const SERVICE_ID_TO_NAME = Object.create(null); // Populated only from the current chain registry.
+
     
-    // Demand data from contracts
-    let serviceDemand = {};
     
     // Service ID to name lookup (built from API)
     let serviceIdToName = {};
@@ -1734,7 +1649,6 @@ console.log(data);</pre>
     let walletAddress = null;
     let contractId = null;
     let walletPubkeyBytes = null;
-    let failoverEnabled = true; // Default to enabled
     
     // State persistence constants
     const STATE_KEY = 'arkeo_subscribe_state';
@@ -1754,7 +1668,6 @@ console.log(data);</pre>
           signingKey: signingKey ? { publicKeyBech32: signingKey.publicKeyBech32, address: signingKey.address } : null, // Never persist private key
           walletAddress,
           walletPubkeyBytes: walletPubkeyBytes ? Array.from(walletPubkeyBytes) : null,
-          failoverEnabled,
           timestamp: Date.now()
         };
         sessionStorage.setItem(STATE_KEY, JSON.stringify(state));
@@ -1794,7 +1707,6 @@ console.log(data);</pre>
         }
         if (state.walletAddress) walletAddress = state.walletAddress;
         if (state.walletPubkeyBytes) walletPubkeyBytes = new Uint8Array(state.walletPubkeyBytes);
-        if (typeof state.failoverEnabled === 'boolean') failoverEnabled = state.failoverEnabled;
         
         // Restore deposit amount
         if (state.depositAmount) {
@@ -1807,9 +1719,6 @@ console.log(data);</pre>
           selectPayment(state.paymentMethod);
         }
         
-        // Restore failover checkbox
-        const failoverCheckbox = document.getElementById('enableFailover');
-        if (failoverCheckbox) failoverCheckbox.checked = failoverEnabled;
         
         // Restore signing key display — NEVER restore private key
         // Private key is only shown once at generation time, never persisted or restored
@@ -2078,79 +1987,16 @@ console.log(data);</pre>
       }
     }
     
-    // Fetch all contracts with pagination
-    async function fetchAllContracts() {
-      let allContracts = [];
-      let nextKey = null;
-      let page = 0;
-      do {
-        page++;
-        const params = nextKey ? `?pagination.key=${encodeURIComponent(nextKey)}&pagination.limit=100` : '?pagination.limit=100';
-        try {
-          const response = await fetch(`${API_BASE}/arkeo/contracts${params}`);
-          const data = await response.json();
-          const contracts = data.contract || data.contracts || [];
-          allContracts = allContracts.concat(contracts);
-          nextKey = data.pagination?.next_key || null;
-        } catch (e) {
-          console.warn('Contract fetch page', page, 'failed:', e);
-          break;
-        }
-      } while (nextKey && page < 20);
-      if (CONFIG.DEBUG_MODE) console.log(`Loaded ${allContracts.length} contracts across ${page} pages`);
-      return allContracts;
-    }
-    
-    function computeServiceDemand(contracts) {
-      const demand = {};
-      for (const c of contracts) {
-        const svc = c.service || c.service_name;
-        if (!svc) continue;
-        if (!demand[svc]) demand[svc] = { active: 0, total: 0 };
-        demand[svc].total++;
-        const deposit = parseInt(c.deposit || '0');
-        const paid = parseInt(c.paid || '0');
-        if (deposit > paid) demand[svc].active++;
-      }
-      return demand;
-    }
-    
-    function getDemandIndicator(active) {
-      if (active >= 5) return { icon: '🔥', label: 'High demand', cls: 'demand-high' };
-      if (active >= 2) return { icon: '⚡', label: 'Growing', cls: 'demand-growing' };
-      if (active >= 1) return { icon: '📊', label: 'Some activity', cls: 'demand-some' };
-      return { icon: '—', label: 'No contracts yet', cls: 'demand-none' };
-    }
-    
+    // Load the complete service and provider registries
     async function loadRealData() {
       try {
-        // Load services, providers, and contracts in parallel
-        const [servicesRes, providersRes, allContracts] = await Promise.all([
-          fetch(`${API_BASE}/arkeo/services`).then(r => r.json()),
-          fetch(`${API_BASE}/arkeo/providers`).then(r => r.json()),
-          fetchAllContracts()
-        ]);
-        
-        const services = servicesRes.services || [];
-        rawProviders = (providersRes.provider || []).filter(p => {
-          if (p.status !== 'ONLINE') return false;
-          const bond = parseInt(p.bond || '0');
-          if (bond <= 0) return false;
-          const uri = p.metadata_uri || '';
-          if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
-          // Show if: in KNOWN_PROVIDERS, has metadata URI, or has PAYG rate
-          const isKnown = !!findKnown(p.pub_key);
-          const hasRate = p.pay_as_you_go_rate && p.pay_as_you_go_rate.length > 0;
-          if (!isKnown && (!uri || uri.trim() === '') && !hasRate) return false;
-          return true;
-        });
-        serviceDemand = computeServiceDemand(allContracts);
-        
+        const { services, providers } = await Marketplace.registry(API_BASE);
+        rawProviders = providers.filter(p => Marketplace.registered(p) && Marketplace.paygRate(p) !== null);
         // Build service ID → name lookup from API
         serviceIdToName = {};
         services.forEach(s => {
-          const id = s.service_id || s.service;
-          const name = s.name || s.service;
+          const id = s.id;
+          const name = s.name;
           if (id && name) {
             serviceIdToName[id] = name;
             SERVICE_ID_TO_NAME[id] = name; // Also update for contract opening
@@ -2164,7 +2010,7 @@ console.log(data);</pre>
         
         // Build chains list from ALL services that have ONLINE providers
         const activeServices = new Set();
-        rawProviders.forEach(p => activeServices.add(p.service));
+        rawProviders.forEach(p => { const svc = Marketplace.resolveService(p.service, services); if (svc) activeServices.add(svc.id); });
         
         // Only show services that have ONLINE providers
         // (394 total services exist, most without providers)
@@ -2176,6 +2022,7 @@ console.log(data);</pre>
             id: serviceId,
             name: displayName,
             icon: getChainIcon(serviceId),
+            serviceName,
             searchTerms: (serviceId + ' ' + serviceName + ' ' + displayName).toLowerCase()
           };
         });
@@ -2190,11 +2037,10 @@ console.log(data);</pre>
         
         rawProviders.forEach(p => {
           const uri = p.metadata_uri || '';
-          if (uri && !seenUris.has(uri) && Validate.httpsUrl(uri) && Validate.notPrivateUrl(uri)) {
+          if (uri && !findKnown(p.pub_key) && !seenUris.has(uri) && Validate.httpsUrl(uri) && Validate.notPrivateUrl(uri)) {
             seenUris.add(uri);
             metadataFetches.push(
-              fetch(uri, { signal: AbortSignal.timeout(3000) })
-                .then(r => r.json())
+              () => Marketplace.json(uri, { timeoutMs: 3000 })
                 .then(data => { metadataCache[uri] = data; })
                 .catch(() => {})
             );
@@ -2202,7 +2048,10 @@ console.log(data);</pre>
         });
         
         // Fetch all metadata in parallel (with timeout)
-        await Promise.allSettled(metadataFetches);
+        let metadataIndex = 0;
+        await Promise.all(Array.from({length:Math.min(6, metadataFetches.length)}, async () => {
+          while (metadataIndex < metadataFetches.length) await metadataFetches[metadataIndex++]();
+        }));
         
         rawProviders.forEach(p => {
           const pubkey = p.pub_key;
@@ -2213,23 +2062,24 @@ console.log(data);</pre>
           const providerName = meta?.name || metadata?.config?.moniker || 'Provider ' + pubkey.slice(-8);
           const providerDesc = meta?.description || metadata?.config?.description || 'Arkeo data provider';
           
-          if (!providersByChain[p.service]) providersByChain[p.service] = [];
+          const svc = Marketplace.resolveService(p.service, services);
+          if (!svc) return;
+          const serviceKey = svc.id;
+          if (!providersByChain[serviceKey]) providersByChain[serviceKey] = [];
           
-          const alreadyAdded = providersByChain[p.service].some(
-            existing => existing.name === providerName
+          const alreadyAdded = providersByChain[serviceKey].some(
+            existing => existing.pubkey === pubkey
           );
           if (alreadyAdded) return;
           
-          const rate = parseInt(p.pay_as_you_go_rate?.[0]?.amount || 0) / 100000000;
-          providersByChain[p.service].push({
+          const rate = Marketplace.paygRate(p);
+          providersByChain[serviceKey].push({
             id: pubkey,
             name: providerName,
-            rate: rate || 0.001,
-            uptime: 99.9,
-            requests: formatNumber(Math.floor(parseInt(p.bond || 0) / 100000000 * 100)),
+            rate: rate.display,
+            rateUarkeo: rate.amount,
             description: providerDesc,
             pubkey: pubkey,
-            verified: !!meta,
             metadataUri: mdUri,
             settlementDuration: p.settlement_duration || '10',
             minDuration: parseInt(p.min_contract_duration || 10),
@@ -2237,18 +2087,10 @@ console.log(data);</pre>
           });
         });
         
-        // Sort chains by demand (active contracts desc), then provider count, then name
-        chains.sort((a, b) => {
-          const da = (serviceDemand[a.id]?.active || 0);
-          const db = (serviceDemand[b.id]?.active || 0);
-          if (db !== da) return db - da;
-          const pa = (providersByChain[a.id]?.length || 0);
-          const pb = (providersByChain[b.id]?.length || 0);
-          if (pb !== pa) return pb - pa;
-          return a.name.localeCompare(b.name);
-        });
-        
-        renderChains(chains);
+        chains.sort((a,b) => a.name.localeCompare(b.name));
+
+        for (const providers of Object.values(providersByChain)) providers.sort(Marketplace.providerOrder);
+        filterChains();
         
         // Handle URL parameter - pre-select provider if specified
         const urlParams = new URLSearchParams(window.location.search);
@@ -2258,9 +2100,7 @@ console.log(data);</pre>
           const providerChains = [];
           for (const [chainId, providers] of Object.entries(providersByChain)) {
             const provider = providers.find(p => 
-              p.pubkey === providerPubkey || 
-              providerPubkey.startsWith(p.pubkey.slice(0, 40)) ||
-              p.pubkey.startsWith(providerPubkey.slice(0, 40))
+              p.pubkey === providerPubkey
             );
             if (provider) {
               const chain = chains.find(c => c.id == chainId);
@@ -2359,25 +2199,25 @@ console.log(data);</pre>
       }
     }
 
+    let showAllServices = false;
     function renderChains(chainList) {
+      chainList = chainList.filter(c => showAllServices || Marketplace.inScope(c.serviceName));
       const grid = document.getElementById('chainGrid');
       grid.innerHTML = chainList.map(chain => {
         const provCount = (providersByChain[chain.id] || []).length;
-        const demand = serviceDemand[chain.id] || { active: 0, total: 0 };
-        const d = getDemandIndicator(demand.active);
-        const countText = demand.active > 0 ? `${demand.active} active` : (demand.total > 0 ? `${demand.total} total` : d.label);
         return `
-        <div class="chain-option" onclick="selectChain('${escapeHtml(chain.id)}', '${escapeHtml(chain.name)}')">
+        <div class="chain-option" data-service-id="${escapeHtml(chain.id)}">
           <span style="font-size: 1.75rem;">${chain.icon}</span>
           <div class="chain-info">
             <div class="chain-name">${escapeHtml(chain.name)}</div>
             <div class="chain-meta">
               <span>${provCount} provider${provCount !== 1 ? 's' : ''}</span>
-              <span class="chain-demand ${d.cls}">${d.icon} ${countText}</span>
             </div>
           </div>
         </div>`;
       }).join('');
+      grid.querySelectorAll('[data-service-id]').forEach(el => el.addEventListener('click', () => { const c = chainList.find(c => c.id === el.dataset.serviceId); if (c) selectChain(c.id, c.name); }));
+      if (!chainList.length) grid.textContent = 'No registered PAYG providers in this scope yet. Try All registered services or become a provider.';
     }
 
     function filterChains() {
@@ -2398,12 +2238,14 @@ console.log(data);</pre>
       renderChains(filtered);
     }
 
+    Marketplace.mountScope('serviceScope', all => { showAllServices = all; filterChains(); });
+
     function selectChain(id, name) {
       selectedChain = { id, name };
       
       document.querySelectorAll('.chain-option').forEach(el => {
         el.classList.remove('selected');
-        if (el.querySelector('.chain-name').textContent === name) {
+        if (el.dataset.serviceId === String(id)) {
           el.classList.add('selected');
         }
       });
@@ -2417,13 +2259,13 @@ console.log(data);</pre>
 
     function renderProviders() {
       const list = document.getElementById('providerList');
-      const chainProviders = providersByChain[selectedChain.id] || [];
+      const chainProviders = [...(providersByChain[selectedChain.id] || [])].sort((a,b) => showAllServices ? a.name.localeCompare(b.name) : Marketplace.providerOrder(a,b));
       
       if (chainProviders.length === 0) {
         list.innerHTML = `
           <div style="text-align: center; padding: 2rem; color: var(--text-dim);">
             <div style="font-size: 2rem; margin-bottom: 1rem;">🔍</div>
-            <p>No verified providers available for ${selectedChain.name} yet.</p>
+            <p>No registered PAYG providers available for ${escapeHtml(selectedChain.name)} yet.</p>
             <p style="margin-top: 0.5rem;"><a href="become-provider.html" style="color: var(--arkeo);">Become a provider →</a></p>
           </div>
         `;
@@ -2431,30 +2273,31 @@ console.log(data);</pre>
       }
       
       list.innerHTML = chainProviders.map(p => `
-        <div class="provider-card" data-pubkey="${escapeHtml(p.pubkey)}" onclick="selectProvider('${escapeHtml(p.id)}', '${escapeHtml(p.name)}', ${p.rate}, '${escapeHtml(selectedChain.id)}')">
+        <div class="provider-card" data-pubkey="${escapeHtml(p.pubkey)}" >
           <div class="provider-header">
-            <span class="provider-name">${escapeHtml(p.name)}${p.verified ? ' ✓' : ''}</span>
-            <span class="provider-rate">${p.rate.toFixed(4)} ARKEO/req</span>
+            <span class="provider-name">${escapeHtml(p.name)}${(Marketplace.profile().preferredProviders || []).includes(p.pubkey) && !showAllServices ? ' · Preferred partner' : ''}</span>
+            <span class="provider-rate">${p.rate.toFixed(8)} ARKEO/req</span>
           </div>
           <div class="provider-stats">
-            <span class="provider-stat"><span class="stat-good">●</span> Online</span>
-            <span class="provider-stat">📊 ${p.requests} requests</span>
+            <span class="provider-stat">Registered online · live health not yet verified</span>
           </div>
           <div class="provider-description">${escapeHtml(p.description) || 'Arkeo data provider'}</div>
         </div>
       `).join('');
+      list.querySelectorAll('[data-pubkey]').forEach(el => el.addEventListener('click', () => { const p = chainProviders.find(p => p.pubkey === el.dataset.pubkey); if (p) selectProvider(p.id, p.name, p.rate, selectedChain.id); }));
     }
 
     function selectProvider(pubkey, name, rate, serviceId = null) {
       // Find the provider's metadata URI from our loaded data
       const chainProviders = providersByChain[serviceId || selectedChain?.id] || [];
       const provInfo = chainProviders.find(p => p.pubkey === pubkey);
+      if (!provInfo) throw new Error('Provider selection is no longer available. Reload providers.');
       const metadataUri = provInfo?.metadataUri || '';
       const settlementDuration = provInfo?.settlementDuration || '10';
       const CHAIN_MAX_DURATION = 5256000; // Arkeo governance limit
       const minDuration = provInfo?.minDuration || 10;
       const maxDuration = Math.min(provInfo?.maxDuration || CHAIN_MAX_DURATION, CHAIN_MAX_DURATION);
-      selectedProvider = { id: pubkey, name, rate, pubkey, serviceId: serviceId || selectedChain?.id, metadataUri, settlementDuration, minDuration, maxDuration };
+      selectedProvider = { id: pubkey, name, rate, rateUarkeo: provInfo?.rateUarkeo, pubkey, serviceId: serviceId || selectedChain?.id, metadataUri, settlementDuration, minDuration, maxDuration };
       
       // Update duration presets — hide any that exceed provider's max
       document.querySelectorAll('.duration-preset').forEach(btn => {
@@ -3003,8 +2846,6 @@ console.log(data);</pre>
       btn.disabled = true;
       btn.textContent = 'Opening Contract...';
       
-      // Check failover setting
-      failoverEnabled = document.getElementById('enableFailover')?.checked ?? true;
       
       statusDiv.innerHTML = `
         <div class="status-box" style="background: var(--arkeo-dim); border: 1px solid var(--arkeo);">
@@ -3018,7 +2859,8 @@ console.log(data);</pre>
         await window.arkeoTx.init();
         
         const depositAmount = document.getElementById('depositAmount').value;
-        const depositUarkeo = String(Math.floor(parseFloat(depositAmount) * CONFIG.ARKEO_DIVISOR));
+        const depositUarkeo = Marketplace.amountToUnits(depositAmount);
+        if (BigInt(depositUarkeo) <= 0n) throw new Error('Deposit must be positive.');
         
         // Get account info
         const accountResp = await fetch(`${CONFIG.REST_API}/cosmos/auth/v1beta1/accounts/${walletAddress}`);
@@ -3046,7 +2888,8 @@ console.log(data);</pre>
         }
 
         // Calculate rate in uarkeo (provider rate is in ARKEO, convert to uarkeo)
-        const rateUarkeo = Math.max(1, Math.floor((selectedProvider.rate || 0.00000001) * CONFIG.ARKEO_DIVISOR));
+        const rateUarkeo = selectedProvider.rateUarkeo;
+        if (!/^\d+$/.test(String(rateUarkeo))) throw new Error('Reload provider pricing before opening a contract');
         
         // Get service name - the API requires the service NAME not ID
         const serviceId = selectedProvider.serviceId || selectedChain.id;
@@ -3058,6 +2901,15 @@ console.log(data);</pre>
           throw new Error('No service name found. Please select a provider again.');
         }
         
+        const currentService = await Marketplace.service(API_BASE, serviceName);
+        const currentProvider = await Marketplace.provider(API_BASE, selectedProvider.pubkey, currentService.name);
+        if (String(currentProvider.service) !== currentService.id && currentProvider.service !== currentService.name) throw new Error('Provider service changed; select it again');
+        if (!Marketplace.registered(currentProvider) || Marketplace.paygRate(currentProvider)?.amount !== rateUarkeo) throw new Error('Provider availability or price changed. Select the provider again before signing.');
+
+        const currentMin = Number(currentProvider.min_contract_duration);
+        const currentMax = Number(currentProvider.max_contract_duration);
+        if (!Number.isSafeInteger(currentMin) || !Number.isSafeInteger(currentMax) || contractDurationBlocks < currentMin || contractDurationBlocks > currentMax || String(currentProvider.settlement_duration) !== String(selectedProvider.settlementDuration)) throw new Error('Provider contract terms changed. Reload the provider before signing.');
+
         // Use signing key as delegate if available, otherwise use client pubkey
         const delegatePubkey = signingKey ? signingKey.publicKeyBech32 : clientPubkey;
         
@@ -3232,44 +3084,9 @@ console.log(data);</pre>
           sentinelBaseUrl = mdUri.replace(/\/metadata\.json$/, '');
         }
         // Fallback: use KNOWN_PROVIDERS website (sentinel typically runs on same domain)
-        if (!sentinelBaseUrl && typeof findKnownProvider === 'function') {
-          const known = findKnownProvider(selectedProvider.pubkey);
-          if (known?.website) {
-            sentinelBaseUrl = known.website.replace(/\/$/, '');
-          }
-        }
         const svcName = serviceName || SERVICE_ID_TO_NAME[selectedProvider.serviceId] || selectedProvider.serviceId || '';
         const endpointUrl = sentinelBaseUrl ? `${sentinelBaseUrl}/${svcName}` : `Provider sentinel URL not found`;
         document.getElementById('finalEndpoint').textContent = endpointUrl;
-        
-        // Update failover status
-        const failoverStatus = document.getElementById('failoverStatus');
-        const failoverInfo = document.getElementById('failoverInfo');
-        if (failoverEnabled) {
-          failoverStatus.querySelector('.summary-value').innerHTML = '🛡️ Enabled';
-          failoverStatus.querySelector('.summary-value').style.color = '#10b981';
-          failoverInfo.style.display = 'block';
-          
-          // Show ranked backup providers (sorted by rate, excluding selected)
-          const backupList = document.getElementById('backupProvidersList');
-          const otherProviders = Object.values(KNOWN_PROVIDERS)
-            .filter(p => p.name !== selectedProvider.name)
-            .slice(0, 4);
-          
-          backupList.innerHTML = otherProviders.map((p, i) => `
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              <span style="background: ${i === 0 ? '#10b981' : 'var(--border)'}; color: ${i === 0 ? '#000' : 'var(--text-dim)'}; 
-                          width: 18px; height: 18px; border-radius: 50%; display: flex; align-items: center; 
-                          justify-content: center; font-size: 0.7rem; font-weight: 600;">${i + 1}</span>
-              <span style="color: ${i === 0 ? 'var(--arkeo)' : 'var(--text-dim)'};">${p.name}</span>
-              ${i === 0 ? '<span style="font-size: 0.75rem; color: #10b981;">← Next in queue</span>' : ''}
-            </div>
-          `).join('');
-        } else {
-          failoverStatus.querySelector('.summary-value').innerHTML = '○ Disabled';
-          failoverStatus.querySelector('.summary-value').style.color = 'var(--text-dim)';
-          failoverInfo.style.display = 'none';
-        }
         
         // Populate SDK integration section with dynamic values
         // Extract base sentinel URL (remove service path if present)

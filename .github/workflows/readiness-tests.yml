@@ -19,5 +19,7 @@ jobs:
       - run: python -m pip install flask pyyaml -r docs/sdk/python/requirements.txt
       - run: npm ci --ignore-scripts
         working-directory: docs/sdk
+      - run: npm ci --ignore-scripts
+        working-directory: tests
       - run: python -m unittest discover -s tests -v
       - run: node --test docs/sdk/client.test.mjs tests/*.test.mjs

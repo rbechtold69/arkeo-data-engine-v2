@@ -5194,6 +5194,15 @@ def _normalize_top_services(entries) -> list[dict]:
     return normalized
 
 
+def _listener_provider_selection(existing, custom, discovered, service_changed=False):
+    """A service change cannot inherit contracts or providers for the previous service."""
+    if service_changed:
+        return discovered
+    if custom is not None:
+        return _merge_top_services_persisted_fields(existing, custom)
+    return existing or discovered
+
+
 def _merge_top_services_persisted_fields(existing: list, incoming: list) -> list[dict]:
     """Merge persisted per-provider fields from existing top_services into incoming top_services."""
     existing_by_pk: dict[str, dict] = {}
@@ -6275,9 +6284,7 @@ def _lookup_settlement_duration(provider_pubkey: str | None, service_id: str | i
 def _candidate_providers(cfg: dict) -> list[dict]:
     """Build an ordered list of provider candidates for failover."""
     candidates: list[dict] = []
-    top = cfg.get("top_services")
-    if not top:
-        return []
+    top = cfg.get("top_services") or []
     svc_id_for_lookup = cfg.get("service_id") or cfg.get("service")
     # cache lookups for active services/providers
     active_lookup = {}
@@ -6309,37 +6316,26 @@ def _candidate_providers(cfg: dict) -> list[dict]:
                     prov_meta_cache[pk] = p
     except Exception:
         pass
-    include_down = True
-    # If we have at least one healthy entry, skip "Down"/misconfigured providers from the live candidate set.
-    # This keeps a failed provider in the UI list but avoids routing to it during normal operation.
+    # Keep configured order. Runtime cooldowns and fresh health checks decide eligibility;
+    # a historical UI "down" result must not permanently prevent primary recovery.
     if isinstance(top, list):
-        try:
-            include_down = not any(
-                str(ts.get("status") or "").lower() in ("up", "ok") and ts.get("cors_configured") is not False
-                for ts in top
-                if isinstance(ts, dict)
-            )
-        except Exception:
-            include_down = True
         for ts in top:
             if not isinstance(ts, dict):
                 continue
-            if not include_down:
-                ts_status = str(ts.get("status") or "").lower()
-                if ts_status == "down" or ts.get("cors_configured") is False:
-                    continue
             pk = ts.get("provider_pubkey")
             if not pk:
                 continue
             svc_for_ts = ts.get("service_id") or ts.get("service") or svc_id_for_lookup
+            if str(svc_for_ts) != str(svc_id_for_lookup):
+                continue  # A different service is never a compatible backup.
             active = active_lookup.get((str(pk), str(svc_for_ts))) or _active_service_lookup(pk, svc_for_ts)
-            active_raw = active.get("raw") if isinstance(active, dict) else {}
+            active_raw = (active.get("raw") or {}) if isinstance(active, dict) else {}
             mu = (active.get("metadata_uri") if isinstance(active, dict) else None) or active_raw.get("metadata_uri")
             sentinel_url = _normalize_sentinel_url(ts.get("sentinel_url")) if ts.get("sentinel_url") else None
             if not sentinel_url and _is_external(mu):
                 sentinel_url = _sentinel_from_metadata_uri(mu)
-            if not sentinel_url:
-                # fallback: try parent cfg sentinel
+            if not sentinel_url and pk == cfg.get("provider_pubkey"):
+                # Only this exact provider may inherit its configured sentinel
                 sentinel_url = _normalize_sentinel_url(cfg.get("provider_sentinel_api"))
             if not sentinel_url:
                 continue  # skip candidates without a usable sentinel URL
@@ -6371,12 +6367,10 @@ def _candidate_providers(cfg: dict) -> list[dict]:
     # ensure configured provider is included (first if not already)
     cfg_pk = cfg.get("provider_pubkey")
     cfg_sent = cfg.get("provider_sentinel_api")
-    if cfg_pk:
+    if cfg_pk and cfg_sent:
         exists = any(c.get("provider_pubkey") == cfg_pk for c in candidates)
         if not exists:
             candidates.insert(0, {"provider_pubkey": cfg_pk, "provider_moniker": cfg.get("provider_moniker"), "sentinel_url": cfg_sent})
-    if not candidates:
-        candidates.append({"provider_pubkey": cfg_pk, "provider_moniker": cfg.get("provider_moniker"), "sentinel_url": cfg_sent})
     # dedupe while preserving order
     seen = set()
     deduped = []
@@ -9930,6 +9924,7 @@ def update_listener(listener_id: str):
         if str(l.get("id")) != str(listener_id):
             continue
         old_snapshot = dict(l)
+        service_changed = str(l.get("service_id") or "") != str(clean.get("service_id") or "")
         if clean["port"] is not None:
             l["port"] = clean["port"]
         l["target"] = ""
@@ -9939,13 +9934,7 @@ def update_listener(listener_id: str):
             l["location"] = clean.get("location") or ""
         # top services ordering: use custom if provided, else keep existing unless service changed or empty
         existing_top = l.get("top_services") if isinstance(l.get("top_services"), list) else []
-        if custom_top is not None:
-            # Honor explicit (even empty) input, but preserve persisted per-provider fields.
-            new_top = _merge_top_services_persisted_fields(existing_top, custom_top)
-        else:
-            new_top = existing_top
-            if str(l.get("service_id")) != str(clean.get("service_id") or "") or not new_top:
-                new_top = best
+        new_top = _listener_provider_selection(existing_top, custom_top, best, service_changed)
         l["top_services"] = _normalize_top_services(new_top)
         # derive provider/sentinel from top services primary (new order wins)
         if l["top_services"]:
@@ -10044,6 +10033,7 @@ def update_listener(listener_id: str):
                 continue
             if str(l.get("id")) != str(listener_id):
                 continue
+            service_changed = str(l.get("service_id") or "") != str(clean.get("service_id") or "")
             if clean["port"] is not None:
                 l["port"] = clean["port"]
             l["target"] = ""
@@ -10051,12 +10041,7 @@ def update_listener(listener_id: str):
             l["service_id"] = clean.get("service_id") or ""
             # Preserve persisted per-provider fields when custom top_services is provided.
             existing_top = l.get("top_services") if isinstance(l.get("top_services"), list) else []
-            if custom_top is not None:
-                new_top = _merge_top_services_persisted_fields(existing_top, custom_top)
-            else:
-                new_top = existing_top
-                if str(l.get("service_id")) != str(clean.get("service_id") or "") or not new_top:
-                    new_top = best
+            new_top = _listener_provider_selection(existing_top, custom_top, best, service_changed)
             l["top_services"] = _normalize_top_services(new_top)
             if clean.get("location") is not None:
                 l["location"] = clean.get("location") or ""
@@ -10268,8 +10253,10 @@ def get_active_providers():
 
 @app.post("/api/listeners/<listener_id>/refresh-top-services")
 def refresh_listener_top_services(listener_id: str):
-    """Recompute top_services for a single listener."""
+    """Refresh discovery while retaining consumer priorities and funded contract state."""
     updated: dict | None = None
+    payload = request.get_json(silent=True) or {}
+    reset_order = isinstance(payload, dict) and payload.get("reset_order") is True
 
     def _mut(data: dict) -> bool:
         nonlocal updated
@@ -10286,7 +10273,11 @@ def refresh_listener_top_services(listener_id: str):
             best = _normalize_top_services(
                 _top_active_services_by_payg(svc_id, limit=3, preferred_location=preferred_location)
             )
-            l["top_services"] = best
+            existing = l.get("top_services") or []
+            # Changing the primary requires an explicit reset or manual reorder.
+            # New providers remain selectable through the provider picker.
+            selected = best if reset_order or not existing else existing
+            l["top_services"] = _normalize_top_services(_merge_top_services_persisted_fields(existing, selected))
             l["updated_at"] = _timestamp()
             updated = l
             return True
