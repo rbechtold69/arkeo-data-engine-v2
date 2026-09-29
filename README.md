@@ -1,5 +1,9 @@
 # The Arkeo Data Marketplace
-This repository delivers production‑ready Docker images to help teams earn more by publishing blockchain data services as providers, or reduce costs and simplify access by consuming data as subscribers in the Arkeo Data Marketplace. For current network activity and available services, see the [Arkeo Data Marketplace](https://marketplace.builtonarkeo.com).
+This repository contains the provider, subscriber and dashboard components of the Arkeo Data Marketplace. The RPC rebuild is a **review candidate, not approved for production**. Its tests and recorded demo do not establish live provider availability or funded settlement.
+
+**Continuing the rebuild? Start with [the agent handoff and detailed prompt](docs/ARKEO_REBUILD_AGENT_HANDOFF.md).** It identifies both repositories, exact revisions, test evidence, known failures and the remaining live-demo gates. Use branch `codex/institutional-readiness-audit`; the rebuild has not been merged into `main`.
+
+The existing marketplace is [arkeomarketplace.com](https://arkeomarketplace.com). Its deployed pages are not evidence that this review branch has been deployed.
 
 ## 🔹 Arkeo Data Engine - Provider
 In this docker image, you can use an admin UI to connect your blockchain data nodes to the Arkeo Data Marketplace and earn Arkeo tokens for the data you provide with a blockchain-based pay-as-you-go model.

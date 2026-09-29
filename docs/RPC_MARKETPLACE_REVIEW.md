@@ -52,7 +52,7 @@ python -m unittest discover -s tests -v
 node --test docs/sdk/client.test.mjs tests/*.test.mjs
 ```
 
-Final local result: **59 Python tests and 46 JavaScript tests pass (105 total)**. Modified HTML inline scripts parse successfully and `git diff --check` is clean.
+The pre-demo candidate had **59 Python tests and 46 JavaScript tests passing (105 total)**. The subsequent measured-demo commit `de3555d` expanded this to **66 Python and 49 JavaScript tests (115 total)**, with all four marketplace GitHub workflows passing. See [the current handoff](ARKEO_REBUILD_AGENT_HANDOFF.md) for revision-specific evidence and the separate chain repository's unresolved integration regression. Earlier checks also verified modified HTML inline scripts parse successfully and `git diff --check` is clean.
 
 Tests exercise actual Flask routing and candidate selection, payment nonce durability, raw signature/transaction encoding, health policy checks, SDK failures and local HTTP failover. New DOM tests load the actual marketplace HTML and scripts using paginated fixtures, click through provider/consumer choices, test directory filters and failure states, and verify provider detail rendering. A subscriber Poll regression checks that probes never PUT a replacement routing order.
 
