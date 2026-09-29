@@ -1,0 +1,40 @@
+{
+  "listeners": {
+    "thorchain-rest": {
+      "primary": {
+        "upstream": "https://REPLACE_LIQUIFY.invalid",
+        "checks": [
+          {
+            "url": "https://REPLACE_LIQUIFY.invalid/REPLACE_HEALTH_PATH",
+            "network_path": "/REPLACE_NETWORK_POINTER",
+            "expected_network": "REPLACE_EXACT_NETWORK",
+            "timestamp_path": "/REPLACE_FRESHNESS_POINTER",
+            "timestamp_unit": "rfc3339",
+            "max_age_seconds": 30,
+            "height_path": "/REPLACE_HEIGHT_POINTER",
+            "equals": {
+              "/REPLACE_SYNCING_POINTER": false
+            }
+          }
+        ]
+      },
+      "REPLACE_BACKUP_PROVIDER_PUBLIC_KEY": {
+        "upstream": "https://REPLACE_BACKUP.invalid",
+        "checks": [
+          {
+            "url": "https://REPLACE_BACKUP.invalid/REPLACE_HEALTH_PATH",
+            "network_path": "/REPLACE_NETWORK_POINTER",
+            "expected_network": "REPLACE_EXACT_NETWORK",
+            "timestamp_path": "/REPLACE_FRESHNESS_POINTER",
+            "timestamp_unit": "rfc3339",
+            "max_age_seconds": 30,
+            "height_path": "/REPLACE_HEIGHT_POINTER",
+            "equals": {
+              "/REPLACE_SYNCING_POINTER": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}

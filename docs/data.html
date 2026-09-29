@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RPC Data | Arkeo Marketplace</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
-  <meta name="description" content="Browse Arkeo's decentralized RPC providers. Compare pricing, chains, and uptime. Subscribe with no KYC.">
+  <meta name="description" content="Browse Arkeo's decentralized RPC providers. Compare registered providers, service coverage, and on-chain terms. Subscribe with no KYC.">
   <link rel="stylesheet" href="css/nav.css">
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
@@ -284,6 +284,7 @@
       .filter-input { min-width: 100%; }
     }
   </style>
+  <script src="js/marketplace.js"></script>
 </head>
 <body>
   <div id="arkeo-nav" data-active="data"></div>
@@ -307,7 +308,7 @@
       </div>
       <div class="why-card">
         <h3>⚡ Multi-Provider Failover</h3>
-        <p>Your requests automatically route through multiple independent providers. If one goes down, another picks up instantly.</p>
+        <p>Configure compatible primary and backup providers in your subscriber. Health checks and ready backup contracts are required for automatic failover.</p>
       </div>
       <div class="why-card">
         <h3>💰 Transparent Pricing</h3>
@@ -315,7 +316,7 @@
       </div>
       <div class="why-card">
         <h3>🛡️ Censorship Resistant</h3>
-        <p>No single entity controls access. Your data requests can't be blocked, throttled, or monitored by any one party.</p>
+        <p>Choose independent providers and retain control of your connections. Each provider has its own capacity and service terms.</p>
       </div>
     </div>
   </section>
@@ -323,10 +324,8 @@
   <!-- Network Stats Dashboard -->
   <section class="container">
     <div class="stats-grid" id="networkStatsGrid">
-      <div class="stat-card"><div class="stat-value" id="statRequests">...</div><div class="stat-label">Total Requests</div></div>
-      <div class="stat-card"><div class="stat-value" id="statRevenue">...</div><div class="stat-label">Total Revenue</div></div>
-      <div class="stat-card"><div class="stat-value" id="statContracts">...</div><div class="stat-label">Active Contracts</div></div>
-      <div class="stat-card"><div class="stat-value" id="statProviders">...</div><div class="stat-label">Active Providers</div></div>
+      <div class="stat-card"><div class="stat-value" id="statServices">...</div><div class="stat-label">Registered Services</div></div>
+      <div class="stat-card"><div class="stat-value" id="statProviders">...</div><div class="stat-label">Registered Providers</div></div>
       <div class="stat-card"><div class="stat-value" id="statChains">...</div><div class="stat-label">Chains Covered</div></div>
     </div>
   </section>
@@ -334,10 +333,11 @@
   <!-- Provider Directory (v1774472902) -->
   <section class="container">
     <div class="section-header">
-      <h2 class="section-title">Active Providers</h2>
+      <h2 class="section-title">Registered Providers</h2>
       <a href="pricing-guide.html" style="color:var(--arkeo);font-size:0.85rem;text-decoration:none;">📊 PAYG Pricing Guide →</a>
     </div>
 
+    <div id="serviceScope"></div>
     <div class="filter-bar">
       <input type="text" class="filter-input" id="searchInput" placeholder="🔍 Search providers or chains..." oninput="filterProviders()">
       <select class="filter-select" id="dataTypeFilter" onchange="filterProviders()">
@@ -347,7 +347,7 @@
       </select>
       <select class="filter-select" id="statusFilter" onchange="filterProviders()">
         <option value="">All Status</option>
-        <option value="online">Online Only</option>
+        <option value="online">Registered Online</option><option value="offline">Registered Offline</option>
       </select>
     </div>
 
@@ -359,7 +359,7 @@
             <th>Chains Served</th>
             <th>Services</th>
             <th>Total Bond</th>
-            <th>Score</th>
+            <th>Live Health</th>
             <th>Status</th>
             <th></th>
           </tr>
@@ -371,53 +371,21 @@
     </div>
   </section>
 
-  <!-- Pricing Comparison -->
   <section class="container">
     <div class="pricing-section">
-      <h2>📊 How Does Pricing Compare?</h2>
-      <p>See what centralized and decentralized providers charge for RPC data.</p>
-
-      <div class="tab-bar">
-        <button class="tab-btn active" id="tabCentralized" onclick="showCompTab('centralized')">Centralized</button>
-        <button class="tab-btn" id="tabDecentralized" onclick="showCompTab('decentralized')">Decentralized</button>
-        <button class="tab-btn" id="tabAll" onclick="showCompTab('all')">All</button>
-      </div>
-
-      <div class="table-container">
-        <table class="provider-table" id="compTable">
-          <thead>
-            <tr>
-              <th>Provider</th>
-              <th>Type</th>
-              <th>Free Tier</th>
-              <th>Cost / 1M Requests</th>
-              <th>Cosmos</th>
-              <th>THORChain</th>
-              <th>KYC</th>
-            </tr>
-          </thead>
-          <tbody id="compTableBody"></tbody>
-        </table>
-      </div>
-
+      <h2>Transparent provider terms</h2>
+      <p>Choose a service and provider to see their registered ARKEO rate and contract limits before signing. Each backup needs its own compatible service and usable contract.</p>
       <div class="arkeo-highlight">
-        <div>
-          <div style="font-weight: 700; margin-bottom: 0.25rem;"><strong>Arkeo</strong> — The Open Alternative</div>
-          <div style="color: var(--text-dim); font-size: 0.85rem;">No signup, no KYC, no monthly plans. Pay per request with USDC or ARKEO tokens.</div>
-        </div>
-        <a href="subscribe.html" class="btn-primary">Try Arkeo →</a>
+        <div>Liquify is the preferred partner for this rollout. Consumers retain provider choice.</div>
+        <a href="subscribe.html" class="btn-primary">Compare providers →</a>
       </div>
-
-      <p style="color: var(--text-muted); font-size: 0.7rem; margin-top: 1rem;">
-        * Pricing verified Feb 2026. Costs vary by method complexity and volume.
-      </p>
     </div>
   </section>
 
   <!-- CTA -->
   <section class="cta-section">
     <h2>Ready to connect?</h2>
-    <p>Start querying blockchain data in under 60 seconds.</p>
+    <p>Choose your service, review provider terms, and connect your wallet.</p>
     <div class="cta-buttons">
       <a href="subscribe.html" class="btn-primary">Subscribe Now</a>
       <a href="test-arkauth.html" class="btn-secondary">Test Connection</a>
@@ -436,240 +404,62 @@
 
   <!-- Load provider data -->
   <script>
-    // Load provider table from REST API, with reputation scores and network stats
-    (async function() {
-      const tbody = document.getElementById('providerTableBody');
-
-      // Chain display names
-      const CHAIN_NAMES = {
-        'arkeo': 'Arkeo', 'eth': 'Ethereum', 'base': 'Base', 'gaia': 'Cosmos Hub',
-        'osmosis': 'Osmosis', 'btc': 'Bitcoin', 'bch': 'Bitcoin Cash', 'bnb': 'BNB Chain',
-        'avax': 'Avalanche', 'arbitrum': 'Arbitrum', 'trx': 'TRON', 'aptos': 'Aptos',
-        'inj': 'Injective', 'near': 'NEAR', 'etc': 'Ethereum Classic', 'tao': 'Bittensor'
-      };
-
-      // Known provider names by pubkey prefix
-      const KNOWN = {
-        'arkeopub1addwnpepqdgt6w2qqkt4jydfud507nl': 'Liquify',
-        'arkeopub1addwnpepq22m27n5ryy787muswzjqjk': 'InnovationTheory',
-        'arkeopub1addwnpepqdvlra44yykhmmpwtfavs35': '0xFury',
-        'arkeopub1addwnpepqfuk5cy2ey6h3pfpwerkhfp': 'Red_5',
-        'arkeopub1addwnpepq2lmfqggxp29nj3ekl3ltxn': 'StakeVillage',
-        'arkeopub1addwnpepqdnr9x5c386meywavzmy5wa': 'Everstake',
-        'arkeopub1addwnpepqdt79h8767429wpr44gxwav': 'Nodes.Guru',
-        'arkeopub1addwnpepqgvlg57udnpwh4y6k7yedt6': 'Nodefleet',
-        'arkeopub1addwnpepqdc6phgk8vqky8v7vyyyk0z': 'InnovationTheory-2',
-        'arkeopub1addwnpepqvj8mevcpdamq9cp5478t8k': 'StakeVillage (Infra)',
-        'arkeopub1addwnpepqduv5lky7ckq8efzzu08rm6': 'RoomIT',
-        'arkeopub1addwnpepqfn52r6xng2wwfrgz2tm5yv': 'BlockHunters',
-        'arkeopub1addwnpepqg3lll0dt65suhu4e7hx898': 'NodeX',
-      };
-
-      function getName(pk) {
-        for (const [prefix, name] of Object.entries(KNOWN)) {
-          if (pk.startsWith(prefix)) return name;
-        }
-        return null;
-      }
-
-      function getScoreClass(score) {
-        if (score >= 80) return 'score-gold';
-        if (score >= 60) return 'score-silver';
-        if (score >= 40) return 'score-bronze';
-        return 'score-dim';
-      }
-
-      try {
-        // Fetch providers, services, and contracts in parallel
-        const [providers, services, contracts] = await Promise.all([
-          API.getProviders(),
-          API.getServices(),
-          API.getContracts()
-        ]);
-
-        // Build service ID to name map
-        const svcMap = {};
-        for (const s of services) {
-          svcMap[String(s.service_id)] = s.name || String(s.service_id);
-        }
-
-        // Build per-provider contract metrics
-        const currentHeight = contracts.reduce((max, c) => Math.max(max, parseInt(c.height || 0)), 0);
-        const metricsMap = {};
-        let totalRequests = 0, totalRevenue = 0, activeContractCount = 0;
-        const allChainIds = new Set();
-
-        for (const c of contracts) {
-          const pk = c.provider || '';
-          if (!metricsMap[pk]) metricsMap[pk] = { totalNonce: 0, totalPaid: 0, activeContracts: 0 };
-          const nonce = parseInt(c.nonce || 0);
-          const paid = parseInt(c.paid || 0);
-          const deposit = parseInt(c.deposit || 0);
-          const notExpired = (parseInt(c.height || 0) + parseInt(c.duration || 0)) > currentHeight;
-          metricsMap[pk].totalNonce += nonce;
-          metricsMap[pk].totalPaid += paid;
-          if (deposit > paid && notExpired) {
-            metricsMap[pk].activeContracts++;
-            activeContractCount++;
-          }
-          totalRequests += nonce;
-          totalRevenue += paid;
-          if (c.service) allChainIds.add(String(c.service));
-        }
-
-        // Filter: ONLINE, bond > 0, not localhost metadata
-        const active = providers.filter(p => {
-          if (p.status !== 'ONLINE' || parseInt(p.bond || '0') <= 0) return false;
-          const uri = p.metadata_uri || '';
-          if (uri.includes('127.0.0.1') || uri.includes('localhost')) return false;
-          return true;
-        });
-
-        // Group by provider pubkey
-        const grouped = {};
-        for (const p of active) {
-          const pk = p.pub_key || '';
-          if (!grouped[pk]) grouped[pk] = { pubkey: pk, services: [], totalBond: 0, rawServices: [] };
-          const svcId = String(p.service || '');
-          const svcName = svcMap[svcId] || `service-${svcId}`;
-          const chain = svcName.split('-')[0];
-          const chainDisplay = CHAIN_NAMES[chain] || chain.toUpperCase();
-          const isTestnet = svcName.includes('testnet');
-          if (!isTestnet && !grouped[pk].services.find(s => s.chain === chainDisplay)) {
-            grouped[pk].services.push({ chain: chainDisplay, svcName, svcId });
-          }
-          grouped[pk].totalBond += parseInt(p.bond || '0');
-          grouped[pk].rawServices.push(svcId);
-        }
-
-        // Compute per-provider metrics for scoring
-        for (const [pk, g] of Object.entries(grouped)) {
-          const m = metricsMap[pk] || { totalNonce: 0, totalPaid: 0, activeContracts: 0 };
-          g.totalNonce = m.totalNonce;
-          g.totalPaid = m.totalPaid;
-          g.activeContracts = m.activeContracts;
-          g.serviceCount = g.services.length;
-        }
-
-        // Compute maxes for normalization
-        const allGroups = Object.values(grouped);
-        const maxNonce = Math.max(1, ...allGroups.map(g => g.totalNonce));
-        const maxPaid = Math.max(1, ...allGroups.map(g => g.totalPaid));
-        const maxBond = Math.max(1, ...allGroups.map(g => g.totalBond));
-        const maxContracts = Math.max(1, ...allGroups.map(g => g.activeContracts));
-        const maxServices = Math.max(1, ...allGroups.map(g => g.serviceCount));
-
-        // Compute reputation score for each provider
-        for (const g of allGroups) {
-          const noncePct = g.totalNonce / maxNonce;
-          const paidPct = g.totalPaid / maxPaid;
-          const bondPct = g.totalBond / maxBond;
-          const contractPct = g.activeContracts / maxContracts;
-          const svcPct = g.serviceCount / maxServices;
-          g.score = Math.round(
-            noncePct * 35 + paidPct * 25 + bondPct * 20 + contractPct * 10 + svcPct * 10
-          );
-        }
-
-        // Network Stats
-        const activeProviderCount = allGroups.filter(g => g.services.length > 0).length;
-        const chainsCovered = allChainIds.size;
-        document.getElementById('statRequests').textContent = Format.number(totalRequests);
-        document.getElementById('statRevenue').textContent = Format.arkeo(totalRevenue) + ' ARKEO';
-        document.getElementById('statContracts').textContent = Format.number(activeContractCount);
-        document.getElementById('statProviders').textContent = activeProviderCount;
-        document.getElementById('statChains').textContent = chainsCovered;
-
-        // Sort: named providers first by score desc, then unnamed by score desc
-        const entries = allGroups
-          .filter(g => g.services.length > 0)
-          .sort((a, b) => {
-            const aName = getName(a.pubkey);
-            const bName = getName(b.pubkey);
-            if (aName && !bName) return -1;
-            if (!aName && bName) return 1;
-            return b.score - a.score;
-          });
-
-        if (entries.length === 0) {
-          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">No providers found</td></tr>';
-          return;
-        }
-
-        const rows = entries.map(g => {
-          const name = getName(g.pubkey) || g.pubkey.substring(0, 16) + '...';
-          const chains = g.services.map(s => s.chain).sort().join(', ');
-          const bondDisplay = (g.totalBond / 1e8).toLocaleString() + ' ARKEO';
-          const svcCount = g.services.length;
-          const scoreClass = getScoreClass(g.score);
-
-          return `<tr>
-            <td style="font-weight:500;" title="${escapeHtml(g.pubkey)}">${escapeHtml(name)}</td>
-            <td style="font-size:0.85rem;">${escapeHtml(chains)}</td>
-            <td>${svcCount} chain${svcCount !== 1 ? 's' : ''}</td>
-            <td>${escapeHtml(bondDisplay)}</td>
-            <td><span class="score-badge ${scoreClass}">${g.score}</span></td>
-            <td>🟢 Online</td>
-            <td><a href="provider.html?address=${encodeURIComponent(g.pubkey)}" style="color:var(--arkeo);text-decoration:none;font-size:0.8rem;">Details →</a></td>
-          </tr>`;
-        });
-
-        tbody.innerHTML = rows.join('');
-      } catch (err) {
-        tbody.innerHTML =
-          `<tr><td colspan="7" style="text-align:center; padding:2rem; color:var(--text-muted);">Failed to load: ${escapeHtml(err.message)}</td></tr>`;
-        // Set stats to error state
-        ['statRequests','statRevenue','statContracts','statProviders','statChains'].forEach(id => {
-          document.getElementById(id).textContent = 'N/A';
-        });
-      }
-    })();
-
-    // Pricing comparison data
-    const COMP_DATA = [
-      { name: 'Infura', type: 'Centralized', free: '100K/day', cost: '$0 (free) – $1.10', cosmos: '❌', thorchain: '❌', kyc: 'Email + CC' },
-      { name: 'Alchemy', type: 'Centralized', free: '3M/mo', cost: '$0.80–$1.20', cosmos: '❌', thorchain: '❌', kyc: 'Email + CC' },
-      { name: 'QuickNode', type: 'Centralized', free: '10M/mo', cost: '$1.50+', cosmos: '✅', thorchain: '❌', kyc: 'Email + CC' },
-      { name: 'Ankr', type: 'Hybrid', free: '30/sec', cost: '$1.00', cosmos: '✅', thorchain: '❌', kyc: 'Email' },
-      { name: 'Chainstack', type: 'Centralized', free: '3M/mo', cost: '$1.50–$3.00', cosmos: '✅', thorchain: '❌', kyc: 'Email + CC' },
-      { name: 'Pokt Network', type: 'Decentralized', free: '100K/day', cost: '~$0.85', cosmos: '✅', thorchain: '❌', kyc: 'None' },
-      { name: 'Lava Network', type: 'Decentralized', free: 'Yes', cost: 'Token-gated', cosmos: '✅', thorchain: '❌', kyc: 'None' },
-      { name: 'Arkeo', type: 'Decentralized', free: 'Yes', cost: '$0.01–$0.10', cosmos: '✅', thorchain: '✅', kyc: 'None ✅' },
-    ];
-
-    let currentTab = 'centralized';
-    function showCompTab(tab) {
-      currentTab = tab;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('tab' + tab.charAt(0).toUpperCase() + tab.slice(1)).classList.add('active');
-      renderComp();
-    }
-    function renderComp() {
-      const tbody = document.getElementById('compTableBody');
-      const filtered = COMP_DATA.filter(d => {
-        if (currentTab === 'centralized') return d.type === 'Centralized';
-        if (currentTab === 'decentralized') return d.type !== 'Centralized';
-        return true;
-      });
-      tbody.innerHTML = filtered.map(d => `<tr${d.name === 'Arkeo' ? ' style="background:rgba(59,224,255,0.05);"' : ''}>
-        <td style="font-weight:${d.name === 'Arkeo' ? '700;color:var(--arkeo)' : '500'}">${d.name}</td>
-        <td>${d.type}</td>
-        <td>${d.free}</td>
-        <td>${d.cost}</td>
-        <td>${d.cosmos}</td>
-        <td>${d.thorchain}</td>
-        <td>${d.kyc}</td>
-      </tr>`).join('');
-    }
-    renderComp();
+    let showAllServices = false;
+    let directoryRegistry = null;
+    const CHAIN_NAMES = {thorchain:'THORChain', maya:'Maya', mayachain:'Maya', btc:'Bitcoin', eth:'Ethereum'};
 
     function filterProviders() {
-      // Placeholder — will filter provider table
-      const q = document.getElementById('searchInput').value.toLowerCase();
-      document.querySelectorAll('#providerTableBody tr').forEach(tr => {
-        tr.style.display = tr.textContent.toLowerCase().includes(q) ? '' : 'none';
-      });
+      if (!directoryRegistry) return;
+      const { services, providers } = directoryRegistry;
+      const query = document.getElementById('searchInput').value.trim().toLowerCase();
+      const type = document.getElementById('dataTypeFilter').value;
+      const status = document.getElementById('statusFilter').value;
+      const groups = new Map();
+      for (const p of providers) {
+        const service = Marketplace.resolveService(p.service, services);
+        if (!service || (!showAllServices && !Marketplace.inScope(service))) continue;
+        if (type && !service.name.split('-').includes(type)) continue;
+        let bonded; try { bonded = BigInt(p.bond || '0') > 0n; } catch { continue; }
+        if (!bonded || !p.pub_key) continue;
+        const online = Marketplace.registered(p);
+        if ((status === 'online' && !online) || (status === 'offline' && online)) continue;
+        const name = findKnownProvider(p.pub_key)?.name || p.pub_key.slice(0, 16) + '…';
+        if (query && !`${name} ${p.pub_key} ${service.name} ${CHAIN_NAMES[service.name.split('-')[0]] || ''}`.toLowerCase().includes(query)) continue;
+        if (!groups.has(p.pub_key)) groups.set(p.pub_key, {pubkey:p.pub_key, name, services:new Map(), bond:0n, online:0});
+        const g = groups.get(p.pub_key);
+        if (g.services.has(service.id)) continue;
+        g.services.set(service.id, service);
+        g.bond += BigInt(p.bond); if (online) g.online++;
+      }
+      const entries = [...groups.values()].sort((a,b) => showAllServices ? a.name.localeCompare(b.name) : Marketplace.providerOrder(a,b));
+      const serviceIds = new Set(), families = new Set();
+      for (const g of entries) for (const s of g.services.values()) { serviceIds.add(s.id); families.add(s.name.split('-')[0]); }
+      document.getElementById('statProviders').textContent = entries.length;
+      document.getElementById('statChains').textContent = families.size;
+      document.getElementById('statServices').textContent = serviceIds.size;
+      document.getElementById('providerTableBody').innerHTML = entries.map(g => {
+        const chains = [...new Set([...g.services.values()].map(s => CHAIN_NAMES[s.name.split('-')[0]] || s.name.split('-')[0].toUpperCase()))].sort().join(', ');
+        const bond = `${g.bond / 100000000n}.${String(g.bond % 100000000n).padStart(8,'0')} ARKEO`;
+        const state = g.online === g.services.size ? 'Registered online' : g.online ? 'Mixed registration' : 'Registered offline';
+        return `<tr>
+          <td title="${escapeHtml(g.pubkey)}">${escapeHtml(g.name)}</td>
+          <td>${escapeHtml(chains)}</td><td>${g.services.size}</td><td>${bond}</td>
+          <td title="Registration does not measure availability">Not measured</td><td>${state}</td>
+          <td><a href="provider.html?address=${encodeURIComponent(g.pubkey)}">Details →</a></td>
+        </tr>`;
+      }).join('') || '<tr><td colspan="7">No providers match these filters.</td></tr>';
     }
+    async function loadDirectory() {
+      try {
+        directoryRegistry = await Marketplace.registry(CONFIG.REST_API);
+        filterProviders();
+      } catch (err) {
+        document.getElementById('providerTableBody').innerHTML = `<tr><td colspan="7">Unable to load the registry: ${escapeHtml(err.message)}. <button onclick="loadDirectory()">Retry</button></td></tr>`;
+        for (const id of ['statProviders','statChains','statServices']) document.getElementById(id).textContent = 'Unavailable';
+      }
+    }
+    Marketplace.mountScope('serviceScope', all => { showAllServices = all; filterProviders(); });
+    void loadDirectory();
   </script>
 </body>
 </html>

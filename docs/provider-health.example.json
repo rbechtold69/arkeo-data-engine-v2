@@ -1,0 +1,60 @@
+{
+  "listeners": {
+    "REPLACE_WITH_LISTENER_ID": {
+      "primary": {
+        "upstream": "https://REPLACE_WITH_EXACT_UPSTREAM",
+        "checks": [
+          {
+            "url": "https://REPLACE_WITH_PROVIDER_RPC/status",
+            "network_path": "/result/node_info/network",
+            "expected_network": "REPLACE_WITH_VERIFIED_CHAIN_ID",
+            "timestamp_path": "/result/sync_info/latest_block_time",
+            "timestamp_unit": "rfc3339",
+            "max_age_seconds": 30,
+            "height_path": "/result/sync_info/latest_block_height",
+            "min_height": 1,
+            "equals": {
+              "/result/sync_info/catching_up": false
+            }
+          }
+        ]
+      },
+      "REPLACE_WITH_BACKUP_1_PUBKEY": {
+        "upstream": "https://REPLACE_WITH_EXACT_UPSTREAM",
+        "checks": [
+          {
+            "url": "https://REPLACE_WITH_PROVIDER_RPC/status",
+            "network_path": "/result/node_info/network",
+            "expected_network": "REPLACE_WITH_VERIFIED_CHAIN_ID",
+            "timestamp_path": "/result/sync_info/latest_block_time",
+            "timestamp_unit": "rfc3339",
+            "max_age_seconds": 30,
+            "height_path": "/result/sync_info/latest_block_height",
+            "min_height": 1,
+            "equals": {
+              "/result/sync_info/catching_up": false
+            }
+          }
+        ]
+      },
+      "REPLACE_WITH_BACKUP_2_PUBKEY": {
+        "upstream": "https://REPLACE_WITH_EXACT_UPSTREAM",
+        "checks": [
+          {
+            "url": "https://REPLACE_WITH_PROVIDER_RPC/status",
+            "network_path": "/result/node_info/network",
+            "expected_network": "REPLACE_WITH_VERIFIED_CHAIN_ID",
+            "timestamp_path": "/result/sync_info/latest_block_time",
+            "timestamp_unit": "rfc3339",
+            "max_age_seconds": 30,
+            "height_path": "/result/sync_info/latest_block_height",
+            "min_height": 1,
+            "equals": {
+              "/result/sync_info/catching_up": false
+            }
+          }
+        ]
+      }
+    }
+  }
+}

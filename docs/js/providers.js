@@ -108,11 +108,8 @@ const KNOWN_PROVIDERS = {
   },
 };
 
-// Helper: find a matching KNOWN_PROVIDERS entry by pubkey (handles prefix matching)
+// Display metadata only; registry status and runtime health are separate signals.
+// Never assign a trusted identity to a truncated or prefix-matching public key.
 function findKnownProvider(pubkey) {
-  if (KNOWN_PROVIDERS[pubkey]) return KNOWN_PROVIDERS[pubkey];
-  const match = Object.keys(KNOWN_PROVIDERS).find(k =>
-    k.startsWith(pubkey.slice(0, 40)) || pubkey.startsWith(k.slice(0, 40))
-  );
-  return match ? KNOWN_PROVIDERS[match] : null;
+  return typeof pubkey === 'string' && Object.hasOwn(KNOWN_PROVIDERS, pubkey) ? KNOWN_PROVIDERS[pubkey] : null;
 }

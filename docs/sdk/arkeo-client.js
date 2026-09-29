@@ -1,7 +1,7 @@
 /**
  * ArkeoClient — Node.js SDK for Arkeo PAYG authenticated RPC calls
  * 
- * Automatically signs requests using ADR-036 signatures with incrementing nonces.
+ * Automatically signs the chain PAYG preimage with incrementing nonces.
  * Provides a transparent proxy to any Arkeo sentinel service.
  * 
  * @version 1.0.0
@@ -16,7 +16,7 @@ import { ripemd160 } from '@noble/hashes/ripemd160';
 // Required for @noble/secp256k1 synchronous signing
 secp256k1.etc.hmacSha256Sync = (k, ...m) => hmac(sha256, k, secp256k1.etc.concatBytes(...m));
 import * as bip39 from 'bip39';
-import crypto from 'crypto';
+import { HDKey } from '@scure/bip32';
 import { Buffer } from 'buffer';
 
 /**
@@ -72,12 +72,9 @@ function bech32Encode(prefix, data) {
  * Derive private key from mnemonic using BIP-39 and BIP-44 (Cosmos path: m/44'/118'/0'/0/0)
  */
 function privateKeyFromMnemonic(mnemonic) {
-  const seed = bip39.mnemonicToSeedSync(mnemonic);
-  // Simple derivation for Cosmos HD path m/44'/118'/0'/0/0
-  // For production, use @scure/bip32 or similar for proper BIP-32 derivation
-  // This is a simplified version that hashes the seed
-  const hash = sha256(seed);
-  return hash.slice(0, 32);
+  if (!bip39.validateMnemonic(mnemonic)) throw new Error('Invalid BIP-39 mnemonic');
+  return HDKey.fromMasterSeed(bip39.mnemonicToSeedSync(mnemonic))
+    .derive("m/44'/118'/0'/0/0").privateKey;
 }
 
 /**
@@ -85,6 +82,7 @@ function privateKeyFromMnemonic(mnemonic) {
  */
 function hexToBytes(hex) {
   if (hex.startsWith('0x')) hex = hex.slice(2);
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) throw new Error('Private key must be 32 bytes of hex');
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
@@ -201,6 +199,11 @@ export class ArkeoClient {
   constructor(config) {
     this.sentinelUrl = config.sentinelUrl.replace(/\/$/, '');
     this.contractId = config.contractId;
+    if (!Number.isSafeInteger(this.contractId) || this.contractId <= 0) throw new Error('Invalid contract ID');
+    this.timeoutMs = config.timeoutMs ?? 10000;
+    if (!Number.isSafeInteger(this.timeoutMs) || this.timeoutMs <= 0) throw new Error('Invalid timeout');
+    this.saveNonce = config.saveNonce;
+    this._tail = Promise.resolve();
     this.service = config.service;
     this.restApi = config.restApi || 'https://rest-seed.arkeo.network';
     
@@ -220,8 +223,9 @@ export class ArkeoClient {
     this.address = pubKeyToAddress(this.publicKey);
     
     // Nonce tracking - will auto-fetch on first request if not provided
-    this.currentNonce = config.startNonce || null;
-    this._nonceFetched = config.startNonce ? true : false;
+    this.currentNonce = null;
+    this._nonceFetched = false;
+    if (config.startNonce !== undefined) this.setNonce(config.startNonce);
   }
   
   /**
@@ -235,7 +239,11 @@ export class ArkeoClient {
    * Set nonce manually (useful for persistence/recovery)
    */
   setNonce(nonce) {
+    if (!Number.isSafeInteger(nonce) || nonce <= 0 || (this.currentNonce !== null && nonce < this.currentNonce)) {
+      throw new Error('Nonce must be a positive safe integer and cannot move backwards');
+    }
     this.currentNonce = nonce;
+    this._nonceFetched = true;
   }
   
   /**
@@ -262,13 +270,13 @@ export class ArkeoClient {
    * Header format: "contractId:pubkey:nonce:signature" (4-part, for sentinel parsing)
    * @returns {Promise<string>} arkauth value
    */
-  async generateArkAuth() {
+  async generateArkAuth(nonce = this.currentNonce) {
     // Chain verifies signature over "{contractId}:{nonce}:" (no chain ID, trailing colon)
-    const preimage = `${this.contractId}:${this.currentNonce}:`;
+    const preimage = `${this.contractId}:${nonce}:`;
     const signature = await this.sign(preimage);
     
     // 4-part format for sentinel: contractId:pubkey:nonce:signature
-    return `${this.contractId}:${this.publicKeyBech32}:${this.currentNonce}:${signature}`;
+    return `${this.contractId}:${this.publicKeyBech32}:${nonce}:${signature}`;
   }
   
   /**
@@ -277,27 +285,23 @@ export class ArkeoClient {
    */
   async _ensureNonce() {
     if (this._nonceFetched) return;
-    
-    try {
-      const resp = await fetch(`${this.restApi}/arkeo/contract/${this.contractId}`);
-      if (resp.ok) {
-        const data = await resp.json();
-        const chainNonce = parseInt(data.contract?.nonce || '0');
-        this.currentNonce = chainNonce + 1;
-        if (this.currentNonce < 1) this.currentNonce = 1;
-        console.log(`[ArkeoClient] Auto-detected nonce: ${this.currentNonce} (chain: ${chainNonce})`);
-      } else {
-        console.warn('[ArkeoClient] Failed to fetch nonce from chain, defaulting to 1');
-        this.currentNonce = 1;
-      }
-    } catch (err) {
-      console.warn('[ArkeoClient] Nonce fetch error, defaulting to 1:', err.message);
-      this.currentNonce = 1;
+    const claimsUrl = new URL(`${this.sentinelUrl}/claims`);
+    claimsUrl.searchParams.set('contract_id', this.contractId);
+    claimsUrl.searchParams.set('client', this.publicKeyBech32);
+    const responses = await Promise.all([
+      fetch(`${this.restApi}/arkeo/contract/${this.contractId}`, { signal: AbortSignal.timeout(this.timeoutMs), redirect: 'error' }),
+      fetch(claimsUrl, { signal: AbortSignal.timeout(this.timeoutMs), redirect: 'error' }),
+    ]);
+    if (responses.some(r => !r.ok)) throw new Error('Cannot safely initialize nonce; chain and sentinel must be reachable');
+    const [chain, claims] = await Promise.all(responses.map(r => r.json()));
+    if (chain.contract?.nonce === undefined || (claims.highest_nonce === undefined && claims.highestNonce === undefined)) {
+      throw new Error('Missing nonce in chain or sentinel response');
     }
-    
-    this._nonceFetched = true;
+    const values = [Number(chain.contract.nonce), Number(claims.highest_nonce ?? claims.highestNonce)];
+    if (values.some(n => !Number.isSafeInteger(n) || n < 0)) throw new Error('Invalid remote nonce');
+    this.setNonce(Math.max(...values) + 1);
   }
-  
+
   /**
    * Make an authenticated RPC call
    * @param {string} path - RPC path (e.g. "/status" or "/abci_info")
@@ -305,25 +309,26 @@ export class ArkeoClient {
    * @returns {Promise<Response>} Fetch response
    */
   async rpc(path, options = {}) {
-    // Auto-fetch nonce on first request if needed
-    await this._ensureNonce();
-    
-    const arkauth = await this.generateArkAuth();
-    
-    // Build URL with arkauth query parameter
-    const url = `${this.sentinelUrl}/${this.service}${path}${path.includes('?') ? '&' : '?'}arkauth=${encodeURIComponent(arkauth)}`;
-    
-    // Make request
-    const response = await fetch(url, options);
-    
-    // Auto-increment nonce on success
-    if (response.ok) {
-      this.currentNonce++;
-    }
-    
-    return response;
+    const run = this._tail.then(async () => {
+      await this._ensureNonce();
+      const nonce = this.currentNonce;
+      this.setNonce(nonce + 1); // Reserve before sending, including failed/ambiguous requests.
+      if (this.saveNonce) await this.saveNonce(this.currentNonce);
+      const arkauth = await this.generateArkAuth(nonce);
+      if (!path.startsWith('/') || path.includes('#')) throw new Error('RPC path must be relative');
+      const url = new URL(`${this.sentinelUrl}/${this.service}${path}`);
+      url.searchParams.delete('arkauth');
+      url.searchParams.delete('arkcontract');
+      const headers = new Headers(options.headers);
+      headers.set('arkauth', arkauth);
+      const timeout = AbortSignal.timeout(this.timeoutMs);
+      const signal = options.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
+      return fetch(url, { ...options, headers, signal, redirect: 'error' });
+    });
+    this._tail = run.catch(() => {});
+    return run;
   }
-  
+
   /**
    * Make authenticated RPC call and return JSON
    * @param {string} path - RPC path

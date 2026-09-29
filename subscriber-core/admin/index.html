@@ -3997,7 +3997,6 @@
         openListenerId = String(id);
         let listener = listenersCache.find((l) => String(l.id) === String(id));
         let top = listener && Array.isArray(listener.top_services) ? dedupTopServices(listener.top_services) : [];
-        const successMap = {};
         // modal shell
         const port = listener?.port ? listener.port : "–";
         const svcLabel = listener
@@ -4036,59 +4035,17 @@
         } catch (e) {
             /* best-effort; continue */
         }
-        const mergeMeta = (list, cacheTop) => {
-            const map = {};
-            (cacheTop || []).forEach((t) => {
-                const key = `${t?.provider_pubkey || ""}::${t?.service_id || t?.service || ""}`;
-                map[key] = t;
-            });
-            return list.map((t) => {
-                const key = `${t?.provider_pubkey || ""}::${t?.service_id || t?.service || ""}`;
-                if (map[key]) {
-                    return { ...map[key], ...t };
-                }
-                return t;
-            });
-        };
         if (!top.length) {
             appendPollLog("No providers to poll; running a single test instead.");
             await testListener(id);
             return;
         }
-            const primary = top[0] || {};
-            const inferredSvc = listener?.service_id || listener?.service || primary.service_id || primary.service || "";
-            const defaults = defaultHealthForService(inferredSvc);
-            const basePayload = {
-                status: "active",
-                service_id: inferredSvc,
-                whitelist_ips: listener?.whitelist_ips || "",
-                health_method: defaults.method,
-                health_payload: defaults.payload,
-                health_header: defaults.header,
-            };
-            let workingTop = dedupTopServices(JSON.parse(JSON.stringify(top)));
-            workingTop = sortProvidersByLocationAndPrice(workingTop, listener?.location || "");
+            // Probe each selected provider explicitly; never rewrite live routing to test it.
+            const workingTop = dedupTopServices(JSON.parse(JSON.stringify(top)));
             for (const ts of workingTop) {
                 const providerLabel = ts?.provider_moniker || "(unknown)";
                 appendPollLog(`Provider: ${providerLabel}`);
-                // reorder so this provider is first
-                const reordered = dedupTopServices([ts, ...workingTop.filter((t) => {
-                    const keyT = `${t?.provider_pubkey || ""}::${t?.service_id || t?.service || ""}`;
-                    const keyTs = `${ts?.provider_pubkey || ""}::${ts?.service_id || ts?.service || ""}`;
-                    return keyT !== keyTs;
-                })]);
-                try {
-                    const merged = mergeMeta(reordered, top);
-                    await fetch(apiUrl(`/api/listeners/${encodeURIComponent(id)}`), {
-                        method: "PUT",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ ...basePayload, top_services: merged }),
-                    });
-                    appendPollLog("  Performing tests and polling data...");
-                } catch (e) {
-                    // ignore reorder errors, proceed
-                    appendPollLog(`  reorder failed: ${e}`);
-                }
+                appendPollLog("  Testing this provider without changing your routing priority...");
                 // run a few tests for this provider, respecting qpm if present
                 const qpm = ts && ts.queries_per_minute ? Number(ts.queries_per_minute) : 0;
                 const spacingMs = qpm > 0 ? Math.max(200, Math.round(60000 / qpm)) : 400;
@@ -4141,82 +4098,17 @@
                     }
                     await new Promise(res => setTimeout(res, spacingMs));
                 }
-                if (allOk && ts && ts.provider_pubkey) {
-                    successMap[String(ts.provider_pubkey)] = true;
-                }
                 await loadListeners();
-                const refreshed = listenersCache.find((l) => String(l.id) === String(id));
-                if (refreshed && Array.isArray(refreshed.top_services)) {
-                    workingTop = dedupTopServices(JSON.parse(JSON.stringify(refreshed.top_services)));
-                }
                 appendPollLog(""); // blank line between providers
             }
-        // sort by cheapest then lowest latency using the freshest cache after polling
-        const latest = listenersCache.find((l) => String(l.id) === String(id));
-        let latestTop = dedupTopServices(latest && Array.isArray(latest.top_services) ? latest.top_services : []);
-        // Promote status to Up for providers that passed all tests
-        if (latestTop.length && Object.keys(successMap).length) {
-            latestTop = latestTop.map((ts) => {
-                const pk = String(ts?.provider_pubkey || "");
-                if (pk && successMap[pk]) {
-                    return { ...ts, status: "Up" };
-                }
-                return ts;
-            });
-        }
-        const preferredLocation = listener?.location || "";
-        const sorted = [...latestTop].sort((a, b) => {
-            const statusScore = (x) => {
-                const s = String(x?.status || "").toLowerCase();
-                if (s === "up") return 0;
-                if (s === "down") return 2;
-                return 1; // unknown
-            };
-            const locScore = (x) => locationMatchScore(preferredLocation, x?.provider_location);
-            const price = (x) => {
-                const amt = x?.pay_as_you_go_rate?.amount;
-                const n = parseInt(amt, 10);
-                return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
-            };
-            const rt = (x) => {
-                const n = Number(x?.rt_avg_ms);
-                return Number.isFinite(n) ? n : Number.POSITIVE_INFINITY;
-            };
-
-            const sA = statusScore(a);
-            const sB = statusScore(b);
-            if (sA !== sB) return sA - sB; // Up first, Down last
-            const lA = locScore(a);
-            const lB = locScore(b);
-            if (lA !== lB) return lA - lB; // preferred location first
-
-            const pA = price(a);
-            const pB = price(b);
-            if (pA !== pB) return pA - pB; // lower price first
-
-            const rtA = rt(a);
-            const rtB = rt(b);
-            return rtA - rtB; // faster first
-        });
-        try {
-            const merged = mergeMeta(sorted, latestTop);
-            await fetch(apiUrl(`/api/listeners/${encodeURIComponent(id)}`), {
-                method: "PUT",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ ...basePayload, top_services: merged }),
-            });
-            appendPollLog("Sorted providers by status, price, then latency and saved.\n\nPolling and sorting complete.");
-        } catch (e) {
-            /* ignore */
-            appendPollLog(`Failed to save sorted providers: ${e}`);
-        }
+        appendPollLog("Polling complete. Your provider priority order is unchanged.");
         await loadListeners();
         const summary = summaryEl();
         if (summary) summary.innerHTML = `Poll complete.`;
     }
 
     async function refreshTopServices(id) {
-        if (!confirm("Refresh top services and check for new ones for this listener?")) return;
+        if (!confirm("Refresh provider discovery while keeping your selected providers and priority order?")) return;
         try {
             const res = await fetch(apiUrl(`/api/listeners/${encodeURIComponent(id)}/refresh-top-services`), {
                 method: "POST",

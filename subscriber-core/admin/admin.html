@@ -160,7 +160,7 @@
         <tr>
             <td class="label">
                 Admin Password
-                <div class="hint">Leave blank to disable. When set, a password prompt can be required on this page.</div>
+                <div class="hint">Leave blank to keep the current password. New passwords require at least 12 characters.</div>
             </td>
             <td class="value"><input type="password" id="adminPasswordInput" class="full" autocomplete="new-password" placeholder="(optional)" /></td>
         </tr>
@@ -552,15 +552,20 @@
                     overviewEl.textContent = "(unavailable)";
                 }
             }
-            try {
-                await fetch(resolveApi("/api/admin-password"), {
-                    method: "POST",
+            if (adminPasswordVal) {
+                const passwordResponse = await fetch(resolveApi("/api/admin-password"), {
+                    method: "POST", credentials: "include",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ password: adminPasswordVal }),
                 });
-                adminPasswordEnabled = !!adminPasswordVal;
-            } catch (e) {
-                // ignore password save errors to avoid blocking settings save
+                if (!passwordResponse.ok) throw new Error("Settings saved, but password update failed.");
+                const loginResponse = await fetch(resolveApi("/api/login"), {
+                    method: "POST", credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ password: adminPasswordVal }),
+                });
+                if (!loginResponse.ok) throw new Error("Password updated. Please sign in again.");
+                adminPasswordEnabled = true;
             }
             if (resultEl) {
                 finalMessage = `Saved subscriber settings${data.subscriber_settings_path ? ` to ${data.subscriber_settings_path}` : ""}.`;
@@ -582,7 +587,7 @@
             const res = await fetch(resolveApi("/api/admin-password"), { cache: "no-store" });
             const data = await res.json();
             adminPasswordEnabled = !!(data && data.enabled);
-            const pwd = data && data.password ? data.password : "";
+            const pwd = ""; // Passwords are never returned by the API.
             const adminPwdInput = document.getElementById("adminPasswordInput");
             if (adminPwdInput) adminPwdInput.value = pwd;
         } catch (e) {

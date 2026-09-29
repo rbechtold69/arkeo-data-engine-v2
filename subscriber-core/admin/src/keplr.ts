@@ -1,6 +1,6 @@
 import { GasPrice, SigningStargateClient, calculateFee, defaultRegistryTypes } from "@cosmjs/stargate";
 import { OfflineSigner, Registry as ProtoRegistry } from "@cosmjs/proto-signing";
-import { osmosis } from "osmojs";
+import { SwapMessage, swapTypeUrl } from "./swap-codec";
 
 declare global {
     interface Window {
@@ -23,7 +23,7 @@ type SwapOptions = ConnectOptions & {
     memo?: string;
     gas?: number;
     gasPrice?: string;
-    poolId?: number;
+    poolId?: string | number | bigint;
 };
 
 type IbcTransferOptions = ConnectOptions & {
@@ -59,62 +59,34 @@ function requireKeplr() {
 }
 
 function normalizeAmount(val: string | number | bigint): string {
-    if (typeof val === "bigint") return val.toString();
-    return String(val ?? "0");
+    if (typeof val === "number" && !Number.isSafeInteger(val)) throw new Error("Amount must be an exact integer");
+    const text = String(val);
+    if (!/^[0-9]+$/.test(text) || BigInt(text) <= 0n) throw new Error("Amount must be a positive integer in base units");
+    return text;
 }
 
 function buildRegistry() {
-    return new ProtoRegistry([...defaultRegistryTypes, ...(osmosis.gamm.v1beta1.registry || [])]);
+    return new ProtoRegistry([...defaultRegistryTypes, [swapTypeUrl, SwapMessage]]);
 }
 
-async function resolveIbcTimeout(
-    client: SigningStargateClient,
-    chainId: string,
-    timeoutSeconds: number,
-) {
-    let blockTimeMs: number | null = null;
-    let blockHeight: number | null = null;
-    try {
-        const block = await client.getBlock();
-        const headerTime = block?.header?.time as unknown;
-        if (headerTime instanceof Date) {
-            blockTimeMs = headerTime.getTime();
-        } else if (typeof headerTime === "string") {
-            const parsed = Date.parse(headerTime);
-            if (!Number.isNaN(parsed)) blockTimeMs = parsed;
-        }
-        const headerHeight = (block?.header?.height as unknown) ?? null;
-        if (typeof headerHeight === "number") {
-            blockHeight = headerHeight;
-        } else if (typeof headerHeight === "string") {
-            const parsedHeight = parseInt(headerHeight, 10);
-            if (!Number.isNaN(parsedHeight)) blockHeight = parsedHeight;
-        } else if (headerHeight && typeof (headerHeight as { toNumber?: () => number }).toNumber === "function") {
-            const parsedHeight = (headerHeight as { toNumber: () => number }).toNumber();
-            if (Number.isFinite(parsedHeight)) blockHeight = parsedHeight;
-        }
-    } catch {
-        blockTimeMs = null;
-        blockHeight = null;
+async function resolveIbcTimeout(client: SigningStargateClient, _chainId: string, timeoutSeconds: number) {
+    const block = await client.getBlock();
+    const blockTimeMs = Date.parse(String(block.header.time));
+    if (!Number.isFinite(blockTimeMs) || Date.now() - blockTimeMs > 60000 || blockTimeMs - Date.now() > 10000) {
+        throw new Error("RPC block time is stale or invalid");
     }
-
-    const baseMs = blockTimeMs && blockTimeMs > 0 ? blockTimeMs : Date.now();
-    const timeoutTimestamp =
-        BigInt(baseMs) * 1_000_000n + BigInt(timeoutSeconds) * 1_000_000_000n;
-
-    let timeoutHeight: { revisionNumber: number; revisionHeight: number } | undefined;
-    const revStr = chainId.split("-").pop() || "";
-    const revisionNumber = parseInt(revStr, 10);
-    if (Number.isFinite(revisionNumber) && blockHeight && blockHeight > 0) {
-        const extraBlocks = Math.max(50, Math.ceil(timeoutSeconds / 6));
-        timeoutHeight = { revisionNumber, revisionHeight: blockHeight + extraBlocks };
-    }
-
-    return { timeoutTimestamp, timeoutHeight };
+    // CosmJS sendIbcTokens expects seconds and converts to protobuf nanoseconds.
+    // An IBC timeout height belongs to the destination, not this source chain.
+    return { timeoutTimestamp: Math.floor(blockTimeMs / 1000) + timeoutSeconds, timeoutHeight: undefined };
 }
 
 async function ensureSigner(chainId: string) {
     requireKeplr();
+    cachedClient?.disconnect();
+    cachedClient = null;
+    cachedSigner = null;
+    cachedAddress = "";
+    cachedRpc = "";
     await window.keplr.enable(chainId);
     cachedSigner = window.getOfflineSigner!(chainId);
     const accounts = await cachedSigner.getAccounts();
@@ -128,12 +100,14 @@ async function ensureSigner(chainId: string) {
 
 async function ensureClient(opts: { chainId: string; rpcEndpoint: string }) {
     const chainId = opts.chainId || DEFAULT_CHAIN_ID;
-    if (!cachedSigner || cachedChainId !== chainId) {
-        await ensureSigner(chainId);
-    }
+    await ensureSigner(chainId);
     if (!cachedClient || cachedRpc !== opts.rpcEndpoint || cachedChainId !== chainId) {
         const registry = buildRegistry();
         cachedClient = await SigningStargateClient.connectWithSigner(opts.rpcEndpoint, cachedSigner!, { registry });
+        if (await cachedClient.getChainId() !== chainId) {
+            cachedClient.disconnect(); cachedClient = null;
+            throw new Error("RPC network does not match the selected wallet network");
+        }
         cachedRpc = opts.rpcEndpoint;
         cachedChainId = chainId;
     }
@@ -169,13 +143,15 @@ export async function signAndBroadcastSwap(opts: SwapOptions) {
     if (!opts.rpcEndpoint) throw new Error("rpcEndpoint is required to sign swap.");
     const client = await ensureClient({ chainId, rpcEndpoint: opts.rpcEndpoint });
     const addr = opts.senderAddress || cachedAddress || (await connectKeplr(opts));
-    const poolId = BigInt(opts.poolId ?? DEFAULT_POOL_ID);
-    const msg = osmosis.gamm.v1beta1.MessageComposer.withTypeUrl.swapExactAmountIn({
+    if (addr !== cachedAddress) throw new Error("Sender does not match the active wallet");
+    const poolId = normalizeAmount(opts.poolId ?? DEFAULT_POOL_ID);
+    if (BigInt(poolId) > 18446744073709551615n) throw new Error("Pool ID exceeds uint64");
+    const msg = { typeUrl: swapTypeUrl, value: {
         sender: addr,
         routes: [{ poolId, tokenOutDenom: opts.tokenOutDenom }],
         tokenIn: { denom: opts.tokenInDenom, amount: normalizeAmount(opts.amountInBase) },
         tokenOutMinAmount: normalizeAmount(opts.minOutBase),
-    });
+    } };
     const fee = calculateFee(opts.gas || DEFAULT_SWAP_GAS, GasPrice.fromString(opts.gasPrice || DEFAULT_GAS_PRICE));
     const result = await client.signAndBroadcast(addr, [msg], fee, opts.memo || "");
     if (result.code !== 0) {
@@ -189,7 +165,9 @@ export async function signAndBroadcastIbcTransfer(opts: IbcTransferOptions) {
     if (!opts.rpcEndpoint) throw new Error("rpcEndpoint is required to sign IBC transfer.");
     const client = await ensureClient({ chainId, rpcEndpoint: opts.rpcEndpoint });
     const addr = opts.senderAddress || cachedAddress || (await connectKeplr(opts));
-    const timeoutSeconds = Math.max(60, Math.floor(opts.timeoutSeconds ?? DEFAULT_IBC_TIMEOUT_SECONDS));
+    if (addr !== cachedAddress) throw new Error("Sender does not match the active wallet");
+    const timeoutSeconds = opts.timeoutSeconds ?? DEFAULT_IBC_TIMEOUT_SECONDS;
+    if (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds < 60 || timeoutSeconds > 86400) throw new Error("IBC timeout must be 60–86400 seconds");
     const fee = calculateFee(opts.gas || DEFAULT_IBC_GAS, GasPrice.fromString(opts.gasPrice || DEFAULT_GAS_PRICE));
     const { timeoutTimestamp, timeoutHeight } = await resolveIbcTimeout(client, chainId, timeoutSeconds);
     const result = await client.sendIbcTokens(

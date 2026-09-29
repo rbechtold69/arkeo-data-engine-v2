@@ -145,7 +145,7 @@
         <tr>
             <td class="label">
                 Admin Password
-                <div class="hint">Leave blank to disable. When set, a password prompt is required on this page.</div>
+                <div class="hint">Leave blank to keep the current password. New passwords require at least 12 characters.</div>
             </td>
             <td class="value"><input type="password" id="adminPasswordInput" class="full" autocomplete="new-password" placeholder="(optional)" /></td>
         </tr>
@@ -649,18 +649,21 @@
                     overviewEl.textContent = "(unavailable)";
                 }
             }
-            // Save admin password (blank disables)
-            try {
-                markStage("saving admin password");
-                await fetch(resolveApi("/api/admin-password"), {
-                    method: "POST",
+            // Change password only when a new value is entered.
+            if (adminPasswordVal) {
+                const passwordResponse = await fetch(resolveApi("/api/admin-password"), {
+                    method: "POST", credentials: "include",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ password: adminPasswordVal }),
                 });
-                sessionStorage.setItem("adminAuthed", adminPasswordVal ? "1" : "0");
-                adminPasswordEnabled = !!adminPasswordVal;
-            } catch (e) {
-                // ignore password save errors to avoid blocking settings save
+                if (!passwordResponse.ok) throw new Error("Settings saved, but password update failed.");
+                const loginResponse = await fetch(resolveApi("/api/login"), {
+                    method: "POST", credentials: "include",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ password: adminPasswordVal }),
+                });
+                if (!loginResponse.ok) throw new Error("Password updated. Please sign in again.");
+                adminPasswordEnabled = true;
             }
             if (resultEl) {
                 const rotated = data.mnemonic_rotated ? "Hotwallet re-imported with new mnemonic. " : "";

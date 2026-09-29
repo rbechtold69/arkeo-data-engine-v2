@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "environment": {
+    "ARKEO_INSTITUTIONAL_MODE": "true",
+    "PROXY_AUTO_CREATE": "false",
+    "ARKEO_PROVIDER_HEALTH_FILE": "/run/arkeo/health.json"
+  },
+  "persistent_nonce_state": false,
+  "admin_private_ingress": false,
+  "redundant_gateway_hosts": false,
+  "workload": [
+    {
+      "role": "thorchain-rest",
+      "listener_id": "thorchain-rest",
+      "service_id": "REPLACE_REGISTRY_SERVICE_ID",
+      "service_name": "REPLACE_REGISTRY_SERVICE_NAME",
+      "network": "REPLACE_EXACT_NETWORK",
+      "sample_read_path": "/thorchain/pools",
+      "workload_confirmed": false,
+      "providers": [
+        {
+          "provider_pubkey": "primary",
+          "upstream": "https://REPLACE_LIQUIFY.invalid",
+          "failure_domain": "REPLACE_PRIMARY_OPERATOR",
+          "endpoint_approved": false
+        },
+        {
+          "provider_pubkey": "REPLACE_BACKUP_PROVIDER_PUBLIC_KEY",
+          "upstream": "https://REPLACE_BACKUP.invalid",
+          "failure_domain": "REPLACE_INDEPENDENT_OPERATOR",
+          "endpoint_approved": false,
+          "contract": {
+            "id": "REPLACE_FUNDED_CONTRACT_ID",
+            "provider": "REPLACE_BACKUP_PROVIDER_PUBLIC_KEY",
+            "service": "REPLACE_REGISTRY_SERVICE_ID",
+            "verified_active": false
+          }
+        }
+      ]
+    }
+  ]
+}

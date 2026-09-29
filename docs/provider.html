@@ -6,10 +6,11 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' cdn.jsdelivr.net; connect-src *; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;">
   <title>Provider Details — Arkeo Marketplace</title>
   <link rel="icon" type="image/png" href="images/arkeo-logo-200px_1.png">
-  <meta name="description" content="View provider details, services, contracts, and reputation on the Arkeo Data Marketplace.">
+  <meta name="description" content="View provider details, registered RPC services, and contract rates on the Arkeo Data Marketplace.">
   <meta name="theme-color" content="#0a0c10">
   <script src="js/config.js"></script>
   <script src="js/utils.js"></script>
+  <script src="js/marketplace.js"></script>
   <style>
     :root {
       --bg-main: #0a0c10;
@@ -425,16 +426,10 @@
     function escapeHtml(text) {
       const div = document.createElement('div');
       div.textContent = text || '';
-      return div.innerHTML;
+      return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     }
     
-    function findKnown(pk) {
-      if (typeof KNOWN_PROVIDERS === 'undefined') return null;
-      if (KNOWN_PROVIDERS[pk]) return KNOWN_PROVIDERS[pk];
-      const match = Object.keys(KNOWN_PROVIDERS).find(k =>
-        k.startsWith(pk.slice(0, 40)) || pk.startsWith(k.slice(0, 40)));
-      return match ? KNOWN_PROVIDERS[match] : null;
-    }
+    function findKnown(pk) { return findKnownProvider(pk); }
 
     const CHAIN_ICONS = {
       'eth': '⟠', 'ethereum': '⟠', 'btc': '₿', 'bitcoin': '₿',
@@ -496,15 +491,10 @@
     async function loadProvider() {
       const params = new URLSearchParams(window.location.search);
       const pubkey = params.get('pubkey') || params.get('address');
-      if (!pubkey) { showError('No pubkey in URL'); return; }
+      if (!/^arkeopub1[a-z0-9]+$/.test(pubkey || '')) { showError('A valid provider public key is required'); return; }
 
       try {
-        const [providers, contracts, servicesList] = await Promise.all([
-          API.getProviders(),
-          API.getContracts().catch(() => []),
-          API.getServices().catch(() => []),
-        ]);
-
+        const {providers, services:servicesList} = await Marketplace.registry(CONFIG.REST_API);
         // Build service ID → name map
         const serviceMap = {};
         servicesList.forEach(s => { serviceMap[s.service_id] = s.name || s.description || ('Service ' + s.service_id); });
@@ -522,19 +512,21 @@
 
         providerEntries.forEach(p => {
           info.totalBond += parseInt(p.bond || 0);
-          if (p.status === 'ONLINE') info.status = 'ONLINE';
+          if (Marketplace.registered(p)) info.status = 'ONLINE';
           info.metadataUri = info.metadataUri || p.metadata_uri;
-          const svcId = p.service;
-          const svcName = serviceMap[svcId] || ('Service ' + svcId);
+          const registeredService = Marketplace.resolveService(p.service, servicesList);
+          if (!registeredService) return;
+          const svcId = registeredService.id;
+          const svcName = registeredService.name;
           info.services.push({
             id: svcId,
             name: svcName,
             displayName: getChainDisplayName(svcName),
             icon: getChainIcon(svcName),
             bond: parseInt(p.bond || 0),
-            rate: p.pay_as_you_go_rate?.[0]?.amount || '0',
+            rate: Marketplace.paygRate(p)?.amount ?? null,
             rateDenom: p.pay_as_you_go_rate?.[0]?.denom || 'uarkeo',
-            status: p.status,
+            status: Marketplace.registered(p) ? 'ONLINE' : 'OFFLINE',
           });
         });
 
@@ -576,71 +568,9 @@
 
         if (!info.name) info.name = 'Provider ' + pubkey.slice(-8);
 
-        // Process contracts for this provider
-        // Get current block height for expiry checks
-        let currentHeight = 0;
-        try {
-          const statusResp = await fetch(CONFIG.RPC_API + '/status');
-          const statusData = await statusResp.json();
-          currentHeight = parseInt(statusData.result?.sync_info?.latest_block_height || 0);
-        } catch (e) { console.warn('Could not fetch block height'); }
-
-        const provContracts = contracts.filter(c => c.provider === pubkey);
-        let totalPaid = 0, totalNonce = 0, activeContracts = 0;
-        provContracts.forEach(c => {
-          totalPaid += parseInt(c.paid || 0);
-          totalNonce += parseInt(c.nonce || 0);
-          const deposit = parseInt(c.deposit || 0);
-          const paid = parseInt(c.paid || 0);
-          const height = parseInt(c.height || 0);
-          const duration = parseInt(c.duration || 0);
-          const expiry = height + duration;
-          const notExpired = currentHeight === 0 || expiry > currentHeight;
-          if (deposit > paid && notExpired) activeContracts++;
-        });
-
-        // Calculate reputation (relative to all providers)
-        const allProviderInfos = {};
-        providers.forEach(p => {
-          const pk = p.pub_key;
-          if (!pk) return;
-          if (!allProviderInfos[pk]) allProviderInfos[pk] = { totalBond: 0, serviceCount: 0 };
-          allProviderInfos[pk].totalBond += parseInt(p.bond || 0);
-          allProviderInfos[pk].serviceCount++;
-        });
-        const allMetrics = {};
-        Object.keys(allProviderInfos).forEach(pk => {
-          allMetrics[pk] = { totalNonce: 0, totalPaid: 0, bond: allProviderInfos[pk].totalBond, activeContracts: 0, serviceCount: allProviderInfos[pk].serviceCount };
-        });
-        contracts.forEach(c => {
-          const pk = c.provider;
-          if (!allMetrics[pk]) return;
-          allMetrics[pk].totalNonce += parseInt(c.nonce || 0);
-          allMetrics[pk].totalPaid += parseInt(c.paid || 0);
-          const dep = parseInt(c.deposit || 0), pd = parseInt(c.paid || 0);
-          if (dep > pd) allMetrics[pk].activeContracts++;
-        });
-        const maxN = Math.max(1, ...Object.values(allMetrics).map(m => m.totalNonce));
-        const maxP = Math.max(1, ...Object.values(allMetrics).map(m => m.totalPaid));
-        const maxB = Math.max(1, ...Object.values(allMetrics).map(m => m.bond));
-        const maxC = Math.max(1, ...Object.values(allMetrics).map(m => m.activeContracts));
-        const maxS = Math.max(1, ...Object.values(allMetrics).map(m => m.serviceCount));
-
-        const m = allMetrics[pubkey] || { totalNonce: 0, totalPaid: 0, bond: 0, activeContracts: 0, serviceCount: 0 };
-        const repBreakdown = {
-          requests: Math.round((m.totalNonce / maxN) * 100),
-          revenue: Math.round((m.totalPaid / maxP) * 100),
-          bond: Math.round((m.bond / maxB) * 100),
-          contracts: Math.round((m.activeContracts / maxC) * 100),
-          services: Math.round((m.serviceCount / maxS) * 100),
-        };
-        const repTotal = Math.round(
-          repBreakdown.requests * 0.35 + repBreakdown.revenue * 0.25 +
-          repBreakdown.bond * 0.20 + repBreakdown.contracts * 0.10 + repBreakdown.services * 0.10
-        );
-
-        // Render
-        renderProvider(info, provContracts, { totalPaid, totalNonce, activeContracts, total: provContracts.length }, repTotal, repBreakdown, currentHeight);
+        // Registry information is not uptime or request-count telemetry.
+        if (info.website && !/^https?:\/\//i.test(info.website)) info.website = null;
+        renderProvider(info);
 
       } catch (err) {
         console.error('Provider load error:', err);
@@ -657,25 +587,13 @@
       errorEl.style.display = 'block';
     }
 
-    function renderProvider(info, contracts, contractStats, repTotal, repBreakdown, currentHeight) {
+    function renderProvider(info) {
       document.getElementById('loading').style.display = 'none';
       const content = document.getElementById('content');
       content.style.display = 'block';
       document.title = `${info.name} — Arkeo Marketplace`;
-
       const isOnline = info.status === 'ONLINE';
-      const repClass = getRepClass(repTotal);
-      const repBadge = getRepBadge(repTotal);
       const pubkeyShort = info.pubkey.slice(0, 14) + '...' + info.pubkey.slice(-6);
-
-      // Sort contracts by ID desc
-      const sortedContracts = [...contracts].sort((a, b) => parseInt(b.id || 0) - parseInt(a.id || 0));
-      const recentContracts = sortedContracts.slice(0, 20);
-
-      const barColor = repTotal >= 80 ? 'linear-gradient(90deg, #f59e0b, #fbbf24)' :
-                        repTotal >= 60 ? 'linear-gradient(90deg, #94a3b8, #cbd5e1)' :
-                        repTotal >= 40 ? 'linear-gradient(90deg, #b45309, #d97706)' : 'var(--text-muted)';
-
       content.innerHTML = `
         <!-- Provider Header -->
         <div class="provider-hero">
@@ -687,7 +605,7 @@
                 <span id="copyBtn" style="font-size:0.8rem;">📋 Copy</span>
               </div>
               <div style="margin-bottom:0.5rem;">
-                <span class="badge ${isOnline ? 'badge-online' : 'badge-offline'}">${isOnline ? '● Online' : '○ Offline'}</span>
+                <span class="badge ${isOnline ? 'badge-online' : 'badge-offline'}">${isOnline ? 'Registered online' : 'Registered offline'}</span>
               </div>
               <div class="provider-hero-meta">
                 ${info.location ? `<span>📍 ${escapeHtml(info.location)}</span>` : ''}
@@ -696,14 +614,14 @@
               ${info.description ? `<p class="provider-hero-desc">${escapeHtml(info.description)}</p>` : ''}
             </div>
             <div class="rep-hero">
-              <div class="rep-hero-score ${repClass}">${repBadge} ${repTotal}</div>
-              <div class="rep-hero-label">Reputation Score</div>
+              <div class="rep-hero-score">Not measured</div>
+              <div class="rep-hero-label">Live availability</div>
             </div>
           </div>
         </div>
 
         <!-- x402 Payment Section -->
-        ${info.x402Url ? `
+        ${info.x402Url && CONFIG.ENABLE_X402 === true ? `
         <div class="section-card" style="border:1px solid rgba(99,102,241,0.3);background:rgba(99,102,241,0.05);">
           <h3 style="color:#818cf8;">⚡ x402 Payments Supported</h3>
           <p style="color:var(--text-dim);margin-bottom:1rem;">This provider accepts HTTP-native micropayments via the <a href="https://x402.org" target="_blank" rel="noopener" style="color:#818cf8;">x402 standard</a>. Pay per request in USDC on Base — no account, no KYC, no ARKEO required.</p>
@@ -735,9 +653,9 @@
                   <tr>
                     <td><span class="chain-icon">${s.icon}</span> ${escapeHtml(s.displayName)}</td>
                     <td style="color:var(--text-dim); font-size:0.8rem;">${escapeHtml(s.name)}</td>
-                    <td style="color:var(--arkeo); font-weight:600;">${parseInt(s.rate).toLocaleString()} uarkeo <span style="color:var(--text-dim); font-size:0.8rem;">(${formatArkeo(s.rate)} ARKEO)</span></td>
+                    <td style="color:var(--arkeo); font-weight:600;">${s.rate === null ? 'No ARKEO PAYG rate' : escapeHtml(s.rate) + ' uarkeo'}</td>
                     <td>${formatArkeo(s.bond)} ARKEO</td>
-                    <td><span class="badge ${s.status === 'ONLINE' ? 'badge-online' : 'badge-offline'}">${s.status === 'ONLINE' ? '● Online' : '○ Offline'}</span></td>
+                    <td><span class="badge ${s.status === 'ONLINE' ? 'badge-online' : 'badge-offline'}">${s.status === 'ONLINE' ? 'Registered online' : 'Registered offline'}</span></td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -745,90 +663,9 @@
           </div>
         </div>
 
-        <!-- Contract History -->
         <div class="section-card">
-          <h3>📜 Contract History</h3>
-          <div class="stats-grid">
-            <div class="stat-box">
-              <div class="stat-box-value">${contractStats.total}</div>
-              <div class="stat-box-label">Total Contracts</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-box-value" style="color:var(--success);">${contractStats.activeContracts}</div>
-              <div class="stat-box-label">Active Contracts</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-box-value">${formatArkeo(contractStats.totalPaid)}</div>
-              <div class="stat-box-label">ARKEO Earned</div>
-            </div>
-            <div class="stat-box">
-              <div class="stat-box-value">${contractStats.totalNonce.toLocaleString()}</div>
-              <div class="stat-box-label">Requests Served</div>
-            </div>
-          </div>
-          ${recentContracts.length > 0 ? `
-          <div style="overflow-x:auto; border-radius:0.75rem; border:1px solid var(--border);">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>ID</th>
-                  <th>Service</th>
-                  <th>Deposit</th>
-                  <th>Paid</th>
-                  <th>Nonce</th>
-                  <th>Status</th>
-                  <th>Duration</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${recentContracts.map(c => {
-                  const deposit = parseInt(c.deposit || 0);
-                  const paid = parseInt(c.paid || 0);
-                  const height = parseInt(c.height || 0);
-                  const duration = parseInt(c.duration || 0);
-                  const expiry = height + duration;
-                  const notExpired = currentHeight === 0 || expiry > currentHeight;
-                  const isActive = deposit > paid && notExpired;
-                  const durationBlocks = duration;
-                  const durationSecs = durationBlocks * 4; // ~4s per block
-                  const durationStr = durationSecs > 0 ? (durationSecs >= 86400 ? Math.floor(durationSecs/86400) + 'd' : durationSecs >= 3600 ? Math.floor(durationSecs/3600) + 'h' : durationSecs + 's') : '—';
-                  return `<tr>
-                    <td style="font-weight:600;">#${c.id || '?'}</td>
-                    <td><span class="chain-icon">${getChainIcon(c.service)}</span> ${getChainDisplayName(c.service)}</td>
-                    <td>${formatArkeo(deposit)}</td>
-                    <td style="color:var(--success); font-weight:600;">${formatArkeo(paid)}</td>
-                    <td>${parseInt(c.nonce || 0).toLocaleString()}</td>
-                    <td><span class="badge ${isActive ? 'badge-online' : 'badge-offline'}">${isActive ? 'Active' : 'Expired'}</span></td>
-                    <td>${durationStr}</td>
-                  </tr>`;
-                }).join('')}
-              </tbody>
-            </table>
-          </div>
-          ` : '<p style="color:var(--text-dim); text-align:center; padding:1rem;">No contracts found for this provider.</p>'}
-        </div>
-
-        <!-- Reputation Breakdown -->
-        <div class="section-card">
-          <h3>⭐ Reputation Breakdown</h3>
-          <div style="text-align:center; margin-bottom:1.5rem;">
-            <div style="font-size:3.5rem; font-weight:800;" class="${repClass}">${repBadge} ${repTotal}<span style="font-size:1.5rem; color:var(--text-dim);">/100</span></div>
-          </div>
-          <div class="rep-breakdown">
-            ${[
-              { label: 'Requests Served', value: repBreakdown.requests, weight: '35%' },
-              { label: 'Revenue Earned', value: repBreakdown.revenue, weight: '25%' },
-              { label: 'Bond Committed', value: repBreakdown.bond, weight: '20%' },
-              { label: 'Active Contracts', value: repBreakdown.contracts, weight: '10%' },
-              { label: 'Service Breadth', value: repBreakdown.services, weight: '10%' },
-            ].map(r => `
-              <div class="rep-row">
-                <div class="rep-row-label">${r.label} <span style="color:var(--text-muted); font-size:0.75rem;">(${r.weight})</span></div>
-                <div class="rep-row-bar"><div class="rep-row-fill" style="width:${r.value}%; background:${barColor};"></div></div>
-                <div class="rep-row-value">${r.value}/100</div>
-              </div>
-            `).join('')}
-          </div>
+          <h3>Availability and failover</h3>
+          <p>Online is the provider’s on-chain registration status. Live uptime and request counts are not measured on this page. Configure and test compatible backups in your subscriber before relying on automatic failover.</p>
         </div>
 
         <!-- Bond Information -->

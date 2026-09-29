@@ -38,6 +38,8 @@
   </style>
   <link rel="stylesheet" href="css/nav.css">
   <script src="js/nav.js"></script>
+  <script src="js/arkeo-tx.js"></script>
+  <script src="js/chain-client.js"></script>
 </head>
 <body>
   <div id="arkeo-nav" data-active="network"></div>
@@ -112,7 +114,7 @@
     $('closeBtn').addEventListener('click', async () => {
       clearOutput();
       const contractId = $('contractId').value.trim();
-      if (!contractId) { log('Error', 'Enter a contract ID', 'err'); return; }
+      if (!/^\d+$/.test(contractId) || BigInt(contractId) <= 0n) { log('Error', 'Enter a valid contract ID', 'err'); return; }
 
       try {
         // Fetch contract details
@@ -125,15 +127,6 @@
         log('Client', contract.client);
         log('Deposit', (parseInt(contract.deposit) / 1e8).toFixed(4) + ' ARKEO');
 
-        // Fetch account info for sequence/account_number
-        log('Action', 'Fetching account info...');
-        const acctRes = await fetch(`${REST}/cosmos/auth/v1beta1/accounts/${walletAddress}`);
-        const acctData = await acctRes.json();
-        const account = acctData.account;
-        const accountNumber = account.account_number;
-        const sequence = account.sequence;
-        log('Account', `#${accountNumber}, seq ${sequence}`);
-
         // Build the MsgCloseContract
         // Get bech32 pubkey
         const aminoPrefix = new Uint8Array([0xeb, 0x5a, 0xe9, 0x87, 0x21]);
@@ -143,74 +136,19 @@
         const pubKeyBech32 = bech32Encode('arkeopub', pubKeyWithPrefix);
 
         const msg = {
-          type: 'arkeo/MsgCloseContract',
+          typeUrl: '/arkeo.arkeo.MsgCloseContract',
           value: {
             creator: walletAddress,
-            contract_id: contractId,
-            client: pubKeyBech32,
-            delegate: pubKeyBech32,
+            contractId: contractId,
+            client: contract.client,
+            delegate: contract.delegate || '',
           }
         };
 
-        const fee = { amount: [{ denom: 'uarkeo', amount: '500' }], gas: '300000' };
-
-        const signDoc = {
-          chain_id: CHAIN_ID,
-          account_number: accountNumber,
-          sequence: sequence,
-          fee: fee,
-          msgs: [msg],
-          memo: '',
-        };
-
-        log('Action', 'Requesting Keplr signature...');
-        const signResponse = await window.keplr.signAmino(CHAIN_ID, walletAddress, signDoc);
-
-        // Broadcast
-        log('Action', 'Broadcasting transaction...');
-        const tx = {
-          tx: {
-            msg: signResponse.signed.msgs,
-            fee: signResponse.signed.fee,
-            signatures: [{
-              pub_key: { type: 'tendermint/PubKeySecp256k1', value: btoa(String.fromCharCode(...walletPubkey)) },
-              signature: signResponse.signature.signature,
-            }],
-            memo: '',
-          },
-          mode: 'sync',
-        };
-
-        const broadcastRes = await fetch(`${REST}/cosmos/tx/v1beta1/txs`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            tx_bytes: btoa(JSON.stringify(tx)),
-            mode: 'BROADCAST_MODE_SYNC',
-          }),
-        });
-        const broadcastData = await broadcastRes.json();
-
-        if (broadcastData.tx_response) {
-          const code = broadcastData.tx_response.code;
-          const txhash = broadcastData.tx_response.txhash;
-          if (code === 0) {
-            log('TX Hash', txhash, 'ok');
-            log('Status', 'Contract closed successfully!', 'ok');
-          } else {
-            log('TX Hash', txhash);
-            log('Error', broadcastData.tx_response.raw_log || 'Unknown error', 'err');
-          }
-        } else {
-          // Try amino broadcast fallback
-          const aminoBroadcast = await fetch(`${REST}/txs`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ tx: tx.tx, mode: 'sync' }),
-          });
-          const aminoData = await aminoBroadcast.json();
-          log('Response', JSON.stringify(aminoData).substring(0, 500));
-        }
+        const key = ChainClient.operationKey(CHAIN_ID,walletAddress,'close:'+contractId);
+        const tx = await ChainClient.signAndSubmit({base:REST,chainId:CHAIN_ID,address:walletAddress,message:msg,key});
+        log('TX Hash',tx.txhash,'ok');
+        log('Status','Contract closure confirmed on-chain.','ok');
 
       } catch (e) {
         log('Error', e.message, 'err');

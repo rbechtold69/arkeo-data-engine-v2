@@ -20,7 +20,7 @@ function injectNav() {
         </a>
 
         <div class="an-links">
-          <a href="index.html" class="an-link ${isActive('home')}">Apps</a>
+          <a href="index.html" class="an-link ${isActive('home')}">Marketplace</a>
           
           <div class="an-dropdown">
             <a href="data.html" class="an-link ${isActive('data')}">Data ▾</a>
@@ -58,8 +58,8 @@ function injectNav() {
           <div class="an-dropdown">
             <a href="index.html" class="an-link ${isActive('community')}">Community ▾</a>
             <div class="an-dropdown-menu">
-              <a href="submit-frontend.html">Submit a Frontend</a>
-              <a href="frontend-trust.html">Trust &amp; Verification</a>
+              <a href="request-chain.html">Request a Service</a>
+              <a href="rpc-rollout.html">RPC Rollout Guide</a>
             </div>
           </div>
 
@@ -71,8 +71,8 @@ function injectNav() {
 
       <div class="an-mobile" id="anMobile">
         <div class="an-mobile-section">
-          <div class="an-mobile-label">Apps</div>
-          <a href="index.html">Home / Frontends</a>
+          <div class="an-mobile-label">Marketplace</div>
+          <a href="index.html">Home / RPC Data</a>
         </div>
         <div class="an-mobile-section">
           <div class="an-mobile-label">Data</div>
@@ -99,8 +99,8 @@ function injectNav() {
         </div>
         <div class="an-mobile-section">
           <div class="an-mobile-label">Community</div>
-          <a href="submit-frontend.html">Submit a Frontend</a>
-          <a href="frontend-trust.html">Trust &amp; Verification</a>
+          <a href="request-chain.html">Request a Service</a>
+          <a href="rpc-rollout.html">RPC Rollout Guide</a>
         </div>
         <div class="an-mobile-section">
           <a href="https://docs.arkeo.network" target="_blank">Docs</a>

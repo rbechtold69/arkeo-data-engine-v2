@@ -144,7 +144,7 @@ class ArkeoTxHelper {
     
     // Load protobuf.js from CDN
     if (!window.protobuf) {
-      await this.loadScript('https://cdn.jsdelivr.net/npm/protobufjs@7.2.6/dist/protobuf.min.js');
+      await this.loadScript('https://cdn.jsdelivr.net/npm/protobufjs@7.6.6/dist/protobuf.min.js');
     }
     
     // Configure protobufjs to use Long
@@ -184,7 +184,7 @@ class ArkeoTxHelper {
   // SRI hashes for dynamically loaded CDN scripts
   static SRI_HASHES = {
     'https://cdn.jsdelivr.net/npm/long@5.2.3/umd/index.min.js': 'sha384-WMR9gjTtdEVLsU2eEynLDmwo7Fv0l59CyDWb5zzAPWBVxEsh3bz9V3A/YW4yZW1K',
-    'https://cdn.jsdelivr.net/npm/protobufjs@7.2.6/dist/protobuf.min.js': 'sha384-N6/IbrGcVGxeDavKs7t3aMNadp5sUPWtGF2BMZf9/554yatfJRVfjlwmJER0Vmww',
+    'https://cdn.jsdelivr.net/npm/protobufjs@7.6.6/dist/protobuf.min.js': 'sha384-RcCYQWe/1f2wGOto33rpxe6p/aNfxBAda7lSQgQvLW+WDT5X6jZZhPjhWBTM7hVh',
   };
 
   // Allowed CDN origins for dynamic script loading
@@ -197,8 +197,8 @@ class ArkeoTxHelper {
       // Validate URL origin against allowlist
       try {
         const url = new URL(src);
-        const allowed = ArkeoTxHelper.ALLOWED_SCRIPT_ORIGINS.some(origin => src.startsWith(origin));
-        if (!allowed) {
+        const allowed = ArkeoTxHelper.ALLOWED_SCRIPT_ORIGINS.some(origin => url.origin === origin);
+        if (!allowed || !ArkeoTxHelper.SRI_HASHES[src]) {
           return reject(new Error(`Script origin not allowed: ${url.origin}`));
         }
       } catch (e) {
@@ -219,6 +219,22 @@ class ArkeoTxHelper {
       script.onerror = reject;
       document.head.appendChild(script);
     });
+  }
+
+  integer(value, fallback, unsigned = false) {
+    const input = value === undefined || value === null || value === '' ? fallback : value;
+    if (typeof input === 'number' && !Number.isSafeInteger(input)) throw new Error('Unsafe integer; use a decimal string');
+    const text = String(input);
+    const maximum = unsigned ? 18446744073709551615n : 9223372036854775807n;
+    if (!/^(0|[1-9][0-9]*)$/.test(text) || BigInt(text) > maximum) throw new Error('Integer outside supported range');
+    if (!window.Long) throw new Error('Initialize transaction encoder before use');
+    return window.Long.fromString(text, unsigned);
+  }
+
+  enumValue(value, fallback, allowed) {
+    const n = Number(value === undefined || value === null || value === '' ? fallback : value);
+    if (!Number.isInteger(n) || !allowed.includes(n)) throw new Error('Invalid enum value');
+    return n;
   }
 
   encodeBondProvider(creator, provider, service, bond) {
@@ -247,9 +263,9 @@ class ArkeoTxHelper {
     
     // Use Long for int64 fields
     const Long = window.Long;
-    const minDur = Long ? Long.fromNumber(parseInt(params.minContractDuration) || 10) : (parseInt(params.minContractDuration) || 10);
-    const maxDur = Long ? Long.fromNumber(parseInt(params.maxContractDuration) || 1000000) : (parseInt(params.maxContractDuration) || 1000000);
-    const settleDur = Long ? Long.fromNumber(parseInt(params.settlementDuration) || 10) : (parseInt(params.settlementDuration) || 10);
+    const minDur = this.integer(params.minContractDuration, 10);
+    const maxDur = this.integer(params.maxContractDuration, 1000000);
+    const settleDur = this.integer(params.settlementDuration, 10);
     
     console.log('Duration values (Long):', { minDur, maxDur, settleDur });
     
@@ -258,8 +274,8 @@ class ArkeoTxHelper {
       provider: params.provider,
       service: params.service,
       metadataUri: params.metadataUri || '',
-      metadataNonce: parseInt(params.metadataNonce) || 1,
-      status: parseInt(params.status) || 1,
+      metadataNonce: this.integer(params.metadataNonce, 1, true),
+      status: this.enumValue(params.status, 1, [0, 1]),
       minContractDuration: minDur,
       maxContractDuration: maxDur,
       subscriptionRate: subscriptionRate,
@@ -279,9 +295,9 @@ class ArkeoTxHelper {
       amount: String(params.rate.amount)
     });
     
-    const duration = Long ? Long.fromNumber(parseInt(params.duration) || 1000000) : (parseInt(params.duration) || 1000000);
-    const settlementDuration = Long ? Long.fromNumber(parseInt(params.settlementDuration) || 10) : (parseInt(params.settlementDuration) || 10);
-    const queriesPerMinute = Long ? Long.fromNumber(parseInt(params.queriesPerMinute) || 100) : (parseInt(params.queriesPerMinute) || 100);
+    const duration = this.integer(params.duration, 1000000);
+    const settlementDuration = this.integer(params.settlementDuration, 10);
+    const queriesPerMinute = this.integer(params.queriesPerMinute, 100);
     
     const message = this.MsgOpenContract.create({
       creator: params.creator,
@@ -289,12 +305,12 @@ class ArkeoTxHelper {
       service: params.service,
       client: params.client,
       delegate: params.delegate || '',
-      contractType: parseInt(params.contractType) || 1, // PAY_AS_YOU_GO = 1
+      contractType: this.enumValue(params.contractType, 1, [0, 1]), // PAY_AS_YOU_GO = 1
       duration: duration,
       rate: rate,
       deposit: String(params.deposit),
       settlementDuration: settlementDuration,
-      authorization: parseInt(params.authorization) || 0, // STRICT = 0
+      authorization: this.enumValue(params.authorization, 0, [0, 1]), // STRICT = 0
       queriesPerMinute: queriesPerMinute
     });
     
@@ -306,7 +322,7 @@ class ArkeoTxHelper {
     const Long = window.Long;
     const message = this.MsgCloseContract.create({
       creator: params.creator,
-      contractId: Long ? Long.fromNumber(parseInt(params.contractId)) : parseInt(params.contractId),
+      contractId: this.integer(params.contractId, undefined, true),
       client: params.client || '',
       delegate: params.delegate || ''
     });
@@ -318,9 +334,9 @@ class ArkeoTxHelper {
     const Long = window.Long;
     const message = this.MsgClaimContractIncome.create({
       creator: params.creator,
-      contractId: Long ? Long.fromNumber(parseInt(params.contractId)) : parseInt(params.contractId),
+      contractId: this.integer(params.contractId, undefined, true),
       signature: params.signature || new Uint8Array(0),
-      nonce: Long ? Long.fromNumber(parseInt(params.nonce)) : parseInt(params.nonce)
+      nonce: this.integer(params.nonce, undefined)
     });
     console.log('MsgClaimContractIncome message:', message);
     return this.MsgClaimContractIncome.encode(message).finish();
@@ -394,6 +410,8 @@ class ArkeoTxHelper {
         msgBytes = this.encodeCloseContract(msg.value);
       } else if (msg.typeUrl === '/arkeo.arkeo.MsgClaimContractIncome') {
         msgBytes = this.encodeClaimContractIncome(msg.value);
+      } else {
+        throw new Error('Unsupported Arkeo message type: ' + msg.typeUrl);
       }
       
       return this.Any.create({
@@ -423,12 +441,12 @@ class ArkeoTxHelper {
       modeInfo: this.ModeInfo.create({
         single: { mode: 1 } // SIGN_MODE_DIRECT = 1
       }),
-      sequence: sequence
+      sequence: this.integer(sequence, undefined, true)
     });
     
     const fee = this.Fee.create({
       amount: [this.Coin.create({ denom: 'uarkeo', amount: feeAmount })],
-      gasLimit: gasLimit
+      gasLimit: this.integer(gasLimit, undefined, true)
     });
     
     const authInfo = this.AuthInfo.create({
@@ -445,7 +463,7 @@ class ArkeoTxHelper {
       bodyBytes: bodyBytes,
       authInfoBytes: authInfoBytes,
       chainId: chainId,
-      accountNumber: accountNumber
+      accountNumber: this.integer(accountNumber, undefined, true)
     });
     return this.SignDoc.encode(signDoc).finish();
   }
